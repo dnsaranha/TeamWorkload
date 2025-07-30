@@ -78,14 +78,28 @@ const EmployeeList = () => {
 
   const handleAddEmployee = async () => {
     try {
+      // Validate required fields
+      if (!formData.name.trim()) {
+        alert("Name is required");
+        return;
+      }
+      if (!formData.role.trim()) {
+        alert("Role is required");
+        return;
+      }
+      if (formData.weekly_hours <= 0) {
+        alert("Weekly hours must be greater than 0");
+        return;
+      }
+
       const skillsArray = formData.skills
         .split(",")
         .map((skill) => skill.trim())
         .filter((skill) => skill !== "");
 
       const newEmployee = await employeeService.create({
-        name: formData.name,
-        role: formData.role,
+        name: formData.name.trim(),
+        role: formData.role.trim(),
         weekly_hours: formData.weekly_hours,
         skills: skillsArray,
       });
@@ -95,6 +109,7 @@ const EmployeeList = () => {
       setIsAddDialogOpen(false);
     } catch (error) {
       console.error("Error adding employee:", error);
+      alert("Failed to add employee. Please try again.");
     }
   };
 
@@ -102,14 +117,28 @@ const EmployeeList = () => {
     if (!currentEmployee) return;
 
     try {
+      // Validate required fields
+      if (!formData.name.trim()) {
+        alert("Name is required");
+        return;
+      }
+      if (!formData.role.trim()) {
+        alert("Role is required");
+        return;
+      }
+      if (formData.weekly_hours <= 0) {
+        alert("Weekly hours must be greater than 0");
+        return;
+      }
+
       const skillsArray = formData.skills
         .split(",")
         .map((skill) => skill.trim())
         .filter((skill) => skill !== "");
 
       const updatedEmployee = await employeeService.update(currentEmployee.id, {
-        name: formData.name,
-        role: formData.role,
+        name: formData.name.trim(),
+        role: formData.role.trim(),
         weekly_hours: formData.weekly_hours,
         skills: skillsArray,
       });
@@ -123,6 +152,7 @@ const EmployeeList = () => {
       setIsEditDialogOpen(false);
     } catch (error) {
       console.error("Error updating employee:", error);
+      alert("Failed to update employee. Please try again.");
     }
   };
 

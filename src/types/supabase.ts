@@ -191,6 +191,36 @@ export type Database = {
           },
         ]
       }
+      employees: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+          role: string
+          skills: Json | null
+          updated_at: string | null
+          weekly_hours: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+          role: string
+          skills?: Json | null
+          updated_at?: string | null
+          weekly_hours?: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          role?: string
+          skills?: Json | null
+          updated_at?: string | null
+          weekly_hours?: number
+        }
+        Relationships: []
+      }
       m3u_sources: {
         Row: {
           created_at: string
@@ -636,6 +666,90 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      workload_projects: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          end_date: string | null
+          id: string
+          name: string
+          start_date: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          name: string
+          start_date?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          name?: string
+          start_date?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      workload_tasks: {
+        Row: {
+          assigned_employee_id: string | null
+          created_at: string | null
+          description: string | null
+          end_date: string
+          estimated_time: number
+          id: string
+          name: string
+          project_id: string | null
+          start_date: string
+          updated_at: string | null
+        }
+        Insert: {
+          assigned_employee_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          end_date: string
+          estimated_time?: number
+          id?: string
+          name: string
+          project_id?: string | null
+          start_date: string
+          updated_at?: string | null
+        }
+        Update: {
+          assigned_employee_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          end_date?: string
+          estimated_time?: number
+          id?: string
+          name?: string
+          project_id?: string | null
+          start_date?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workload_tasks_assigned_employee_id_fkey"
+            columns: ["assigned_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workload_tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "workload_projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

@@ -119,7 +119,7 @@ export const employeeService = {
 export const projectService = {
   async getAll() {
     const { data, error } = await supabase
-      .from("projects")
+      .from("workload_projects")
       .select("*")
       .order("name");
 
@@ -129,7 +129,7 @@ export const projectService = {
 
   async create(project: ProjectInsert) {
     const { data, error } = await supabase
-      .from("projects")
+      .from("workload_projects")
       .insert(project)
       .select()
       .single();
@@ -140,7 +140,7 @@ export const projectService = {
 
   async update(id: string, project: ProjectUpdate) {
     const { data, error } = await supabase
-      .from("projects")
+      .from("workload_projects")
       .update(project)
       .eq("id", id)
       .select()
@@ -151,7 +151,10 @@ export const projectService = {
   },
 
   async delete(id: string) {
-    const { error } = await supabase.from("projects").delete().eq("id", id);
+    const { error } = await supabase
+      .from("workload_projects")
+      .delete()
+      .eq("id", id);
 
     if (error) throw error;
   },
@@ -160,11 +163,11 @@ export const projectService = {
 export const taskService = {
   async getAll() {
     const { data, error } = await supabase
-      .from("tasks")
+      .from("workload_tasks")
       .select(
         `
         *,
-        project:projects(*),
+        project:workload_projects(*),
         assigned_employee:employees(*)
       `,
       )
@@ -176,12 +179,12 @@ export const taskService = {
 
   async create(task: TaskInsert) {
     const { data, error } = await supabase
-      .from("tasks")
+      .from("workload_tasks")
       .insert(task)
       .select(
         `
         *,
-        project:projects(*),
+        project:workload_projects(*),
         assigned_employee:employees(*)
       `,
       )
@@ -193,13 +196,13 @@ export const taskService = {
 
   async update(id: string, task: TaskUpdate) {
     const { data, error } = await supabase
-      .from("tasks")
+      .from("workload_tasks")
       .update(task)
       .eq("id", id)
       .select(
         `
         *,
-        project:projects(*),
+        project:workload_projects(*),
         assigned_employee:employees(*)
       `,
       )
@@ -210,7 +213,10 @@ export const taskService = {
   },
 
   async delete(id: string) {
-    const { error } = await supabase.from("tasks").delete().eq("id", id);
+    const { error } = await supabase
+      .from("workload_tasks")
+      .delete()
+      .eq("id", id);
 
     if (error) throw error;
   },
