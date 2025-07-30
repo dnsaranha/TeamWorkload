@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -14,8 +14,20 @@ import {
   ChevronRight,
   Calendar as CalendarIcon,
 } from "lucide-react";
+import {
+  taskService,
+  employeeService,
+  type Task,
+  type Employee,
+  type Project,
+} from "@/lib/supabaseClient";
 
-interface Task {
+type TaskWithRelations = Task & {
+  project: Project | null;
+  assigned_employee: Employee | null;
+};
+
+type CalendarTask = {
   id: string;
   name: string;
   project: string;
@@ -23,20 +35,12 @@ interface Task {
   startDate: Date;
   endDate: Date;
   employeeId: string;
-}
-
-interface Employee {
-  id: string;
-  name: string;
-  role: string;
-  weeklyHours: number;
-  skills: string[];
-}
+};
 
 interface WorkloadCalendarProps {
-  tasks?: Task[];
+  tasks?: CalendarTask[];
   employees?: Employee[];
-  onTaskClick?: (task: Task) => void;
+  onTaskClick?: (task: CalendarTask) => void;
   onDateRangeChange?: (startDate: Date, endDate: Date) => void;
 }
 
@@ -48,67 +52,49 @@ const WorkloadCalendar = ({
 }: WorkloadCalendarProps) => {
   const [view, setView] = useState<"week" | "month">("week");
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
+  const [dbEmployees, setDbEmployees] = useState<Employee[]>([]);
+  const [dbTasks, setDbTasks] = useState<CalendarTask[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data for demonstration
+  // Load data from database
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [tasksData, employeesData] = await Promise.all([
+        taskService.getAll(),
+        employeeService.getAll(),
+      ]);
+
+      // Transform tasks to match calendar format
+      const calendarTasks: CalendarTask[] = (
+        tasksData as TaskWithRelations[]
+      ).map((task) => ({
+        id: task.id,
+        name: task.name,
+        project: task.project?.name || "No project",
+        estimatedHours: task.estimated_time,
+        startDate: new Date(task.start_date),
+        endDate: new Date(task.end_date),
+        employeeId: task.assigned_employee_id || "",
+      }));
+
+      setDbTasks(calendarTasks);
+      setDbEmployees(employeesData);
+    } catch (error) {
+      console.error("Error loading calendar data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Use database data if available, otherwise use props
   const mockEmployees: Employee[] =
-    employees.length > 0
-      ? employees
-      : [
-          {
-            id: "1",
-            name: "John Doe",
-            role: "Developer",
-            weeklyHours: 40,
-            skills: ["React", "TypeScript"],
-          },
-          {
-            id: "2",
-            name: "Jane Smith",
-            role: "Designer",
-            weeklyHours: 35,
-            skills: ["UI/UX", "Figma"],
-          },
-          {
-            id: "3",
-            name: "Mike Johnson",
-            role: "Project Manager",
-            weeklyHours: 40,
-            skills: ["Agile", "Scrum"],
-          },
-        ];
-
-  const mockTasks: Task[] =
-    tasks.length > 0
-      ? tasks
-      : [
-          {
-            id: "1",
-            name: "Frontend Development",
-            project: "Website Redesign",
-            estimatedHours: 30,
-            startDate: new Date(2023, 5, 1),
-            endDate: new Date(2023, 5, 5),
-            employeeId: "1",
-          },
-          {
-            id: "2",
-            name: "UI Design",
-            project: "Mobile App",
-            estimatedHours: 20,
-            startDate: new Date(2023, 5, 3),
-            endDate: new Date(2023, 5, 7),
-            employeeId: "2",
-          },
-          {
-            id: "3",
-            name: "Sprint Planning",
-            project: "Website Redesign",
-            estimatedHours: 10,
-            startDate: new Date(2023, 5, 2),
-            endDate: new Date(2023, 5, 2),
-            employeeId: "3",
-          },
-        ];
+    employees.length > 0 ? employees : dbEmployees;
+  const mockTasks: CalendarTask[] = tasks.length > 0 ? tasks : dbTasks;
 
   // Helper functions to navigate dates
   const navigatePrevious = () => {
@@ -210,7 +196,7 @@ const WorkloadCalendar = ({
     if (!employee) return 0;
 
     // Daily capacity (weekly hours / 5 workdays)
-    const dailyCapacity = employee.weeklyHours / 5;
+    const dailyCapacity = employee.weekly_hours / 5;
 
     // Skip weekends in workload calculation
     const dayOfWeek = date.getDay();
@@ -234,6 +220,16 @@ const WorkloadCalendar = ({
       date: date.getDate(),
     };
   };
+
+  if (loading) {
+    return (
+      <Card className="w-full bg-white">
+        <CardContent className="p-6">
+          <div className="text-center">Loading calendar...</div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="w-full bg-white">

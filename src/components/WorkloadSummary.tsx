@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -12,77 +12,125 @@ import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  taskService,
+  employeeService,
+  projectService,
+  type Task,
+  type Employee,
+  type Project,
+} from "@/lib/supabaseClient";
 
-interface Employee {
-  id: string;
-  name: string;
-  role: string;
-  avatar?: string;
+type TaskWithRelations = Task & {
+  project: Project | null;
+  assigned_employee: Employee | null;
+};
+
+interface EmployeeWithWorkload extends Employee {
   workload: number; // percentage
 }
 
-interface Project {
-  id: string;
-  name: string;
+interface ProjectWithWorkload extends Project {
   progress: number; // percentage
   workload: number; // percentage
 }
 
 interface WorkloadSummaryProps {
-  employees?: Employee[];
-  projects?: Project[];
+  employees?: EmployeeWithWorkload[];
+  projects?: ProjectWithWorkload[];
   period?: string;
   onPeriodChange?: (period: string) => void;
 }
 
 const WorkloadSummary = ({
-  employees = [
-    {
-      id: "1",
-      name: "John Doe",
-      role: "Developer",
-      workload: 120,
-      avatar: "JD",
-    },
-    {
-      id: "2",
-      name: "Jane Smith",
-      role: "Designer",
-      workload: 85,
-      avatar: "JS",
-    },
-    {
-      id: "3",
-      name: "Mike Johnson",
-      role: "QA Engineer",
-      workload: 45,
-      avatar: "MJ",
-    },
-    {
-      id: "4",
-      name: "Sarah Williams",
-      role: "Project Manager",
-      workload: 95,
-      avatar: "SW",
-    },
-    {
-      id: "5",
-      name: "David Brown",
-      role: "Developer",
-      workload: 110,
-      avatar: "DB",
-    },
-  ],
-  projects = [
-    { id: "1", name: "Website Redesign", progress: 65, workload: 90 },
-    { id: "2", name: "Mobile App", progress: 30, workload: 120 },
-    { id: "3", name: "CRM Integration", progress: 80, workload: 75 },
-    { id: "4", name: "E-commerce Platform", progress: 45, workload: 60 },
-  ],
+  employees = [],
+  projects = [],
   period = "This Week",
   onPeriodChange = () => {},
 }: WorkloadSummaryProps) => {
   const [activeTab, setActiveTab] = useState("employees");
+  const [dbEmployees, setDbEmployees] = useState<EmployeeWithWorkload[]>([]);
+  const [dbProjects, setDbProjects] = useState<ProjectWithWorkload[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Load data from database
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [tasksData, employeesData, projectsData] = await Promise.all([
+        taskService.getAll(),
+        employeeService.getAll(),
+        projectService.getAll(),
+      ]);
+
+      // Calculate workload for employees
+      const employeesWithWorkload: EmployeeWithWorkload[] = employeesData.map(
+        (employee) => {
+          const employeeTasks = (tasksData as TaskWithRelations[]).filter(
+            (task) => task.assigned_employee_id === employee.id,
+          );
+
+          const totalHours = employeeTasks.reduce(
+            (sum, task) => sum + task.estimated_time,
+            0,
+          );
+          const workload =
+            employee.weekly_hours > 0
+              ? Math.round((totalHours / employee.weekly_hours) * 100)
+              : 0;
+
+          return {
+            ...employee,
+            workload,
+          };
+        },
+      );
+
+      // Calculate workload for projects
+      const projectsWithWorkload: ProjectWithWorkload[] = projectsData.map(
+        (project) => {
+          const projectTasks = (tasksData as TaskWithRelations[]).filter(
+            (task) => task.project_id === project.id,
+          );
+
+          const totalHours = projectTasks.reduce(
+            (sum, task) => sum + task.estimated_time,
+            0,
+          );
+          const completedTasks = projectTasks.filter(
+            (task) => new Date(task.end_date) < new Date(),
+          ).length;
+
+          const progress =
+            projectTasks.length > 0
+              ? Math.round((completedTasks / projectTasks.length) * 100)
+              : 0;
+          const workload = Math.min(100, Math.round((totalHours / 40) * 100)); // Assuming 40h baseline
+
+          return {
+            ...project,
+            progress,
+            workload,
+          };
+        },
+      );
+
+      setDbEmployees(employeesWithWorkload);
+      setDbProjects(projectsWithWorkload);
+    } catch (error) {
+      console.error("Error loading workload summary data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Use database data if available, otherwise use props
+  const displayEmployees = employees.length > 0 ? employees : dbEmployees;
+  const displayProjects = projects.length > 0 ? projects : dbProjects;
 
   const getWorkloadColor = (workload: number) => {
     if (workload > 100) return "bg-red-500";
@@ -127,94 +175,114 @@ const WorkloadSummary = ({
           <ScrollArea className="h-[600px] pr-4">
             <TabsContent value="employees" className="mt-0">
               <div className="space-y-4">
-                {employees.map((employee) => (
-                  <div key={employee.id} className="p-3 rounded-lg border">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Avatar>
-                        <AvatarImage
-                          src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${employee.avatar}`}
-                        />
-                        <AvatarFallback>{employee.avatar}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <h4 className="font-medium text-sm">{employee.name}</h4>
-                        <p className="text-xs text-muted-foreground">
-                          {employee.role}
-                        </p>
-                      </div>
-                      <Badge
-                        variant={getWorkloadBadge(employee.workload)}
-                        className="ml-auto"
-                      >
-                        {employee.workload}%
-                      </Badge>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-xs">
-                        <span>Workload</span>
-                        <span
-                          className={
-                            employee.workload > 100
-                              ? "text-red-500 font-medium"
-                              : ""
-                          }
+                {loading ? (
+                  <div className="text-center py-6">Loading employees...</div>
+                ) : displayEmployees.length === 0 ? (
+                  <div className="text-center py-6">No employees found</div>
+                ) : (
+                  displayEmployees.map((employee) => (
+                    <div key={employee.id} className="p-3 rounded-lg border">
+                      <div className="flex items-center gap-3 mb-3">
+                        <Avatar>
+                          <AvatarImage
+                            src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${employee.name}`}
+                          />
+                          <AvatarFallback>
+                            {employee.name
+                              .split(" ")
+                              .map((n) => n[0])
+                              .join("")
+                              .toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <h4 className="font-medium text-sm">
+                            {employee.name}
+                          </h4>
+                          <p className="text-xs text-muted-foreground">
+                            {employee.role}
+                          </p>
+                        </div>
+                        <Badge
+                          variant={getWorkloadBadge(employee.workload)}
+                          className="ml-auto"
                         >
                           {employee.workload}%
-                        </span>
+                        </Badge>
                       </div>
-                      <Progress
-                        value={employee.workload}
-                        max={150}
-                        className={`h-2 ${getWorkloadColor(employee.workload)}`}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </TabsContent>
-
-            <TabsContent value="projects" className="mt-0">
-              <div className="space-y-4">
-                {projects.map((project) => (
-                  <div key={project.id} className="p-3 rounded-lg border">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-medium text-sm">{project.name}</h4>
-                      <Badge variant={getWorkloadBadge(project.workload)}>
-                        {project.workload}%
-                      </Badge>
-                    </div>
-
-                    <div className="space-y-3">
                       <div className="space-y-1">
                         <div className="flex justify-between text-xs">
                           <span>Workload</span>
                           <span
                             className={
-                              project.workload > 100
+                              employee.workload > 100
                                 ? "text-red-500 font-medium"
                                 : ""
                             }
                           >
-                            {project.workload}%
+                            {employee.workload}%
                           </span>
                         </div>
                         <Progress
-                          value={project.workload}
+                          value={employee.workload}
                           max={150}
-                          className={`h-2 ${getWorkloadColor(project.workload)}`}
+                          className={`h-2 ${getWorkloadColor(employee.workload)}`}
                         />
                       </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </TabsContent>
 
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-xs">
-                          <span>Progress</span>
-                          <span>{project.progress}%</span>
+            <TabsContent value="projects" className="mt-0">
+              <div className="space-y-4">
+                {loading ? (
+                  <div className="text-center py-6">Loading projects...</div>
+                ) : displayProjects.length === 0 ? (
+                  <div className="text-center py-6">No projects found</div>
+                ) : (
+                  displayProjects.map((project) => (
+                    <div key={project.id} className="p-3 rounded-lg border">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-medium text-sm">{project.name}</h4>
+                        <Badge variant={getWorkloadBadge(project.workload)}>
+                          {project.workload}%
+                        </Badge>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span>Workload</span>
+                            <span
+                              className={
+                                project.workload > 100
+                                  ? "text-red-500 font-medium"
+                                  : ""
+                              }
+                            >
+                              {project.workload}%
+                            </span>
+                          </div>
+                          <Progress
+                            value={project.workload}
+                            max={150}
+                            className={`h-2 ${getWorkloadColor(project.workload)}`}
+                          />
                         </div>
-                        <Progress value={project.progress} className="h-2" />
+
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span>Progress</span>
+                            <span>{project.progress}%</span>
+                          </div>
+                          <Progress value={project.progress} className="h-2" />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </TabsContent>
           </ScrollArea>

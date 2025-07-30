@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -33,54 +33,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { PlusCircle, Pencil, Trash2, Search } from "lucide-react";
-
-interface Skill {
-  id: string;
-  name: string;
-}
-
-interface Employee {
-  id: string;
-  name: string;
-  role: string;
-  weeklyHours: number;
-  skills: Skill[];
-}
+import { employeeService, type Employee } from "@/lib/supabaseClient";
 
 const EmployeeList = () => {
-  const [employees, setEmployees] = useState<Employee[]>([
-    {
-      id: "1",
-      name: "John Doe",
-      role: "Frontend Developer",
-      weeklyHours: 40,
-      skills: [
-        { id: "1", name: "React" },
-        { id: "2", name: "TypeScript" },
-      ],
-    },
-    {
-      id: "2",
-      name: "Jane Smith",
-      role: "UX Designer",
-      weeklyHours: 35,
-      skills: [
-        { id: "3", name: "Figma" },
-        { id: "4", name: "UI Design" },
-      ],
-    },
-    {
-      id: "3",
-      name: "Mike Johnson",
-      role: "Backend Developer",
-      weeklyHours: 40,
-      skills: [
-        { id: "5", name: "Node.js" },
-        { id: "6", name: "Express" },
-      ],
-    },
-  ]);
-
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -90,67 +47,92 @@ const EmployeeList = () => {
   const [formData, setFormData] = useState({
     name: "",
     role: "",
-    weeklyHours: 40,
+    weekly_hours: 40,
     skills: "",
   });
+
+  // Load employees from database
+  useEffect(() => {
+    loadEmployees();
+  }, []);
+
+  const loadEmployees = async () => {
+    try {
+      setLoading(true);
+      const data = await employeeService.getAll();
+      setEmployees(data);
+    } catch (error) {
+      console.error("Error loading employees:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
-      [name]: name === "weeklyHours" ? parseInt(value) || 0 : value,
+      [name]: name === "weekly_hours" ? parseInt(value) || 0 : value,
     });
   };
 
-  const handleAddEmployee = () => {
-    const skillsArray = formData.skills
-      .split(",")
-      .map((skill) => skill.trim())
-      .filter((skill) => skill !== "")
-      .map((skill, index) => ({ id: `new-${index}`, name: skill }));
+  const handleAddEmployee = async () => {
+    try {
+      const skillsArray = formData.skills
+        .split(",")
+        .map((skill) => skill.trim())
+        .filter((skill) => skill !== "");
 
-    const newEmployee: Employee = {
-      id: `emp-${Date.now()}`,
-      name: formData.name,
-      role: formData.role,
-      weeklyHours: formData.weeklyHours,
-      skills: skillsArray,
-    };
+      const newEmployee = await employeeService.create({
+        name: formData.name,
+        role: formData.role,
+        weekly_hours: formData.weekly_hours,
+        skills: skillsArray,
+      });
 
-    setEmployees([...employees, newEmployee]);
-    resetForm();
-    setIsAddDialogOpen(false);
+      setEmployees([...employees, newEmployee]);
+      resetForm();
+      setIsAddDialogOpen(false);
+    } catch (error) {
+      console.error("Error adding employee:", error);
+    }
   };
 
-  const handleEditEmployee = () => {
+  const handleEditEmployee = async () => {
     if (!currentEmployee) return;
 
-    const skillsArray = formData.skills
-      .split(",")
-      .map((skill) => skill.trim())
-      .filter((skill) => skill !== "")
-      .map((skill, index) => ({ id: `edit-${index}`, name: skill }));
+    try {
+      const skillsArray = formData.skills
+        .split(",")
+        .map((skill) => skill.trim())
+        .filter((skill) => skill !== "");
 
-    const updatedEmployees = employees.map((emp) => {
-      if (emp.id === currentEmployee.id) {
-        return {
-          ...emp,
-          name: formData.name,
-          role: formData.role,
-          weeklyHours: formData.weeklyHours,
-          skills: skillsArray,
-        };
-      }
-      return emp;
-    });
+      const updatedEmployee = await employeeService.update(currentEmployee.id, {
+        name: formData.name,
+        role: formData.role,
+        weekly_hours: formData.weekly_hours,
+        skills: skillsArray,
+      });
 
-    setEmployees(updatedEmployees);
-    resetForm();
-    setIsEditDialogOpen(false);
+      const updatedEmployees = employees.map((emp) =>
+        emp.id === currentEmployee.id ? updatedEmployee : emp,
+      );
+
+      setEmployees(updatedEmployees);
+      resetForm();
+      setIsEditDialogOpen(false);
+    } catch (error) {
+      console.error("Error updating employee:", error);
+    }
   };
 
-  const handleDeleteEmployee = (id: string) => {
-    setEmployees(employees.filter((emp) => emp.id !== id));
+  const handleDeleteEmployee = async (id: string) => {
+    try {
+      await employeeService.delete(id);
+      setEmployees(employees.filter((emp) => emp.id !== id));
+    } catch (error) {
+      console.error("Error deleting employee:", error);
+    }
   };
 
   const openEditDialog = (employee: Employee) => {
@@ -158,8 +140,8 @@ const EmployeeList = () => {
     setFormData({
       name: employee.name,
       role: employee.role,
-      weeklyHours: employee.weeklyHours,
-      skills: employee.skills.map((skill) => skill.name).join(", "),
+      weekly_hours: employee.weekly_hours,
+      skills: Array.isArray(employee.skills) ? employee.skills.join(", ") : "",
     });
     setIsEditDialogOpen(true);
   };
@@ -168,7 +150,7 @@ const EmployeeList = () => {
     setFormData({
       name: "",
       role: "",
-      weeklyHours: 40,
+      weekly_hours: 40,
       skills: "",
     });
     setCurrentEmployee(null);
@@ -235,14 +217,14 @@ const EmployeeList = () => {
                     />
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="weeklyHours" className="text-right">
+                    <Label htmlFor="weekly_hours" className="text-right">
                       Weekly Hours
                     </Label>
                     <Input
-                      id="weeklyHours"
-                      name="weeklyHours"
+                      id="weekly_hours"
+                      name="weekly_hours"
                       type="number"
-                      value={formData.weeklyHours}
+                      value={formData.weekly_hours}
                       onChange={handleInputChange}
                       className="col-span-3"
                     />
@@ -286,21 +268,31 @@ const EmployeeList = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredEmployees.length > 0 ? (
+              {loading ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    className="text-center py-6 text-muted-foreground"
+                  >
+                    Loading employees...
+                  </TableCell>
+                </TableRow>
+              ) : filteredEmployees.length > 0 ? (
                 filteredEmployees.map((employee) => (
                   <TableRow key={employee.id}>
                     <TableCell className="font-medium">
                       {employee.name}
                     </TableCell>
                     <TableCell>{employee.role}</TableCell>
-                    <TableCell>{employee.weeklyHours}h</TableCell>
+                    <TableCell>{employee.weekly_hours}h</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
-                        {employee.skills.map((skill) => (
-                          <Badge key={skill.id} variant="secondary">
-                            {skill.name}
-                          </Badge>
-                        ))}
+                        {Array.isArray(employee.skills) &&
+                          employee.skills.map((skill, index) => (
+                            <Badge key={index} variant="secondary">
+                              {skill}
+                            </Badge>
+                          ))}
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
@@ -395,14 +387,14 @@ const EmployeeList = () => {
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-weeklyHours" className="text-right">
+              <Label htmlFor="edit-weekly_hours" className="text-right">
                 Weekly Hours
               </Label>
               <Input
-                id="edit-weeklyHours"
-                name="weeklyHours"
+                id="edit-weekly_hours"
+                name="weekly_hours"
                 type="number"
-                value={formData.weeklyHours}
+                value={formData.weekly_hours}
                 onChange={handleInputChange}
                 className="col-span-3"
               />

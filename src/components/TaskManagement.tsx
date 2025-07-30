@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
@@ -32,139 +32,156 @@ import { Calendar } from "./ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { format } from "date-fns";
 import { CalendarIcon, Edit, Plus, Trash2 } from "lucide-react";
+import {
+  taskService,
+  projectService,
+  employeeService,
+  type Task,
+  type Project,
+  type Employee,
+} from "@/lib/supabaseClient";
 
-interface Task {
-  id: string;
-  name: string;
-  description: string;
-  estimatedTime: number;
-  startDate: Date;
-  endDate: Date;
-  project: string;
-  assignedEmployee: string | null;
-}
+type TaskWithRelations = Task & {
+  project: Project | null;
+  assigned_employee: Employee | null;
+};
 
 const TaskManagement = () => {
-  const [tasks, setTasks] = useState<Task[]>([
-    {
-      id: "1",
-      name: "Website Redesign",
-      description: "Redesign the company website homepage",
-      estimatedTime: 20,
-      startDate: new Date(2023, 5, 1),
-      endDate: new Date(2023, 5, 10),
-      project: "Marketing Refresh",
-      assignedEmployee: "John Doe",
-    },
-    {
-      id: "2",
-      name: "Database Migration",
-      description: "Migrate data to new cloud infrastructure",
-      estimatedTime: 15,
-      startDate: new Date(2023, 5, 5),
-      endDate: new Date(2023, 5, 8),
-      project: "Tech Infrastructure",
-      assignedEmployee: "Jane Smith",
-    },
-    {
-      id: "3",
-      name: "User Testing",
-      description: "Conduct user testing sessions for new features",
-      estimatedTime: 8,
-      startDate: new Date(2023, 5, 12),
-      endDate: new Date(2023, 5, 14),
-      project: "Product Development",
-      assignedEmployee: null,
-    },
-  ]);
+  const [tasks, setTasks] = useState<TaskWithRelations[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [isNewTaskDialogOpen, setIsNewTaskDialogOpen] = useState(false);
   const [isEditTaskDialogOpen, setIsEditTaskDialogOpen] = useState(false);
   const [isAssignTaskDialogOpen, setIsAssignTaskDialogOpen] = useState(false);
-  const [currentTask, setCurrentTask] = useState<Task | null>(null);
+  const [currentTask, setCurrentTask] = useState<TaskWithRelations | null>(
+    null,
+  );
 
-  // Mock data for dropdowns
-  const projects = [
-    "Marketing Refresh",
-    "Tech Infrastructure",
-    "Product Development",
-    "HR Initiative",
-  ];
-  const employees = [
-    "John Doe",
-    "Jane Smith",
-    "Robert Johnson",
-    "Emily Davis",
-    "Michael Wilson",
-  ];
-
-  const [newTask, setNewTask] = useState<Partial<Task>>({
+  const [newTask, setNewTask] = useState({
     name: "",
     description: "",
-    estimatedTime: 0,
-    startDate: new Date(),
-    endDate: new Date(),
-    project: "",
-    assignedEmployee: null,
+    estimated_time: 0,
+    start_date: new Date().toISOString().split("T")[0],
+    end_date: new Date().toISOString().split("T")[0],
+    project_id: "",
+    assigned_employee_id: "",
   });
 
-  const handleCreateTask = () => {
-    const task: Task = {
-      id: Date.now().toString(),
-      name: newTask.name || "",
-      description: newTask.description || "",
-      estimatedTime: newTask.estimatedTime || 0,
-      startDate: newTask.startDate || new Date(),
-      endDate: newTask.endDate || new Date(),
-      project: newTask.project || "",
-      assignedEmployee: newTask.assignedEmployee || null,
-    };
+  // Load data from database
+  useEffect(() => {
+    loadData();
+  }, []);
 
-    setTasks([...tasks, task]);
-    setNewTask({
-      name: "",
-      description: "",
-      estimatedTime: 0,
-      startDate: new Date(),
-      endDate: new Date(),
-      project: "",
-      assignedEmployee: null,
-    });
-    setIsNewTaskDialogOpen(false);
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [tasksData, projectsData, employeesData] = await Promise.all([
+        taskService.getAll(),
+        projectService.getAll(),
+        employeeService.getAll(),
+      ]);
+
+      setTasks(tasksData as TaskWithRelations[]);
+      setProjects(projectsData);
+      setEmployees(employeesData);
+    } catch (error) {
+      console.error("Error loading data:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleUpdateTask = () => {
+  const handleCreateTask = async () => {
+    try {
+      const taskData = {
+        name: newTask.name,
+        description: newTask.description,
+        estimated_time: newTask.estimated_time,
+        start_date: newTask.start_date,
+        end_date: newTask.end_date,
+        project_id: newTask.project_id || null,
+        assigned_employee_id: newTask.assigned_employee_id || null,
+      };
+
+      const createdTask = await taskService.create(taskData);
+      setTasks([createdTask as TaskWithRelations, ...tasks]);
+
+      setNewTask({
+        name: "",
+        description: "",
+        estimated_time: 0,
+        start_date: new Date().toISOString().split("T")[0],
+        end_date: new Date().toISOString().split("T")[0],
+        project_id: "",
+        assigned_employee_id: "",
+      });
+      setIsNewTaskDialogOpen(false);
+    } catch (error) {
+      console.error("Error creating task:", error);
+    }
+  };
+
+  const handleUpdateTask = async () => {
     if (!currentTask) return;
 
-    const updatedTasks = tasks.map((task) =>
-      task.id === currentTask.id ? currentTask : task,
-    );
+    try {
+      const updatedTask = await taskService.update(currentTask.id, {
+        name: currentTask.name,
+        description: currentTask.description,
+        estimated_time: currentTask.estimated_time,
+        start_date: currentTask.start_date,
+        end_date: currentTask.end_date,
+        project_id: currentTask.project_id,
+        assigned_employee_id: currentTask.assigned_employee_id,
+      });
 
-    setTasks(updatedTasks);
-    setIsEditTaskDialogOpen(false);
+      const updatedTasks = tasks.map((task) =>
+        task.id === currentTask.id ? (updatedTask as TaskWithRelations) : task,
+      );
+
+      setTasks(updatedTasks);
+      setIsEditTaskDialogOpen(false);
+    } catch (error) {
+      console.error("Error updating task:", error);
+    }
   };
 
-  const handleAssignTask = () => {
+  const handleAssignTask = async () => {
     if (!currentTask) return;
 
-    const updatedTasks = tasks.map((task) =>
-      task.id === currentTask.id ? currentTask : task,
-    );
+    try {
+      const updatedTask = await taskService.update(currentTask.id, {
+        assigned_employee_id: currentTask.assigned_employee_id,
+      });
 
-    setTasks(updatedTasks);
-    setIsAssignTaskDialogOpen(false);
+      const updatedTasks = tasks.map((task) =>
+        task.id === currentTask.id ? (updatedTask as TaskWithRelations) : task,
+      );
+
+      setTasks(updatedTasks);
+      setIsAssignTaskDialogOpen(false);
+    } catch (error) {
+      console.error("Error assigning task:", error);
+    }
   };
 
-  const handleDeleteTask = (id: string) => {
-    setTasks(tasks.filter((task) => task.id !== id));
+  const handleDeleteTask = async (id: string) => {
+    try {
+      await taskService.delete(id);
+      setTasks(tasks.filter((task) => task.id !== id));
+    } catch (error) {
+      console.error("Error deleting task:", error);
+    }
   };
 
-  const openEditDialog = (task: Task) => {
+  const openEditDialog = (task: TaskWithRelations) => {
     setCurrentTask(task);
     setIsEditTaskDialogOpen(true);
   };
 
-  const openAssignDialog = (task: Task) => {
+  const openAssignDialog = (task: TaskWithRelations) => {
     setCurrentTask(task);
     setIsAssignTaskDialogOpen(true);
   };
@@ -222,13 +239,13 @@ const TaskManagement = () => {
                   Est. Hours
                 </Label>
                 <Input
-                  id="estimatedTime"
+                  id="estimated_time"
                   type="number"
-                  value={newTask.estimatedTime}
+                  value={newTask.estimated_time}
                   onChange={(e) =>
                     setNewTask({
                       ...newTask,
-                      estimatedTime: Number(e.target.value),
+                      estimated_time: Number(e.target.value),
                     })
                   }
                   className="col-span-3"
@@ -241,28 +258,15 @@ const TaskManagement = () => {
                 <div className="col-span-3">
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className="w-full justify-start text-left font-normal"
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {newTask.startDate ? (
-                          format(newTask.startDate, "PPP")
-                        ) : (
-                          <span>Pick a date</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={newTask.startDate}
-                        onSelect={(date) =>
-                          date && setNewTask({ ...newTask, startDate: date })
+                      <Input
+                        type="date"
+                        value={newTask.start_date}
+                        onChange={(e) =>
+                          setNewTask({ ...newTask, start_date: e.target.value })
                         }
-                        initialFocus
+                        className="w-full"
                       />
-                    </PopoverContent>
+                    </PopoverTrigger>
                   </Popover>
                 </div>
               </div>
@@ -271,31 +275,14 @@ const TaskManagement = () => {
                   End Date
                 </Label>
                 <div className="col-span-3">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className="w-full justify-start text-left font-normal"
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {newTask.endDate ? (
-                          format(newTask.endDate, "PPP")
-                        ) : (
-                          <span>Pick a date</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={newTask.endDate}
-                        onSelect={(date) =>
-                          date && setNewTask({ ...newTask, endDate: date })
-                        }
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <Input
+                    type="date"
+                    value={newTask.end_date}
+                    onChange={(e) =>
+                      setNewTask({ ...newTask, end_date: e.target.value })
+                    }
+                    className="w-full"
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -304,17 +291,17 @@ const TaskManagement = () => {
                 </Label>
                 <Select
                   onValueChange={(value) =>
-                    setNewTask({ ...newTask, project: value })
+                    setNewTask({ ...newTask, project_id: value })
                   }
-                  defaultValue={newTask.project || undefined}
+                  value={newTask.project_id}
                 >
                   <SelectTrigger className="col-span-3">
                     <SelectValue placeholder="Select a project" />
                   </SelectTrigger>
                   <SelectContent>
                     {projects.map((project) => (
-                      <SelectItem key={project} value={project}>
-                        {project}
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -347,46 +334,60 @@ const TaskManagement = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {tasks.map((task) => (
-                <TableRow key={task.id}>
-                  <TableCell className="font-medium">{task.name}</TableCell>
-                  <TableCell>{task.project}</TableCell>
-                  <TableCell>{task.estimatedTime}h</TableCell>
-                  <TableCell>
-                    {format(task.startDate, "MMM d")} -{" "}
-                    {format(task.endDate, "MMM d, yyyy")}
-                  </TableCell>
-                  <TableCell>
-                    {task.assignedEmployee || (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openAssignDialog(task)}
-                      >
-                        Assign
-                      </Button>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEditDialog(task)}
-                      >
-                        <Edit size={16} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteTask(task.id)}
-                      >
-                        <Trash2 size={16} />
-                      </Button>
-                    </div>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-6">
+                    Loading tasks...
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : tasks.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-6">
+                    No tasks found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                tasks.map((task) => (
+                  <TableRow key={task.id}>
+                    <TableCell className="font-medium">{task.name}</TableCell>
+                    <TableCell>{task.project?.name || "No project"}</TableCell>
+                    <TableCell>{task.estimated_time}h</TableCell>
+                    <TableCell>
+                      {format(new Date(task.start_date), "MMM d")} -{" "}
+                      {format(new Date(task.end_date), "MMM d, yyyy")}
+                    </TableCell>
+                    <TableCell>
+                      {task.assigned_employee?.name || (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openAssignDialog(task)}
+                        >
+                          Assign
+                        </Button>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openEditDialog(task)}
+                        >
+                          <Edit size={16} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteTask(task.id)}
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -440,13 +441,13 @@ const TaskManagement = () => {
                   Est. Hours
                 </Label>
                 <Input
-                  id="edit-estimatedTime"
+                  id="edit-estimated_time"
                   type="number"
-                  value={currentTask.estimatedTime}
+                  value={currentTask.estimated_time}
                   onChange={(e) =>
                     setCurrentTask({
                       ...currentTask,
-                      estimatedTime: Number(e.target.value),
+                      estimated_time: Number(e.target.value),
                     })
                   }
                   className="col-span-3"
@@ -464,16 +465,19 @@ const TaskManagement = () => {
                         className="w-full justify-start text-left font-normal"
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {format(currentTask.startDate, "PPP")}
+                        {format(new Date(currentTask.start_date), "PPP")}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0">
                       <Calendar
                         mode="single"
-                        selected={currentTask.startDate}
+                        selected={new Date(currentTask.start_date)}
                         onSelect={(date) =>
                           date &&
-                          setCurrentTask({ ...currentTask, startDate: date })
+                          setCurrentTask({
+                            ...currentTask,
+                            start_date: date.toISOString().split("T")[0],
+                          })
                         }
                         initialFocus
                       />
@@ -493,16 +497,19 @@ const TaskManagement = () => {
                         className="w-full justify-start text-left font-normal"
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {format(currentTask.endDate, "PPP")}
+                        {format(new Date(currentTask.end_date), "PPP")}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0">
                       <Calendar
                         mode="single"
-                        selected={currentTask.endDate}
+                        selected={new Date(currentTask.end_date)}
                         onSelect={(date) =>
                           date &&
-                          setCurrentTask({ ...currentTask, endDate: date })
+                          setCurrentTask({
+                            ...currentTask,
+                            end_date: date.toISOString().split("T")[0],
+                          })
                         }
                         initialFocus
                       />
@@ -516,17 +523,17 @@ const TaskManagement = () => {
                 </Label>
                 <Select
                   onValueChange={(value) =>
-                    setCurrentTask({ ...currentTask, project: value })
+                    setCurrentTask({ ...currentTask, project_id: value })
                   }
-                  defaultValue={currentTask.project}
+                  value={currentTask.project_id || ""}
                 >
                   <SelectTrigger className="col-span-3">
                     <SelectValue placeholder="Select a project" />
                   </SelectTrigger>
                   <SelectContent>
                     {projects.map((project) => (
-                      <SelectItem key={project} value={project}>
-                        {project}
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -568,17 +575,20 @@ const TaskManagement = () => {
                 </Label>
                 <Select
                   onValueChange={(value) =>
-                    setCurrentTask({ ...currentTask, assignedEmployee: value })
+                    setCurrentTask({
+                      ...currentTask,
+                      assigned_employee_id: value,
+                    })
                   }
-                  defaultValue={currentTask.assignedEmployee || undefined}
+                  value={currentTask.assigned_employee_id || ""}
                 >
                   <SelectTrigger className="col-span-3">
                     <SelectValue placeholder="Select an employee" />
                   </SelectTrigger>
                   <SelectContent>
                     {employees.map((employee) => (
-                      <SelectItem key={employee} value={employee}>
-                        {employee}
+                      <SelectItem key={employee.id} value={employee.id}>
+                        {employee.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
