@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,9 +7,64 @@ import WorkloadCalendar from "./WorkloadCalendar";
 import EmployeeList from "./EmployeeList";
 import TaskManagement from "./TaskManagement";
 import WorkloadSummary from "./WorkloadSummary";
+import { employeeService, taskService } from "@/lib/supabaseClient";
 
 const HomePage = () => {
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [totalEmployees, setTotalEmployees] = useState(0);
+  const [activeTasks, setActiveTasks] = useState(0);
+  const [avgWorkload, setAvgWorkload] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true);
+      const [employees, tasks] = await Promise.all([
+        employeeService.getAll(),
+        taskService.getAll(),
+      ]);
+
+      setTotalEmployees(employees.length);
+
+      // Count active tasks (tasks that are assigned and within current date range)
+      const currentDate = new Date();
+      const activeTasksCount = tasks.filter((task) => {
+        const startDate = new Date(task.start_date);
+        const endDate = new Date(task.end_date);
+        return (
+          task.assigned_employee_id &&
+          startDate <= currentDate &&
+          endDate >= currentDate
+        );
+      }).length;
+      setActiveTasks(activeTasksCount);
+
+      // Calculate average workload
+      if (employees.length > 0) {
+        const totalCapacity = employees.reduce(
+          (sum, emp) => sum + emp.weekly_hours,
+          0,
+        );
+        const totalAssignedHours = tasks
+          .filter((task) => task.assigned_employee_id)
+          .reduce((sum, task) => sum + task.estimated_time, 0);
+
+        const avgWorkloadPercent =
+          totalCapacity > 0
+            ? Math.round((totalAssignedHours / totalCapacity) * 100)
+            : 0;
+        setAvgWorkload(avgWorkloadPercent);
+      }
+    } catch (error) {
+      console.error("Error loading dashboard data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="flex h-screen bg-background">
@@ -99,7 +154,9 @@ const HomePage = () => {
                       <p className="text-sm text-muted-foreground">
                         Total Employees
                       </p>
-                      <p className="text-2xl font-bold">12</p>
+                      <p className="text-2xl font-bold">
+                        {loading ? "..." : totalEmployees}
+                      </p>
                     </div>
                   </CardContent>
                 </Card>
@@ -112,7 +169,9 @@ const HomePage = () => {
                       <p className="text-sm text-muted-foreground">
                         Active Tasks
                       </p>
-                      <p className="text-2xl font-bold">24</p>
+                      <p className="text-2xl font-bold">
+                        {loading ? "..." : activeTasks}
+                      </p>
                     </div>
                   </CardContent>
                 </Card>
@@ -125,7 +184,9 @@ const HomePage = () => {
                       <p className="text-sm text-muted-foreground">
                         Avg. Workload
                       </p>
-                      <p className="text-2xl font-bold">78%</p>
+                      <p className="text-2xl font-bold">
+                        {loading ? "..." : `${avgWorkload}%`}
+                      </p>
                     </div>
                   </CardContent>
                 </Card>

@@ -55,6 +55,7 @@ const TaskManagement = () => {
   const [isNewTaskDialogOpen, setIsNewTaskDialogOpen] = useState(false);
   const [isEditTaskDialogOpen, setIsEditTaskDialogOpen] = useState(false);
   const [isAssignTaskDialogOpen, setIsAssignTaskDialogOpen] = useState(false);
+  const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false);
   const [currentTask, setCurrentTask] = useState<TaskWithRelations | null>(
     null,
   );
@@ -65,8 +66,15 @@ const TaskManagement = () => {
     estimated_time: 0,
     start_date: new Date().toISOString().split("T")[0],
     end_date: new Date().toISOString().split("T")[0],
-    project_id: "",
-    assigned_employee_id: "",
+    project_id: "none",
+    assigned_employee_id: "none",
+  });
+
+  const [newProject, setNewProject] = useState({
+    name: "",
+    description: "",
+    start_date: new Date().toISOString().split("T")[0],
+    end_date: new Date().toISOString().split("T")[0],
   });
 
   // Load data from database
@@ -101,8 +109,12 @@ const TaskManagement = () => {
         estimated_time: newTask.estimated_time,
         start_date: newTask.start_date,
         end_date: newTask.end_date,
-        project_id: newTask.project_id || null,
-        assigned_employee_id: newTask.assigned_employee_id || null,
+        project_id:
+          newTask.project_id === "none" ? null : newTask.project_id || null,
+        assigned_employee_id:
+          newTask.assigned_employee_id === "none"
+            ? null
+            : newTask.assigned_employee_id || null,
       };
 
       const createdTask = await taskService.create(taskData);
@@ -114,8 +126,8 @@ const TaskManagement = () => {
         estimated_time: 0,
         start_date: new Date().toISOString().split("T")[0],
         end_date: new Date().toISOString().split("T")[0],
-        project_id: "",
-        assigned_employee_id: "",
+        project_id: "none",
+        assigned_employee_id: "none",
       });
       setIsNewTaskDialogOpen(false);
     } catch (error) {
@@ -133,8 +145,12 @@ const TaskManagement = () => {
         estimated_time: currentTask.estimated_time,
         start_date: currentTask.start_date,
         end_date: currentTask.end_date,
-        project_id: currentTask.project_id,
-        assigned_employee_id: currentTask.assigned_employee_id,
+        project_id:
+          currentTask.project_id === "none" ? null : currentTask.project_id,
+        assigned_employee_id:
+          currentTask.assigned_employee_id === "none"
+            ? null
+            : currentTask.assigned_employee_id,
       });
 
       const updatedTasks = tasks.map((task) =>
@@ -153,7 +169,10 @@ const TaskManagement = () => {
 
     try {
       const updatedTask = await taskService.update(currentTask.id, {
-        assigned_employee_id: currentTask.assigned_employee_id,
+        assigned_employee_id:
+          currentTask.assigned_employee_id === "none"
+            ? null
+            : currentTask.assigned_employee_id,
       });
 
       const updatedTasks = tasks.map((task) =>
@@ -176,6 +195,23 @@ const TaskManagement = () => {
     }
   };
 
+  const handleCreateProject = async () => {
+    try {
+      const createdProject = await projectService.create(newProject);
+      setProjects([...projects, createdProject]);
+
+      setNewProject({
+        name: "",
+        description: "",
+        start_date: new Date().toISOString().split("T")[0],
+        end_date: new Date().toISOString().split("T")[0],
+      });
+      setIsNewProjectDialogOpen(false);
+    } catch (error) {
+      console.error("Error creating project:", error);
+    }
+  };
+
   const openEditDialog = (task: TaskWithRelations) => {
     setCurrentTask(task);
     setIsEditTaskDialogOpen(true);
@@ -190,131 +226,223 @@ const TaskManagement = () => {
     <div className="bg-background p-6 w-full">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Task Management</h1>
-        <Dialog
-          open={isNewTaskDialogOpen}
-          onOpenChange={setIsNewTaskDialogOpen}
-        >
-          <DialogTrigger asChild>
-            <Button className="flex items-center gap-2">
-              <Plus size={16} />
-              Create New Task
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[550px]">
-            <DialogHeader>
-              <DialogTitle>Create New Task</DialogTitle>
-              <DialogDescription>
-                Add a new task with details and time estimates.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right">
-                  Task Name
-                </Label>
-                <Input
-                  id="name"
-                  value={newTask.name}
-                  onChange={(e) =>
-                    setNewTask({ ...newTask, name: e.target.value })
-                  }
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="description" className="text-right">
-                  Description
-                </Label>
-                <Textarea
-                  id="description"
-                  value={newTask.description}
-                  onChange={(e) =>
-                    setNewTask({ ...newTask, description: e.target.value })
-                  }
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="estimatedTime" className="text-right">
-                  Est. Hours
-                </Label>
-                <Input
-                  id="estimated_time"
-                  type="number"
-                  value={newTask.estimated_time}
-                  onChange={(e) =>
-                    setNewTask({
-                      ...newTask,
-                      estimated_time: Number(e.target.value),
-                    })
-                  }
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="startDate" className="text-right">
-                  Start Date
-                </Label>
-                <div className="col-span-3">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Input
-                        type="date"
-                        value={newTask.start_date}
-                        onChange={(e) =>
-                          setNewTask({ ...newTask, start_date: e.target.value })
-                        }
-                        className="w-full"
-                      />
-                    </PopoverTrigger>
-                  </Popover>
-                </div>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="endDate" className="text-right">
-                  End Date
-                </Label>
-                <div className="col-span-3">
+        <div className="flex gap-2">
+          <Dialog
+            open={isNewProjectDialogOpen}
+            onOpenChange={setIsNewProjectDialogOpen}
+          >
+            <DialogTrigger asChild>
+              <Button variant="outline" className="flex items-center gap-2">
+                <Plus size={16} />
+                New Project
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Create New Project</DialogTitle>
+                <DialogDescription>
+                  Add a new project to organize your tasks.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="project-name" className="text-right">
+                    Name
+                  </Label>
                   <Input
-                    type="date"
-                    value={newTask.end_date}
+                    id="project-name"
+                    value={newProject.name}
                     onChange={(e) =>
-                      setNewTask({ ...newTask, end_date: e.target.value })
+                      setNewProject({ ...newProject, name: e.target.value })
                     }
-                    className="w-full"
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="project-description" className="text-right">
+                    Description
+                  </Label>
+                  <Textarea
+                    id="project-description"
+                    value={newProject.description}
+                    onChange={(e) =>
+                      setNewProject({
+                        ...newProject,
+                        description: e.target.value,
+                      })
+                    }
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="project-start-date" className="text-right">
+                    Start Date
+                  </Label>
+                  <Input
+                    id="project-start-date"
+                    type="date"
+                    value={newProject.start_date}
+                    onChange={(e) =>
+                      setNewProject({
+                        ...newProject,
+                        start_date: e.target.value,
+                      })
+                    }
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="project-end-date" className="text-right">
+                    End Date
+                  </Label>
+                  <Input
+                    id="project-end-date"
+                    type="date"
+                    value={newProject.end_date}
+                    onChange={(e) =>
+                      setNewProject({ ...newProject, end_date: e.target.value })
+                    }
+                    className="col-span-3"
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="project" className="text-right">
-                  Project
-                </Label>
-                <Select
-                  onValueChange={(value) =>
-                    setNewTask({ ...newTask, project_id: value })
-                  }
-                  value={newTask.project_id}
-                >
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select a project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="submit" onClick={handleCreateTask}>
-                Create Task
+              <DialogFooter>
+                <Button type="submit" onClick={handleCreateProject}>
+                  Create Project
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog
+            open={isNewTaskDialogOpen}
+            onOpenChange={setIsNewTaskDialogOpen}
+          >
+            <DialogTrigger asChild>
+              <Button className="flex items-center gap-2">
+                <Plus size={16} />
+                Create New Task
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[550px]">
+              <DialogHeader>
+                <DialogTitle>Create New Task</DialogTitle>
+                <DialogDescription>
+                  Add a new task with details and time estimates.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="name" className="text-right">
+                    Task Name
+                  </Label>
+                  <Input
+                    id="name"
+                    value={newTask.name}
+                    onChange={(e) =>
+                      setNewTask({ ...newTask, name: e.target.value })
+                    }
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="description" className="text-right">
+                    Description
+                  </Label>
+                  <Textarea
+                    id="description"
+                    value={newTask.description}
+                    onChange={(e) =>
+                      setNewTask({ ...newTask, description: e.target.value })
+                    }
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="estimatedTime" className="text-right">
+                    Est. Hours
+                  </Label>
+                  <Input
+                    id="estimated_time"
+                    type="number"
+                    value={newTask.estimated_time}
+                    onChange={(e) =>
+                      setNewTask({
+                        ...newTask,
+                        estimated_time: Number(e.target.value),
+                      })
+                    }
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="startDate" className="text-right">
+                    Start Date
+                  </Label>
+                  <div className="col-span-3">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Input
+                          type="date"
+                          value={newTask.start_date}
+                          onChange={(e) =>
+                            setNewTask({
+                              ...newTask,
+                              start_date: e.target.value,
+                            })
+                          }
+                          className="w-full"
+                        />
+                      </PopoverTrigger>
+                    </Popover>
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="endDate" className="text-right">
+                    End Date
+                  </Label>
+                  <div className="col-span-3">
+                    <Input
+                      type="date"
+                      value={newTask.end_date}
+                      onChange={(e) =>
+                        setNewTask({ ...newTask, end_date: e.target.value })
+                      }
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="project" className="text-right">
+                    Project
+                  </Label>
+                  <Select
+                    onValueChange={(value) =>
+                      setNewTask({ ...newTask, project_id: value })
+                    }
+                    value={newTask.project_id}
+                  >
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Select a project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No project</SelectItem>
+                      {projects.map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="submit" onClick={handleCreateTask}>
+                  Create Task
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <Card>
@@ -525,12 +653,13 @@ const TaskManagement = () => {
                   onValueChange={(value) =>
                     setCurrentTask({ ...currentTask, project_id: value })
                   }
-                  value={currentTask.project_id || ""}
+                  value={currentTask.project_id || "none"}
                 >
                   <SelectTrigger className="col-span-3">
                     <SelectValue placeholder="Select a project" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">No project</SelectItem>
                     {projects.map((project) => (
                       <SelectItem key={project.id} value={project.id}>
                         {project.name}
@@ -580,12 +709,13 @@ const TaskManagement = () => {
                       assigned_employee_id: value,
                     })
                   }
-                  value={currentTask.assigned_employee_id || ""}
+                  value={currentTask.assigned_employee_id || "none"}
                 >
                   <SelectTrigger className="col-span-3">
                     <SelectValue placeholder="Select an employee" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">No employee</SelectItem>
                     {employees.map((employee) => (
                       <SelectItem key={employee.id} value={employee.id}>
                         {employee.name}

@@ -10,20 +10,69 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 
-// Types for our application
-export type Employee = Database["public"]["Tables"]["employees"]["Row"];
-export type EmployeeInsert =
-  Database["public"]["Tables"]["employees"]["Insert"];
-export type EmployeeUpdate =
-  Database["public"]["Tables"]["employees"]["Update"];
+// Types for our application - using fallback types if database types don't exist
+export type Employee = {
+  id: string;
+  name: string;
+  role: string;
+  weekly_hours: number;
+  skills: string[];
+  created_at: string;
+  updated_at: string;
+};
 
-export type Project = Database["public"]["Tables"]["projects"]["Row"];
-export type ProjectInsert = Database["public"]["Tables"]["projects"]["Insert"];
-export type ProjectUpdate = Database["public"]["Tables"]["projects"]["Update"];
+export type EmployeeInsert = {
+  name: string;
+  role: string;
+  weekly_hours: number;
+  skills: string[];
+};
 
-export type Task = Database["public"]["Tables"]["tasks"]["Row"];
-export type TaskInsert = Database["public"]["Tables"]["tasks"]["Insert"];
-export type TaskUpdate = Database["public"]["Tables"]["tasks"]["Update"];
+export type EmployeeUpdate = Partial<EmployeeInsert>;
+
+export type Project = {
+  id: string;
+  name: string;
+  description: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProjectInsert = {
+  name: string;
+  description?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+};
+
+export type ProjectUpdate = Partial<ProjectInsert>;
+
+export type Task = {
+  id: string;
+  name: string;
+  description: string | null;
+  estimated_time: number;
+  start_date: string;
+  end_date: string;
+  project_id: string | null;
+  assigned_employee_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TaskInsert = {
+  name: string;
+  description?: string | null;
+  estimated_time: number;
+  start_date: string;
+  end_date: string;
+  project_id?: string | null;
+  assigned_employee_id?: string | null;
+};
+
+export type TaskUpdate = Partial<TaskInsert>;
 
 // Helper functions for CRUD operations
 export const employeeService = {

@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS projects (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT,
+  start_date DATE,
+  end_date DATE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -41,11 +43,11 @@ INSERT INTO employees (name, role, weekly_hours, skills) VALUES
 ('David Brown', 'QA Engineer', 35, '["Testing", "Automation"]')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO projects (name, description) VALUES
-('Website Redesign', 'Complete redesign of company website'),
-('Mobile App', 'New mobile application development'),
-('CRM Integration', 'Integration with customer relationship management system'),
-('E-commerce Platform', 'Development of new e-commerce platform')
+INSERT INTO projects (name, description, start_date, end_date) VALUES
+('Website Redesign', 'Complete redesign of company website', CURRENT_DATE, CURRENT_DATE + INTERVAL '30 days'),
+('Mobile App', 'New mobile application development', CURRENT_DATE + INTERVAL '5 days', CURRENT_DATE + INTERVAL '60 days'),
+('CRM Integration', 'Integration with customer relationship management system', CURRENT_DATE + INTERVAL '10 days', CURRENT_DATE + INTERVAL '45 days'),
+('E-commerce Platform', 'Development of new e-commerce platform', CURRENT_DATE + INTERVAL '15 days', CURRENT_DATE + INTERVAL '90 days')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO tasks (name, description, estimated_time, start_date, end_date, project_id, assigned_employee_id)
