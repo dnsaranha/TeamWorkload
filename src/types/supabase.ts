@@ -700,6 +700,7 @@ export type Database = {
       workload_tasks: {
         Row: {
           assigned_employee_id: string | null
+          completion_date: string | null
           created_at: string | null
           description: string | null
           end_date: string
@@ -708,10 +709,12 @@ export type Database = {
           name: string
           project_id: string | null
           start_date: string
+          status: string | null
           updated_at: string | null
         }
         Insert: {
           assigned_employee_id?: string | null
+          completion_date?: string | null
           created_at?: string | null
           description?: string | null
           end_date: string
@@ -720,10 +723,12 @@ export type Database = {
           name: string
           project_id?: string | null
           start_date: string
+          status?: string | null
           updated_at?: string | null
         }
         Update: {
           assigned_employee_id?: string | null
+          completion_date?: string | null
           created_at?: string | null
           description?: string | null
           end_date?: string
@@ -732,6 +737,7 @@ export type Database = {
           name?: string
           project_id?: string | null
           start_date?: string
+          status?: string | null
           updated_at?: string | null
         }
         Relationships: [

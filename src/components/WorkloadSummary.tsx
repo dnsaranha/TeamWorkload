@@ -12,6 +12,23 @@ import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line,
+  Legend,
+} from "recharts";
 import {
   taskService,
   employeeService,
@@ -40,18 +57,45 @@ interface WorkloadSummaryProps {
   projects?: ProjectWithWorkload[];
   period?: string;
   onPeriodChange?: (period: string) => void;
+  showCharts?: boolean;
 }
+
+interface ChartConfig {
+  employeeWorkload: boolean;
+  projectProgress: boolean;
+  taskDistribution: boolean;
+  timelineProgress: boolean;
+}
+
+const COLORS = [
+  "#0088FE",
+  "#00C49F",
+  "#FFBB28",
+  "#FF8042",
+  "#8884D8",
+  "#82CA9D",
+];
 
 const WorkloadSummary = ({
   employees = [],
   projects = [],
   period = "This Week",
   onPeriodChange = () => {},
+  showCharts = false,
 }: WorkloadSummaryProps) => {
-  const [activeTab, setActiveTab] = useState("employees");
+  const [activeTab, setActiveTab] = useState(
+    showCharts ? "charts" : "employees",
+  );
   const [dbEmployees, setDbEmployees] = useState<EmployeeWithWorkload[]>([]);
   const [dbProjects, setDbProjects] = useState<ProjectWithWorkload[]>([]);
+  const [tasks, setTasks] = useState<TaskWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
+  const [chartConfig, setChartConfig] = useState<ChartConfig>({
+    employeeWorkload: true,
+    projectProgress: true,
+    taskDistribution: true,
+    timelineProgress: false,
+  });
 
   // Load data from database
   useEffect(() => {
@@ -67,20 +111,27 @@ const WorkloadSummary = ({
         projectService.getAll(),
       ]);
 
-      // Calculate workload for employees
+      // Set tasks state
+      setTasks(tasksData as TaskWithRelations[]);
+
+      // Calculate workload for employees based on filtered period
       const employeesWithWorkload: EmployeeWithWorkload[] = employeesData.map(
         (employee) => {
           const employeeTasks = (tasksData as TaskWithRelations[]).filter(
             (task) => task.assigned_employee_id === employee.id,
           );
 
-          const totalHours = employeeTasks.reduce(
-            (sum, task) => sum + task.estimated_time,
-            0,
+          // Filter tasks based on the selected period and calculate workload
+          const filteredTasks = filterTasksByPeriod(employeeTasks, period);
+          const totalHours = calculatePeriodHours(filteredTasks, period);
+          const periodCapacity = calculatePeriodCapacity(
+            employee.weekly_hours,
+            period,
           );
+
           const workload =
-            employee.weekly_hours > 0
-              ? Math.round((totalHours / employee.weekly_hours) * 100)
+            periodCapacity > 0
+              ? Math.round((totalHours / periodCapacity) * 100)
               : 0;
 
           return {
@@ -128,6 +179,114 @@ const WorkloadSummary = ({
     }
   };
 
+  // Helper functions for period-based calculations
+  const filterTasksByPeriod = (
+    tasks: TaskWithRelations[],
+    selectedPeriod: string,
+  ) => {
+    const now = new Date();
+    let startDate: Date;
+    let endDate: Date;
+
+    switch (selectedPeriod) {
+      case "Today":
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        endDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() + 1,
+        );
+        break;
+      case "This Week":
+        const dayOfWeek = now.getDay();
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() - dayOfWeek,
+        );
+        endDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() + (6 - dayOfWeek) + 1,
+        );
+        break;
+      case "This Month":
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        break;
+      case "This Quarter":
+        const quarter = Math.floor(now.getMonth() / 3);
+        startDate = new Date(now.getFullYear(), quarter * 3, 1);
+        endDate = new Date(now.getFullYear(), quarter * 3 + 3, 0);
+        break;
+      default:
+        return tasks;
+    }
+
+    return tasks.filter((task) => {
+      const taskStart = new Date(task.start_date);
+      const taskEnd = new Date(task.end_date);
+
+      // Task overlaps with the period if it starts before period ends and ends after period starts
+      return taskStart < endDate && taskEnd >= startDate;
+    });
+  };
+
+  const calculatePeriodHours = (
+    tasks: TaskWithRelations[],
+    selectedPeriod: string,
+  ) => {
+    const now = new Date();
+
+    return tasks.reduce((total, task) => {
+      // If task is completed, only count hours up to completion date
+      if (task.status === "completed" && task.completion_date) {
+        const completionDate = new Date(task.completion_date);
+        const taskStart = new Date(task.start_date);
+        const taskEnd = new Date(task.end_date);
+
+        // If completed before the task period, don't count any hours
+        if (completionDate < taskStart) return total;
+
+        // Calculate the proportion of task completed within the period
+        const effectiveEnd =
+          completionDate < taskEnd ? completionDate : taskEnd;
+        const taskDuration = Math.max(
+          1,
+          (taskEnd.getTime() - taskStart.getTime()) / (1000 * 60 * 60 * 24),
+        );
+        const completedDuration = Math.max(
+          1,
+          (effectiveEnd.getTime() - taskStart.getTime()) /
+            (1000 * 60 * 60 * 24),
+        );
+
+        return total + task.estimated_time * (completedDuration / taskDuration);
+      }
+
+      // For non-completed tasks, count full estimated time
+      return total + task.estimated_time;
+    }, 0);
+  };
+
+  const calculatePeriodCapacity = (
+    weeklyHours: number,
+    selectedPeriod: string,
+  ) => {
+    switch (selectedPeriod) {
+      case "Today":
+        return weeklyHours / 5; // Assuming 5 work days per week
+      case "This Week":
+        return weeklyHours;
+      case "This Month":
+        return weeklyHours * 4.33; // Average weeks per month
+      case "This Quarter":
+        return weeklyHours * 13; // Average weeks per quarter
+      default:
+        return weeklyHours;
+    }
+  };
+
   // Use database data if available, otherwise use props
   const displayEmployees = employees.length > 0 ? employees : dbEmployees;
   const displayProjects = projects.length > 0 ? projects : dbProjects;
@@ -143,6 +302,56 @@ const WorkloadSummary = ({
     if (workload >= 50) return "default";
     return "secondary";
   };
+
+  // Prepare chart data
+  const employeeChartData = displayEmployees.map((emp) => ({
+    name: emp.name.split(" ")[0], // First name only for chart
+    workload: emp.workload,
+    capacity: 100,
+  }));
+
+  const projectChartData = displayProjects.map((proj) => ({
+    name:
+      proj.name.length > 15 ? proj.name.substring(0, 15) + "..." : proj.name,
+    progress: proj.progress,
+    workload: proj.workload,
+  }));
+
+  const taskDistributionData = displayEmployees
+    .map((emp) => {
+      const employeeTasks = tasks.filter(
+        (task) => task.assigned_employee_id === emp.id,
+      );
+      return {
+        name: emp.name.split(" ")[0],
+        tasks: employeeTasks.length,
+        hours: employeeTasks.reduce(
+          (sum, task) => sum + task.estimated_time,
+          0,
+        ),
+      };
+    })
+    .filter((item) => item.tasks > 0);
+
+  const workloadStatusData = [
+    {
+      name: "Overloaded (>100%)",
+      value: displayEmployees.filter((emp) => emp.workload > 100).length,
+      color: "#FF8042",
+    },
+    {
+      name: "Optimal (50-100%)",
+      value: displayEmployees.filter(
+        (emp) => emp.workload >= 50 && emp.workload <= 100,
+      ).length,
+      color: "#FFBB28",
+    },
+    {
+      name: "Underutilized (<50%)",
+      value: displayEmployees.filter((emp) => emp.workload < 50).length,
+      color: "#00C49F",
+    },
+  ].filter((item) => item.value > 0);
 
   return (
     <Card className="h-full bg-background">
@@ -164,9 +373,12 @@ const WorkloadSummary = ({
           </Select>
         </div>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList
+            className={`grid w-full ${showCharts ? "grid-cols-3" : "grid-cols-2"}`}
+          >
             <TabsTrigger value="employees">Employees</TabsTrigger>
             <TabsTrigger value="projects">Projects</TabsTrigger>
+            {showCharts && <TabsTrigger value="charts">Charts</TabsTrigger>}
           </TabsList>
         </Tabs>
       </CardHeader>
@@ -285,6 +497,196 @@ const WorkloadSummary = ({
                 )}
               </div>
             </TabsContent>
+
+            {showCharts && (
+              <TabsContent value="charts" className="mt-0">
+                <div className="space-y-4">
+                  {/* Chart Selection */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">Chart Options</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="employeeWorkload"
+                          checked={chartConfig.employeeWorkload}
+                          onCheckedChange={(checked) =>
+                            setChartConfig((prev) => ({
+                              ...prev,
+                              employeeWorkload: !!checked,
+                            }))
+                          }
+                        />
+                        <label htmlFor="employeeWorkload" className="text-sm">
+                          Employee Workload
+                        </label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="projectProgress"
+                          checked={chartConfig.projectProgress}
+                          onCheckedChange={(checked) =>
+                            setChartConfig((prev) => ({
+                              ...prev,
+                              projectProgress: !!checked,
+                            }))
+                          }
+                        />
+                        <label htmlFor="projectProgress" className="text-sm">
+                          Project Progress
+                        </label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="taskDistribution"
+                          checked={chartConfig.taskDistribution}
+                          onCheckedChange={(checked) =>
+                            setChartConfig((prev) => ({
+                              ...prev,
+                              taskDistribution: !!checked,
+                            }))
+                          }
+                        />
+                        <label htmlFor="taskDistribution" className="text-sm">
+                          Task Distribution
+                        </label>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Employee Workload Bar Chart */}
+                  {chartConfig.employeeWorkload &&
+                    employeeChartData.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">
+                            Employee Workload
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-64">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={employeeChartData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="name" fontSize={12} />
+                                <YAxis fontSize={12} />
+                                <Tooltip />
+                                <Bar dataKey="workload" fill="#8884d8" />
+                                <Bar
+                                  dataKey="capacity"
+                                  fill="#e0e0e0"
+                                  opacity={0.3}
+                                />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                  {/* Project Progress Chart */}
+                  {chartConfig.projectProgress &&
+                    projectChartData.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">
+                            Project Progress
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-64">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={projectChartData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="name" fontSize={12} />
+                                <YAxis fontSize={12} />
+                                <Tooltip />
+                                <Bar dataKey="progress" fill="#00C49F" />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                  {/* Task Distribution Pie Chart */}
+                  {chartConfig.taskDistribution &&
+                    workloadStatusData.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">
+                            Workload Distribution
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-64">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie
+                                  data={workloadStatusData}
+                                  cx="50%"
+                                  cy="50%"
+                                  labelLine={false}
+                                  label={({ name, value }) =>
+                                    `${name}: ${value}`
+                                  }
+                                  outerRadius={80}
+                                  fill="#8884d8"
+                                  dataKey="value"
+                                >
+                                  {workloadStatusData.map((entry, index) => (
+                                    <Cell
+                                      key={`cell-${index}`}
+                                      fill={entry.color}
+                                    />
+                                  ))}
+                                </Pie>
+                                <Tooltip />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                  {/* Task Distribution by Employee */}
+                  {chartConfig.taskDistribution &&
+                    taskDistributionData.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">
+                            Task Distribution by Employee
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-64">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={taskDistributionData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="name" fontSize={12} />
+                                <YAxis fontSize={12} />
+                                <Tooltip />
+                                <Legend />
+                                <Bar
+                                  dataKey="tasks"
+                                  fill="#8884d8"
+                                  name="Tasks"
+                                />
+                                <Bar
+                                  dataKey="hours"
+                                  fill="#82ca9d"
+                                  name="Hours"
+                                />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                </div>
+              </TabsContent>
+            )}
           </ScrollArea>
         </Tabs>
       </CardContent>

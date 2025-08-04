@@ -16,16 +16,16 @@ export type Employee = {
   name: string;
   role: string;
   weekly_hours: number;
-  skills: string[];
-  created_at: string;
-  updated_at: string;
+  skills: any; // Using any to match Supabase Json type
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 export type EmployeeInsert = {
   name: string;
   role: string;
   weekly_hours: number;
-  skills: string[];
+  skills: any; // Using any to match Supabase Json type
 };
 
 export type EmployeeUpdate = Partial<EmployeeInsert>;
@@ -36,8 +36,8 @@ export type Project = {
   description: string | null;
   start_date: string | null;
   end_date: string | null;
-  created_at: string;
-  updated_at: string;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 export type ProjectInsert = {
@@ -58,8 +58,10 @@ export type Task = {
   end_date: string;
   project_id: string | null;
   assigned_employee_id: string | null;
-  created_at: string;
-  updated_at: string;
+  status: "pending" | "in_progress" | "completed";
+  completion_date: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 export type TaskInsert = {
@@ -70,6 +72,8 @@ export type TaskInsert = {
   end_date: string;
   project_id?: string | null;
   assigned_employee_id?: string | null;
+  status?: "pending" | "in_progress" | "completed";
+  completion_date?: string | null;
 };
 
 export type TaskUpdate = Partial<TaskInsert>;

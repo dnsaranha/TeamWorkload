@@ -30,8 +30,19 @@ import {
 } from "./ui/table";
 import { Calendar } from "./ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Badge } from "./ui/badge";
 import { format } from "date-fns";
-import { CalendarIcon, Edit, Plus, Trash2 } from "lucide-react";
+import {
+  CalendarIcon,
+  Edit,
+  Plus,
+  Trash2,
+  Filter,
+  Download,
+  Upload,
+  X,
+} from "lucide-react";
+import * as XLSX from "xlsx";
 import {
   taskService,
   projectService,
@@ -52,6 +63,14 @@ const TaskManagement = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Filter states
+  const [filters, setFilters] = useState({
+    project: "all",
+    employee: "all",
+    status: "all",
+  });
+  const [showFilters, setShowFilters] = useState(false);
+
   const [isNewTaskDialogOpen, setIsNewTaskDialogOpen] = useState(false);
   const [isEditTaskDialogOpen, setIsEditTaskDialogOpen] = useState(false);
   const [isAssignTaskDialogOpen, setIsAssignTaskDialogOpen] = useState(false);
@@ -68,6 +87,8 @@ const TaskManagement = () => {
     end_date: new Date().toISOString().split("T")[0],
     project_id: "none",
     assigned_employee_id: "none",
+    status: "pending" as "pending" | "in_progress" | "completed",
+    completion_date: "",
   });
 
   const [newProject, setNewProject] = useState({
@@ -115,6 +136,11 @@ const TaskManagement = () => {
           newTask.assigned_employee_id === "none"
             ? null
             : newTask.assigned_employee_id || null,
+        status: newTask.status,
+        completion_date:
+          newTask.status === "completed" && newTask.completion_date
+            ? newTask.completion_date
+            : null,
       };
 
       const createdTask = await taskService.create(taskData);
@@ -128,6 +154,8 @@ const TaskManagement = () => {
         end_date: new Date().toISOString().split("T")[0],
         project_id: "none",
         assigned_employee_id: "none",
+        status: "pending" as "pending" | "in_progress" | "completed",
+        completion_date: "",
       });
       setIsNewTaskDialogOpen(false);
     } catch (error) {
@@ -151,6 +179,11 @@ const TaskManagement = () => {
           currentTask.assigned_employee_id === "none"
             ? null
             : currentTask.assigned_employee_id,
+        status: currentTask.status,
+        completion_date:
+          currentTask.status === "completed" && currentTask.completion_date
+            ? currentTask.completion_date
+            : null,
       });
 
       const updatedTasks = tasks.map((task) =>
@@ -222,11 +255,143 @@ const TaskManagement = () => {
     setIsAssignTaskDialogOpen(true);
   };
 
+  // Filter tasks based on selected filters
+  const filteredTasks = tasks.filter((task) => {
+    const projectMatch =
+      filters.project === "all" || task.project_id === filters.project;
+    const employeeMatch =
+      filters.employee === "all" ||
+      task.assigned_employee_id === filters.employee;
+    const statusMatch =
+      filters.status === "all" ||
+      (filters.status === "assigned" && task.assigned_employee_id) ||
+      (filters.status === "unassigned" && !task.assigned_employee_id) ||
+      (filters.status === "completed" &&
+        new Date(task.end_date) < new Date()) ||
+      (filters.status === "active" &&
+        new Date(task.start_date) <= new Date() &&
+        new Date(task.end_date) >= new Date());
+
+    return projectMatch && employeeMatch && statusMatch;
+  });
+
+  // Export to Excel
+  const exportToExcel = () => {
+    const exportData = filteredTasks.map((task) => ({
+      "Task Name": task.name,
+      Description: task.description || "",
+      Project: task.project?.name || "No project",
+      "Assigned To": task.assigned_employee?.name || "Unassigned",
+      "Estimated Hours": task.estimated_time,
+      "Start Date": task.start_date,
+      "End Date": task.end_date,
+      "Created At": new Date(task.created_at).toLocaleDateString(),
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Tasks");
+    XLSX.writeFile(
+      wb,
+      `tasks_export_${new Date().toISOString().split("T")[0]}.xlsx`,
+    );
+  };
+
+  // Import from Excel
+  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+        // Process imported data and create tasks
+        jsonData.forEach(async (row: any) => {
+          if (row["Task Name"]) {
+            try {
+              const taskData = {
+                name: row["Task Name"],
+                description: row["Description"] || "",
+                estimated_time: Number(row["Estimated Hours"]) || 1,
+                start_date:
+                  row["Start Date"] || new Date().toISOString().split("T")[0],
+                end_date:
+                  row["End Date"] || new Date().toISOString().split("T")[0],
+                project_id: null,
+                assigned_employee_id: null,
+                status: "pending" as "pending" | "in_progress" | "completed",
+                completion_date: null,
+              };
+
+              const createdTask = await taskService.create(taskData);
+              setTasks((prev) => [createdTask as TaskWithRelations, ...prev]);
+            } catch (error) {
+              console.error("Error importing task:", error);
+            }
+          }
+        });
+
+        alert("Import completed! Please refresh to see the new tasks.");
+      } catch (error) {
+        console.error("Error reading file:", error);
+        alert("Error reading file. Please make sure it's a valid Excel file.");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      project: "all",
+      employee: "all",
+      status: "all",
+    });
+  };
+
   return (
     <div className="bg-background p-6 w-full">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Task Management</h1>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowFilters(!showFilters)}
+            className="flex items-center gap-2"
+          >
+            <Filter size={16} />
+            Filters
+          </Button>
+          <Button
+            variant="outline"
+            onClick={exportToExcel}
+            className="flex items-center gap-2"
+          >
+            <Download size={16} />
+            Export
+          </Button>
+          <div className="relative">
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleFileImport}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              id="file-import"
+            />
+            <Button
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={() => document.getElementById("file-import")?.click()}
+            >
+              <Upload size={16} />
+              Import
+            </Button>
+          </div>
           <Dialog
             open={isNewProjectDialogOpen}
             onOpenChange={setIsNewProjectDialogOpen}
@@ -434,6 +599,45 @@ const TaskManagement = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="status" className="text-right">
+                    Status
+                  </Label>
+                  <Select
+                    onValueChange={(
+                      value: "pending" | "in_progress" | "completed",
+                    ) => setNewTask({ ...newTask, status: value })}
+                    value={newTask.status}
+                  >
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pendente</SelectItem>
+                      <SelectItem value="in_progress">Em Andamento</SelectItem>
+                      <SelectItem value="completed">Concluída</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {newTask.status === "completed" && (
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="completion_date" className="text-right">
+                      Data de Conclusão
+                    </Label>
+                    <Input
+                      id="completion_date"
+                      type="date"
+                      value={newTask.completion_date}
+                      onChange={(e) =>
+                        setNewTask({
+                          ...newTask,
+                          completion_date: e.target.value,
+                        })
+                      }
+                      className="col-span-3"
+                    />
+                  </div>
+                )}
               </div>
               <DialogFooter>
                 <Button type="submit" onClick={handleCreateTask}>
@@ -445,9 +649,146 @@ const TaskManagement = () => {
         </div>
       </div>
 
+      {/* Filters Panel */}
+      {showFilters && (
+        <Card className="mb-6">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">Filters</CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowFilters(false)}
+              >
+                <X size={16} />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <Label htmlFor="project-filter">Project</Label>
+                <Select
+                  value={filters.project}
+                  onValueChange={(value) =>
+                    setFilters({ ...filters, project: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Projects" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Projects</SelectItem>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="employee-filter">Employee</Label>
+                <Select
+                  value={filters.employee}
+                  onValueChange={(value) =>
+                    setFilters({ ...filters, employee: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Employees" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Employees</SelectItem>
+                    {employees.map((employee) => (
+                      <SelectItem key={employee.id} value={employee.id}>
+                        {employee.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="status-filter">Status</Label>
+                <Select
+                  value={filters.status}
+                  onValueChange={(value) =>
+                    setFilters({ ...filters, status: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="assigned">Assigned</SelectItem>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-end">
+                <Button
+                  variant="outline"
+                  onClick={clearFilters}
+                  className="w-full"
+                >
+                  Clear Filters
+                </Button>
+              </div>
+            </div>
+
+            {/* Active Filters Display */}
+            <div className="flex flex-wrap gap-2 mt-4">
+              {filters.project !== "all" && (
+                <Badge variant="secondary" className="flex items-center gap-1">
+                  Project:{" "}
+                  {projects.find((p) => p.id === filters.project)?.name}
+                  <X
+                    size={12}
+                    className="cursor-pointer"
+                    onClick={() => setFilters({ ...filters, project: "all" })}
+                  />
+                </Badge>
+              )}
+              {filters.employee !== "all" && (
+                <Badge variant="secondary" className="flex items-center gap-1">
+                  Employee:{" "}
+                  {employees.find((e) => e.id === filters.employee)?.name}
+                  <X
+                    size={12}
+                    className="cursor-pointer"
+                    onClick={() => setFilters({ ...filters, employee: "all" })}
+                  />
+                </Badge>
+              )}
+              {filters.status !== "all" && (
+                <Badge variant="secondary" className="flex items-center gap-1">
+                  Status: {filters.status}
+                  <X
+                    size={12}
+                    className="cursor-pointer"
+                    onClick={() => setFilters({ ...filters, status: "all" })}
+                  />
+                </Badge>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
-          <CardTitle>Task List</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Task List</CardTitle>
+            <div className="text-sm text-muted-foreground">
+              Showing {filteredTasks.length} of {tasks.length} tasks
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -457,6 +798,7 @@ const TaskManagement = () => {
                 <TableHead>Project</TableHead>
                 <TableHead>Est. Hours</TableHead>
                 <TableHead>Period</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Assigned To</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -464,18 +806,20 @@ const TaskManagement = () => {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-6">
+                  <TableCell colSpan={7} className="text-center py-6">
                     Loading tasks...
                   </TableCell>
                 </TableRow>
-              ) : tasks.length === 0 ? (
+              ) : filteredTasks.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-6">
-                    No tasks found
+                  <TableCell colSpan={7} className="text-center py-6">
+                    {tasks.length === 0
+                      ? "No tasks found"
+                      : "No tasks match the current filters"}
                   </TableCell>
                 </TableRow>
               ) : (
-                tasks.map((task) => (
+                filteredTasks.map((task) => (
                   <TableRow key={task.id}>
                     <TableCell className="font-medium">{task.name}</TableCell>
                     <TableCell>{task.project?.name || "No project"}</TableCell>
@@ -483,6 +827,29 @@ const TaskManagement = () => {
                     <TableCell>
                       {format(new Date(task.start_date), "MMM d")} -{" "}
                       {format(new Date(task.end_date), "MMM d, yyyy")}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          task.status === "completed"
+                            ? "default"
+                            : task.status === "in_progress"
+                              ? "secondary"
+                              : "outline"
+                        }
+                      >
+                        {task.status === "pending"
+                          ? "Pendente"
+                          : task.status === "in_progress"
+                            ? "Em Andamento"
+                            : "Concluída"}
+                      </Badge>
+                      {task.status === "completed" && task.completion_date && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Concluída em{" "}
+                          {format(new Date(task.completion_date), "dd/MM/yyyy")}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>
                       {task.assigned_employee?.name || (
@@ -663,6 +1030,71 @@ const TaskManagement = () => {
                     {projects.map((project) => (
                       <SelectItem key={project.id} value={project.id}>
                         {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-status" className="text-right">
+                  Status
+                </Label>
+                <Select
+                  onValueChange={(
+                    value: "pending" | "in_progress" | "completed",
+                  ) => setCurrentTask({ ...currentTask, status: value })}
+                  value={currentTask.status}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pendente</SelectItem>
+                    <SelectItem value="in_progress">Em Andamento</SelectItem>
+                    <SelectItem value="completed">Concluída</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {currentTask.status === "completed" && (
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-completion_date" className="text-right">
+                    Data de Conclusão
+                  </Label>
+                  <Input
+                    id="edit-completion_date"
+                    type="date"
+                    value={currentTask.completion_date || ""}
+                    onChange={(e) =>
+                      setCurrentTask({
+                        ...currentTask,
+                        completion_date: e.target.value,
+                      })
+                    }
+                    className="col-span-3"
+                  />
+                </div>
+              )}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-assigned-employee" className="text-right">
+                  Responsável
+                </Label>
+                <Select
+                  onValueChange={(value) =>
+                    setCurrentTask({
+                      ...currentTask,
+                      assigned_employee_id: value,
+                    })
+                  }
+                  value={currentTask.assigned_employee_id || "none"}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select an employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Não atribuído</SelectItem>
+                    {employees.map((employee) => (
+                      <SelectItem key={employee.id} value={employee.id}>
+                        {employee.name}
                       </SelectItem>
                     ))}
                   </SelectContent>

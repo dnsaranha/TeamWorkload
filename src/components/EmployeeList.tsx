@@ -171,7 +171,11 @@ const EmployeeList = () => {
       name: employee.name,
       role: employee.role,
       weekly_hours: employee.weekly_hours,
-      skills: Array.isArray(employee.skills) ? employee.skills.join(", ") : "",
+      skills: Array.isArray(employee.skills)
+        ? employee.skills.join(", ")
+        : typeof employee.skills === "string"
+          ? employee.skills
+          : "",
     });
     setIsEditDialogOpen(true);
   };
@@ -321,6 +325,12 @@ const EmployeeList = () => {
                           employee.skills.map((skill, index) => (
                             <Badge key={index} variant="secondary">
                               {skill}
+                            </Badge>
+                          ))}
+                        {typeof employee.skills === "string" &&
+                          employee.skills.split(",").map((skill, index) => (
+                            <Badge key={index} variant="secondary">
+                              {skill.trim()}
                             </Badge>
                           ))}
                       </div>
