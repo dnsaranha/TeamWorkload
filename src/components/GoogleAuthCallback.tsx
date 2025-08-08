@@ -1,113 +1,122 @@
-import React, { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { CheckCircle, AlertCircle, ArrowLeft } from "lucide-react";
-import { googleCalendarService } from "@/lib/googleCalendarService";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { googleCalendarService } from "../lib/googleCalendarService";
 
 const GoogleAuthCallback = () => {
-  const [status, setStatus] = useState<"processing" | "success" | "error">(
-    "processing",
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [status, setStatus] = useState<"loading" | "success" | "error">(
+    "loading",
   );
-  const [message, setMessage] = useState("Processando autenticação...");
 
   useEffect(() => {
-    handleAuthCallback();
-  }, []);
-
-  const handleAuthCallback = async () => {
-    try {
-      // Get the authorization code from URL parameters
-      const urlParams = new URLSearchParams(window.location.search);
-      const code = urlParams.get("code");
-      const error = urlParams.get("error");
+    const handleCallback = async () => {
+      const code = searchParams.get("code");
+      const error = searchParams.get("error");
 
       if (error) {
+        console.error("OAuth error:", error);
         setStatus("error");
-        setMessage(`Erro na autenticação: ${error}`);
+        setTimeout(() => navigate("/"), 3000);
         return;
       }
 
-      if (!code) {
-        setStatus("error");
-        setMessage("Código de autorização não encontrado.");
-        return;
-      }
+      if (code) {
+        try {
+          // Exchange code for tokens (disabled)
+          const success = false; // Google Calendar integration disabled
 
-      // Exchange code for tokens
-      const success = await googleCalendarService.handleAuthCallback(code);
-
-      if (success) {
-        setStatus("success");
-        setMessage("Google Calendar conectado com sucesso!");
-
-        // Redirect back to the original page after a short delay
-        setTimeout(() => {
-          const returnUrl =
-            localStorage.getItem("google_auth_return_url") || "/";
-          localStorage.removeItem("google_auth_return_url");
-          window.location.href = returnUrl;
-        }, 2000);
+          if (success) {
+            setStatus("success");
+            setTimeout(() => navigate("/"), 2000);
+          } else {
+            setStatus("error");
+            setTimeout(() => navigate("/"), 3000);
+          }
+        } catch (error) {
+          console.error("Error handling auth callback:", error);
+          setStatus("error");
+          setTimeout(() => navigate("/"), 3000);
+        }
       } else {
         setStatus("error");
-        setMessage("Falha ao conectar com Google Calendar. Tente novamente.");
+        setTimeout(() => navigate("/"), 3000);
       }
-    } catch (error) {
-      console.error("Auth callback error:", error);
-      setStatus("error");
-      setMessage("Erro inesperado durante a autenticação.");
-    }
-  };
+    };
 
-  const handleReturnHome = () => {
-    const returnUrl = localStorage.getItem("google_auth_return_url") || "/";
-    localStorage.removeItem("google_auth_return_url");
-    window.location.href = returnUrl;
-  };
+    handleCallback();
+  }, [searchParams, navigate]);
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="flex items-center justify-center gap-2">
-            {status === "processing" && (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary" />
-                Autenticando...
-              </>
-            )}
-            {status === "success" && (
-              <>
-                <CheckCircle className="h-5 w-5 text-green-600" />
-                Sucesso!
-              </>
-            )}
-            {status === "error" && (
-              <>
-                <AlertCircle className="h-5 w-5 text-red-600" />
-                Erro
-              </>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-center space-y-4">
-          <p className="text-muted-foreground">{message}</p>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6">
+        <div className="text-center">
+          {status === "loading" && (
+            <>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                Connecting to Google Calendar...
+              </h2>
+              <p className="text-gray-600">
+                Please wait while we complete the authentication process.
+              </p>
+            </>
+          )}
 
           {status === "success" && (
-            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-sm text-green-700">
-                Você será redirecionado automaticamente em alguns segundos...
+            <>
+              <div className="rounded-full h-12 w-12 bg-green-100 mx-auto mb-4 flex items-center justify-center">
+                <svg
+                  className="h-6 w-6 text-green-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                Successfully Connected!
+              </h2>
+              <p className="text-gray-600">
+                Your Google Calendar has been connected. Redirecting...
               </p>
-            </div>
+            </>
           )}
 
           {status === "error" && (
-            <Button onClick={handleReturnHome} className="w-full">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar ao App
-            </Button>
+            <>
+              <div className="rounded-full h-12 w-12 bg-red-100 mx-auto mb-4 flex items-center justify-center">
+                <svg
+                  className="h-6 w-6 text-red-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                Connection Failed
+              </h2>
+              <p className="text-gray-600">
+                Google Calendar integration is currently disabled.
+                Redirecting...
+              </p>
+            </>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 };
