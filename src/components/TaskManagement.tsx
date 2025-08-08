@@ -405,6 +405,10 @@ const TaskManagement = () => {
       }),
     }));
 
+    const [editingTask, setEditingTask] = useState<string | null>(null);
+    const [tempStartDate, setTempStartDate] = useState("");
+    const [tempEndDate, setTempEndDate] = useState("");
+
     const cellTasks = tasks.filter(
       (task) =>
         task.assigned_employee_id === employee.id &&
@@ -433,6 +437,36 @@ const TaskManagement = () => {
       return "bg-green-100 border-green-300";
     };
 
+    const handleEditTask = (task: TaskWithRelations) => {
+      setEditingTask(task.id);
+      setTempStartDate(task.start_date);
+      setTempEndDate(task.end_date);
+    };
+
+    const handleSaveTaskDates = async (taskId: string) => {
+      try {
+        const updatedTask = await taskService.update(taskId, {
+          start_date: tempStartDate,
+          end_date: tempEndDate,
+        });
+
+        const updatedTasks = tasks.map((t) =>
+          t.id === taskId ? (updatedTask as TaskWithRelations) : t,
+        );
+
+        setTasks(updatedTasks);
+        setEditingTask(null);
+      } catch (error) {
+        console.error("Error updating task dates:", error);
+      }
+    };
+
+    const handleCancelEdit = () => {
+      setEditingTask(null);
+      setTempStartDate("");
+      setTempEndDate("");
+    };
+
     return (
       <div
         ref={drop}
@@ -445,12 +479,63 @@ const TaskManagement = () => {
         </div>
         <div className="space-y-1">
           {cellTasks.map((task) => (
-            <div
-              key={task.id}
-              className="text-xs p-1 bg-white border border-gray-300 rounded truncate"
-            >
-              <div className="font-medium truncate">{task.name}</div>
-              <div className="text-gray-500">{task.estimated_time}h</div>
+            <div key={task.id}>
+              {editingTask === task.id ? (
+                <div className="text-xs p-2 bg-white border border-blue-300 rounded space-y-2">
+                  <div className="font-medium truncate text-blue-900">
+                    {task.name}
+                  </div>
+                  <div className="space-y-1">
+                    <div>
+                      <Label className="text-xs text-gray-600">Início:</Label>
+                      <Input
+                        type="date"
+                        value={tempStartDate}
+                        onChange={(e) => setTempStartDate(e.target.value)}
+                        className="h-6 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-600">Fim:</Label>
+                      <Input
+                        type="date"
+                        value={tempEndDate}
+                        onChange={(e) => setTempEndDate(e.target.value)}
+                        className="h-6 text-xs"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      onClick={() => handleSaveTaskDates(task.id)}
+                      className="h-5 px-2 text-xs"
+                    >
+                      Salvar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleCancelEdit}
+                      className="h-5 px-2 text-xs"
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="text-xs p-1 bg-white border border-gray-300 rounded truncate cursor-pointer hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                  onClick={() => handleEditTask(task)}
+                >
+                  <div className="font-medium truncate">{task.name}</div>
+                  <div className="text-gray-500">{task.estimated_time}h</div>
+                  <div className="text-xs text-gray-400">
+                    {format(new Date(task.start_date), "dd/MM")} -{" "}
+                    {format(new Date(task.end_date), "dd/MM")}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
