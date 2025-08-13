@@ -1,76 +1,204 @@
 @tailwind base;
-  @tailwind components;
-  @tailwind utilities;
+@tailwind components;
+@tailwind utilities;
 
-  @layer base {
-    :root {
-      --background: 0 0% 100%;
-      --foreground: 222.2 84% 4.9%;
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
 
-      --card: 0 0% 100%;
-      --card-foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
 
-      --popover: 0 0% 100%;
-      --popover-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
 
-      --primary: 222.2 47.4% 11.2%;
-      --primary-foreground: 210 40% 98%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
 
-      --secondary: 210 40% 96.1%;
-      --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
 
-      --muted: 210 40% 96.1%;
-      --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
 
-      --accent: 210 40% 96.1%;
-      --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
 
-      --destructive: 0 84.2% 60.2%;
-      --destructive-foreground: 210 40% 98%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
 
-      --border: 214.3 31.8% 91.4%;
-      --input: 214.3 31.8% 91.4%;
-      --ring: 222.2 84% 4.9%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
 
-      --radius: 0.5rem;
-    }
-
-    .dark {
-      --background: 222.2 84% 4.9%;
-      --foreground: 210 40% 98%;
-
-      --card: 222.2 84% 4.9%;
-      --card-foreground: 210 40% 98%;
-
-      --popover: 222.2 84% 4.9%;
-      --popover-foreground: 210 40% 98%;
-
-      --primary: 210 40% 98%;
-      --primary-foreground: 222.2 47.4% 11.2%;
-
-      --secondary: 217.2 32.6% 17.5%;
-      --secondary-foreground: 210 40% 98%;
-
-      --muted: 217.2 32.6% 17.5%;
-      --muted-foreground: 215 20.2% 65.1%;
-
-      --accent: 217.2 32.6% 17.5%;
-      --accent-foreground: 210 40% 98%;
-
-      --destructive: 0 62.8% 30.6%;
-      --destructive-foreground: 210 40% 98%;
-
-      --border: 217.2 32.6% 17.5%;
-      --input: 217.2 32.6% 17.5%;
-      --ring: 212.7 26.8% 83.9%;
-    }
+    --radius: 0.5rem;
   }
 
-  @layer base {
-    * {
-      @apply border-border;
-    }
-    body {
-      @apply bg-background text-foreground;
-    }
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
   }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Roadmap Timeline Styles */
+.roadmap-timeline {
+  font-family: inherit;
+}
+
+.roadmap-timeline .vis-timeline {
+  border: none;
+  font-family: inherit;
+}
+
+.roadmap-timeline .vis-panel.vis-left {
+  border-right: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+}
+
+.roadmap-timeline .vis-panel.vis-center {
+  background: hsl(var(--background));
+}
+
+.roadmap-timeline .vis-panel.vis-top {
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--muted));
+}
+
+.roadmap-timeline .vis-labelset .vis-label {
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+}
+
+.roadmap-timeline .vis-time-axis .vis-text {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+}
+
+.roadmap-timeline .vis-time-axis .vis-text.vis-major {
+  color: hsl(var(--foreground));
+  font-weight: 500;
+}
+
+.roadmap-timeline .vis-item {
+  border-radius: 6px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.roadmap-timeline .vis-item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.roadmap-timeline .vis-item.status-pending {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+
+.roadmap-timeline .vis-item.status-in_progress {
+  background: #dbeafe;
+  border-color: #3b82f6;
+  color: #1e40af;
+}
+
+.roadmap-timeline .vis-item.status-completed {
+  background: #d1fae5;
+  border-color: #10b981;
+  color: #065f46;
+}
+
+.roadmap-timeline .vis-item.special-major_release {
+  border-width: 2px;
+  border-style: dashed;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.roadmap-timeline .vis-item.special-major_deployment {
+  border-width: 2px;
+  border-style: dashed;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.roadmap-timeline .vis-item.special-major_theme {
+  border-width: 2px;
+  border-style: dashed;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+}
+
+.roadmap-timeline .vis-item .roadmap-item-content {
+  padding: 4px 8px;
+}
+
+.roadmap-timeline .vis-item .item-title {
+  font-weight: 500;
+  margin-bottom: 2px;
+  line-height: 1.2;
+}
+
+.roadmap-timeline .vis-item .item-project {
+  font-size: 10px;
+  opacity: 0.8;
+  line-height: 1.2;
+}
+
+.roadmap-timeline .vis-item .special-marker {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+  opacity: 0.9;
+}
+
+.roadmap-timeline .vis-current-time {
+  background: hsl(var(--destructive));
+  width: 2px;
+}
+
+.roadmap-timeline .vis-custom-time {
+  background: hsl(var(--primary));
+  width: 2px;
+}
+
+.roadmap-group {
+  padding: 8px 12px;
+  font-size: 14px;
+}

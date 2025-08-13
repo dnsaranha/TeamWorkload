@@ -49,6 +49,7 @@ const EmployeeList = () => {
     role: "",
     weekly_hours: 40,
     skills: "",
+    trabalha_fim_de_semana: false,
   });
 
   // Load employees from database
@@ -69,10 +70,15 @@ const EmployeeList = () => {
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData({
       ...formData,
-      [name]: name === "weekly_hours" ? parseInt(value) || 0 : value,
+      [name]:
+        type === "checkbox"
+          ? checked
+          : name === "weekly_hours"
+            ? parseInt(value) || 0
+            : value,
     });
   };
 
@@ -102,6 +108,7 @@ const EmployeeList = () => {
         role: formData.role.trim(),
         weekly_hours: formData.weekly_hours,
         skills: skillsArray,
+        trabalha_fim_de_semana: formData.trabalha_fim_de_semana,
       });
 
       setEmployees([...employees, newEmployee]);
@@ -141,6 +148,7 @@ const EmployeeList = () => {
         role: formData.role.trim(),
         weekly_hours: formData.weekly_hours,
         skills: skillsArray,
+        trabalha_fim_de_semana: formData.trabalha_fim_de_semana,
       });
 
       const updatedEmployees = employees.map((emp) =>
@@ -176,6 +184,7 @@ const EmployeeList = () => {
         : typeof employee.skills === "string"
           ? employee.skills
           : "",
+      trabalha_fim_de_semana: employee.trabalha_fim_de_semana || false,
     });
     setIsEditDialogOpen(true);
   };
@@ -186,6 +195,7 @@ const EmployeeList = () => {
       role: "",
       weekly_hours: 40,
       skills: "",
+      trabalha_fim_de_semana: false,
     });
     setCurrentEmployee(null);
   };
@@ -276,6 +286,30 @@ const EmployeeList = () => {
                       className="col-span-3"
                     />
                   </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label
+                      htmlFor="trabalha_fim_de_semana"
+                      className="text-right"
+                    >
+                      Trabalha Fim de Semana
+                    </Label>
+                    <div className="col-span-3 flex items-center space-x-2">
+                      <input
+                        id="trabalha_fim_de_semana"
+                        name="trabalha_fim_de_semana"
+                        type="checkbox"
+                        checked={formData.trabalha_fim_de_semana}
+                        onChange={handleInputChange}
+                        className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                      />
+                      <Label
+                        htmlFor="trabalha_fim_de_semana"
+                        className="text-sm"
+                      >
+                        Sim, trabalha aos sábados e domingos
+                      </Label>
+                    </div>
+                  </div>
                 </div>
                 <DialogFooter>
                   <Button
@@ -297,6 +331,7 @@ const EmployeeList = () => {
                 <TableHead>Name</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Weekly Hours</TableHead>
+                <TableHead>Weekend Work</TableHead>
                 <TableHead>Skills</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -305,7 +340,7 @@ const EmployeeList = () => {
               {loading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className="text-center py-6 text-muted-foreground"
                   >
                     Loading employees...
@@ -319,6 +354,17 @@ const EmployeeList = () => {
                     </TableCell>
                     <TableCell>{employee.role}</TableCell>
                     <TableCell>{employee.weekly_hours}h</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          employee.trabalha_fim_de_semana
+                            ? "default"
+                            : "secondary"
+                        }
+                      >
+                        {employee.trabalha_fim_de_semana ? "Sim" : "Não"}
+                      </Badge>
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {Array.isArray(employee.skills) &&
@@ -380,7 +426,7 @@ const EmployeeList = () => {
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className="text-center py-6 text-muted-foreground"
                   >
                     No employees found
@@ -451,6 +497,30 @@ const EmployeeList = () => {
                 placeholder="React, TypeScript, Node.js"
                 className="col-span-3"
               />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label
+                htmlFor="edit-trabalha_fim_de_semana"
+                className="text-right"
+              >
+                Trabalha Fim de Semana
+              </Label>
+              <div className="col-span-3 flex items-center space-x-2">
+                <input
+                  id="edit-trabalha_fim_de_semana"
+                  name="trabalha_fim_de_semana"
+                  type="checkbox"
+                  checked={formData.trabalha_fim_de_semana}
+                  onChange={handleInputChange}
+                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                />
+                <Label
+                  htmlFor="edit-trabalha_fim_de_semana"
+                  className="text-sm"
+                >
+                  Sim, trabalha aos sábados e domingos
+                </Label>
+              </div>
             </div>
           </div>
           <DialogFooter>

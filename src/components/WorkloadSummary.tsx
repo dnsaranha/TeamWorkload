@@ -501,60 +501,6 @@ const WorkloadSummary = ({
             {showCharts && (
               <TabsContent value="charts" className="mt-0">
                 <div className="space-y-4">
-                  {/* Chart Selection */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-sm">Chart Options</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="employeeWorkload"
-                          checked={chartConfig.employeeWorkload}
-                          onCheckedChange={(checked) =>
-                            setChartConfig((prev) => ({
-                              ...prev,
-                              employeeWorkload: !!checked,
-                            }))
-                          }
-                        />
-                        <label htmlFor="employeeWorkload" className="text-sm">
-                          Employee Workload
-                        </label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="projectProgress"
-                          checked={chartConfig.projectProgress}
-                          onCheckedChange={(checked) =>
-                            setChartConfig((prev) => ({
-                              ...prev,
-                              projectProgress: !!checked,
-                            }))
-                          }
-                        />
-                        <label htmlFor="projectProgress" className="text-sm">
-                          Project Progress
-                        </label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="taskDistribution"
-                          checked={chartConfig.taskDistribution}
-                          onCheckedChange={(checked) =>
-                            setChartConfig((prev) => ({
-                              ...prev,
-                              taskDistribution: !!checked,
-                            }))
-                          }
-                        />
-                        <label htmlFor="taskDistribution" className="text-sm">
-                          Task Distribution
-                        </label>
-                      </div>
-                    </CardContent>
-                  </Card>
-
                   {/* Employee Workload Bar Chart */}
                   {chartConfig.employeeWorkload &&
                     employeeChartData.length > 0 && (

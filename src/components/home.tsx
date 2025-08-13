@@ -11,6 +11,7 @@ import {
   Menu,
   X,
   FolderOpen,
+  Target,
 } from "lucide-react";
 import WorkloadCalendar from "./WorkloadCalendar";
 import EmployeeList from "./EmployeeList";
@@ -18,6 +19,7 @@ import TaskManagement from "./TaskManagement";
 import WorkloadSummary from "./WorkloadSummary";
 import ProjectVisualization from "./ProjectVisualization";
 import UserProfile from "./UserProfile";
+import Roadmap from "./Roadmap";
 import {
   employeeService,
   taskService,
@@ -195,6 +197,17 @@ const HomePage = () => {
             {isMobile && <span className="text-xs">Projects</span>}
           </Button>
           <Button
+            variant={activeTab === "roadmap" ? "default" : "ghost"}
+            className={`${isMobile ? "flex-col p-2 h-12" : sidebarCollapsed ? "w-8 h-8 p-0" : "w-full justify-start"}`}
+            onClick={() => setActiveTab("roadmap")}
+          >
+            <Target
+              className={`${isMobile ? "mb-1" : sidebarCollapsed ? "" : "mr-2"} h-4 w-4`}
+            />
+            {!sidebarCollapsed && !isMobile && "Roadmap"}
+            {isMobile && <span className="text-xs">Roadmap</span>}
+          </Button>
+          <Button
             variant={activeTab === "reports" ? "default" : "ghost"}
             className={`${isMobile ? "flex-col p-2 h-12" : sidebarCollapsed ? "w-8 h-8 p-0" : "w-full justify-start"}`}
             onClick={() => setActiveTab("reports")}
@@ -339,6 +352,13 @@ const HomePage = () => {
             <div>
               <h2 className="text-3xl font-bold mb-6">Project Visualization</h2>
               <ProjectVisualization />
+            </div>
+          )}
+
+          {activeTab === "roadmap" && (
+            <div>
+              <h2 className="text-3xl font-bold mb-6">Strategic Roadmap</h2>
+              <Roadmap />
             </div>
           )}
 

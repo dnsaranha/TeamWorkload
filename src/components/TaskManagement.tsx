@@ -94,6 +94,9 @@ const TaskManagement = () => {
     assigned_employee_id: "none",
     status: "pending" as "pending" | "in_progress" | "completed",
     completion_date: "",
+    repeats_weekly: false,
+    repeat_days: [] as string[],
+    hours_per_day: 0,
   });
 
   const [newProject, setNewProject] = useState({
@@ -101,7 +104,32 @@ const TaskManagement = () => {
     description: "",
     start_date: new Date().toISOString().split("T")[0],
     end_date: new Date().toISOString().split("T")[0],
+    categoria_estrategica: "",
   });
+
+  // Strategic categories for projects
+  const [strategicCategories, setStrategicCategories] = useState<string[]>([]);
+
+  // Load existing strategic categories
+  useEffect(() => {
+    loadStrategicCategories();
+  }, []);
+
+  const loadStrategicCategories = async () => {
+    try {
+      const projectsData = await projectService.getAll();
+      const categories = projectsData
+        .map((p) => p.categoria_estrategica)
+        .filter(
+          (cat): cat is string =>
+            cat !== null && cat !== undefined && cat !== "",
+        )
+        .filter((cat, index, arr) => arr.indexOf(cat) === index); // Remove duplicates
+      setStrategicCategories(categories);
+    } catch (error) {
+      console.error("Error loading strategic categories:", error);
+    }
+  };
 
   // Load data from database
   useEffect(() => {
@@ -146,6 +174,9 @@ const TaskManagement = () => {
           newTask.status === "completed" && newTask.completion_date
             ? newTask.completion_date
             : null,
+        repeats_weekly: newTask.repeats_weekly,
+        repeat_days: newTask.repeats_weekly ? newTask.repeat_days : null,
+        hours_per_day: newTask.repeats_weekly ? newTask.hours_per_day : null,
       };
 
       const createdTask = await taskService.create(taskData);
@@ -161,6 +192,9 @@ const TaskManagement = () => {
         assigned_employee_id: "none",
         status: "pending" as "pending" | "in_progress" | "completed",
         completion_date: "",
+        repeats_weekly: false,
+        repeat_days: [] as string[],
+        hours_per_day: 0,
       });
       setIsNewTaskDialogOpen(false);
     } catch (error) {
@@ -172,9 +206,9 @@ const TaskManagement = () => {
     if (!currentTask) return;
 
     try {
-      const updatedTask = await taskService.update(currentTask.id, {
+      const updateData: any = {
         name: currentTask.name,
-        description: currentTask.description,
+        description: currentTask.description || null,
         estimated_time: currentTask.estimated_time,
         start_date: currentTask.start_date,
         end_date: currentTask.end_date,
@@ -189,16 +223,27 @@ const TaskManagement = () => {
           currentTask.status === "completed" && currentTask.completion_date
             ? currentTask.completion_date
             : null,
-      });
+        repeats_weekly: currentTask.repeats_weekly || false,
+        repeat_days: currentTask.repeats_weekly
+          ? currentTask.repeat_days
+          : null,
+        hours_per_day: currentTask.repeats_weekly
+          ? currentTask.hours_per_day
+          : null,
+      };
+
+      const updatedTask = await taskService.update(currentTask.id, updateData);
 
       const updatedTasks = tasks.map((task) =>
         task.id === currentTask.id ? (updatedTask as TaskWithRelations) : task,
       );
 
       setTasks(updatedTasks);
+      setCurrentTask(null);
       setIsEditTaskDialogOpen(false);
     } catch (error) {
       console.error("Error updating task:", error);
+      alert("Erro ao atualizar tarefa. Verifique os dados e tente novamente.");
     }
   };
 
@@ -238,11 +283,23 @@ const TaskManagement = () => {
       const createdProject = await projectService.create(newProject);
       setProjects([...projects, createdProject]);
 
+      // Update strategic categories if a new one was added
+      if (
+        newProject.categoria_estrategica &&
+        !strategicCategories.includes(newProject.categoria_estrategica)
+      ) {
+        setStrategicCategories([
+          ...strategicCategories,
+          newProject.categoria_estrategica,
+        ]);
+      }
+
       setNewProject({
         name: "",
         description: "",
         start_date: new Date().toISOString().split("T")[0],
         end_date: new Date().toISOString().split("T")[0],
+        categoria_estrategica: "",
       });
       setIsNewProjectDialogOpen(false);
     } catch (error) {
@@ -258,6 +315,37 @@ const TaskManagement = () => {
   const openAssignDialog = (task: TaskWithRelations) => {
     setCurrentTask(task);
     setIsAssignTaskDialogOpen(true);
+  };
+
+  // Helper function to handle repeat day changes
+  const handleRepeatDayChange = (day: string, checked: boolean) => {
+    if (checked) {
+      setNewTask({
+        ...newTask,
+        repeat_days: [...newTask.repeat_days, day],
+      });
+    } else {
+      setNewTask({
+        ...newTask,
+        repeat_days: newTask.repeat_days.filter((d) => d !== day),
+      });
+    }
+  };
+
+  const handleCurrentTaskRepeatDayChange = (day: string, checked: boolean) => {
+    if (!currentTask) return;
+    const currentDays = currentTask.repeat_days || [];
+    if (checked) {
+      setCurrentTask({
+        ...currentTask,
+        repeat_days: [...currentDays, day],
+      });
+    } else {
+      setCurrentTask({
+        ...currentTask,
+        repeat_days: currentDays.filter((d) => d !== day),
+      });
+    }
   };
 
   // Filter tasks based on selected filters
@@ -709,6 +797,31 @@ const TaskManagement = () => {
                     className="col-span-3"
                   />
                 </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="project-categoria" className="text-right">
+                    Categoria Estratégica
+                  </Label>
+                  <div className="col-span-3">
+                    <Input
+                      id="project-categoria"
+                      list="strategic-categories"
+                      value={newProject.categoria_estrategica}
+                      onChange={(e) =>
+                        setNewProject({
+                          ...newProject,
+                          categoria_estrategica: e.target.value,
+                        })
+                      }
+                      placeholder="Digite ou selecione uma categoria"
+                      className="w-full"
+                    />
+                    <datalist id="strategic-categories">
+                      {strategicCategories.map((category) => (
+                        <option key={category} value={category} />
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
               </div>
               <DialogFooter>
                 <Button type="submit" onClick={handleCreateProject}>
@@ -876,6 +989,96 @@ const TaskManagement = () => {
                       className="col-span-3"
                     />
                   </div>
+                )}
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="repeats_weekly" className="text-right">
+                    Repetição Semanal
+                  </Label>
+                  <div className="col-span-3 flex items-center space-x-2">
+                    <input
+                      id="repeats_weekly"
+                      type="checkbox"
+                      checked={newTask.repeats_weekly}
+                      onChange={(e) =>
+                        setNewTask({
+                          ...newTask,
+                          repeats_weekly: e.target.checked,
+                          repeat_days: e.target.checked
+                            ? newTask.repeat_days
+                            : [],
+                          hours_per_day: e.target.checked
+                            ? newTask.hours_per_day
+                            : 0,
+                        })
+                      }
+                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                    />
+                    <Label htmlFor="repeats_weekly" className="text-sm">
+                      Esta tarefa se repete semanalmente
+                    </Label>
+                  </div>
+                </div>
+                {newTask.repeats_weekly && (
+                  <>
+                    <div className="grid grid-cols-4 items-start gap-4">
+                      <Label className="text-right pt-2">Dias da Semana</Label>
+                      <div className="col-span-3 grid grid-cols-2 gap-2">
+                        {[
+                          { value: "monday", label: "Segunda" },
+                          { value: "tuesday", label: "Terça" },
+                          { value: "wednesday", label: "Quarta" },
+                          { value: "thursday", label: "Quinta" },
+                          { value: "friday", label: "Sexta" },
+                          { value: "saturday", label: "Sábado" },
+                          { value: "sunday", label: "Domingo" },
+                        ].map((day) => (
+                          <div
+                            key={day.value}
+                            className="flex items-center space-x-2"
+                          >
+                            <input
+                              id={`day-${day.value}`}
+                              type="checkbox"
+                              checked={newTask.repeat_days.includes(day.value)}
+                              onChange={(e) =>
+                                handleRepeatDayChange(
+                                  day.value,
+                                  e.target.checked,
+                                )
+                              }
+                              className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                            />
+                            <Label
+                              htmlFor={`day-${day.value}`}
+                              className="text-sm"
+                            >
+                              {day.label}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="hours_per_day" className="text-right">
+                        Horas por Dia
+                      </Label>
+                      <Input
+                        id="hours_per_day"
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        value={newTask.hours_per_day}
+                        onChange={(e) =>
+                          setNewTask({
+                            ...newTask,
+                            hours_per_day: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        className="col-span-3"
+                        placeholder="Ex: 2.5"
+                      />
+                    </div>
+                  </>
                 )}
               </div>
               <DialogFooter>
@@ -1312,6 +1515,98 @@ const TaskManagement = () => {
                     className="col-span-3"
                   />
                 </div>
+              )}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-repeats_weekly" className="text-right">
+                  Repetição Semanal
+                </Label>
+                <div className="col-span-3 flex items-center space-x-2">
+                  <input
+                    id="edit-repeats_weekly"
+                    type="checkbox"
+                    checked={currentTask.repeats_weekly || false}
+                    onChange={(e) =>
+                      setCurrentTask({
+                        ...currentTask,
+                        repeats_weekly: e.target.checked,
+                        repeat_days: e.target.checked
+                          ? currentTask.repeat_days || []
+                          : null,
+                        hours_per_day: e.target.checked
+                          ? currentTask.hours_per_day || 0
+                          : null,
+                      })
+                    }
+                    className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                  />
+                  <Label htmlFor="edit-repeats_weekly" className="text-sm">
+                    Esta tarefa se repete semanalmente
+                  </Label>
+                </div>
+              </div>
+              {currentTask.repeats_weekly && (
+                <>
+                  <div className="grid grid-cols-4 items-start gap-4">
+                    <Label className="text-right pt-2">Dias da Semana</Label>
+                    <div className="col-span-3 grid grid-cols-2 gap-2">
+                      {[
+                        { value: "monday", label: "Segunda" },
+                        { value: "tuesday", label: "Terça" },
+                        { value: "wednesday", label: "Quarta" },
+                        { value: "thursday", label: "Quinta" },
+                        { value: "friday", label: "Sexta" },
+                        { value: "saturday", label: "Sábado" },
+                        { value: "sunday", label: "Domingo" },
+                      ].map((day) => (
+                        <div
+                          key={day.value}
+                          className="flex items-center space-x-2"
+                        >
+                          <input
+                            id={`edit-day-${day.value}`}
+                            type="checkbox"
+                            checked={(currentTask.repeat_days || []).includes(
+                              day.value,
+                            )}
+                            onChange={(e) =>
+                              handleCurrentTaskRepeatDayChange(
+                                day.value,
+                                e.target.checked,
+                              )
+                            }
+                            className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                          />
+                          <Label
+                            htmlFor={`edit-day-${day.value}`}
+                            className="text-sm"
+                          >
+                            {day.label}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="edit-hours_per_day" className="text-right">
+                      Horas por Dia
+                    </Label>
+                    <Input
+                      id="edit-hours_per_day"
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={currentTask.hours_per_day || 0}
+                      onChange={(e) =>
+                        setCurrentTask({
+                          ...currentTask,
+                          hours_per_day: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                      className="col-span-3"
+                      placeholder="Ex: 2.5"
+                    />
+                  </div>
+                </>
               )}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="edit-assigned-employee" className="text-right">

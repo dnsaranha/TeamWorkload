@@ -17,6 +17,7 @@ export type Employee = {
   role: string;
   weekly_hours: number;
   skills: any; // Using any to match Supabase Json type
+  trabalha_fim_de_semana?: boolean;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -26,6 +27,7 @@ export type EmployeeInsert = {
   role: string;
   weekly_hours: number;
   skills: any; // Using any to match Supabase Json type
+  trabalha_fim_de_semana?: boolean;
 };
 
 export type EmployeeUpdate = Partial<EmployeeInsert>;
@@ -36,6 +38,7 @@ export type Project = {
   description: string | null;
   start_date: string | null;
   end_date: string | null;
+  categoria_estrategica?: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -45,6 +48,7 @@ export type ProjectInsert = {
   description?: string | null;
   start_date?: string | null;
   end_date?: string | null;
+  categoria_estrategica?: string | null;
 };
 
 export type ProjectUpdate = Partial<ProjectInsert>;
@@ -60,6 +64,9 @@ export type Task = {
   assigned_employee_id: string | null;
   status: "pending" | "in_progress" | "completed";
   completion_date: string | null;
+  repeats_weekly?: boolean;
+  repeat_days?: string[] | null; // Days of the week for repetition
+  hours_per_day?: number | null; // Hours per day for repeated tasks
   created_at: string | null;
   updated_at: string | null;
 };
@@ -74,6 +81,9 @@ export type TaskInsert = {
   assigned_employee_id?: string | null;
   status?: "pending" | "in_progress" | "completed";
   completion_date?: string | null;
+  repeats_weekly?: boolean;
+  repeat_days?: string[] | null;
+  hours_per_day?: number | null;
 };
 
 export type TaskUpdate = Partial<TaskInsert>;
