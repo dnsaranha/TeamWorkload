@@ -1,0 +1,227 @@
+import { createClient } from "@supabase/supabase-js";
+import { Database } from "@/types/supabase";
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error("Missing Supabase environment variables");
+}
+
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+
+// Types for our application - using fallback types if database types don't exist
+export type Employee = {
+  id: string;
+  name: string;
+  role: string;
+  weekly_hours: number;
+  skills: any; // Using any to match Supabase Json type
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type EmployeeInsert = {
+  name: string;
+  role: string;
+  weekly_hours: number;
+  skills: any; // Using any to match Supabase Json type
+};
+
+export type EmployeeUpdate = Partial<EmployeeInsert>;
+
+export type Project = {
+  id: string;
+  name: string;
+  description: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ProjectInsert = {
+  name: string;
+  description?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+};
+
+export type ProjectUpdate = Partial<ProjectInsert>;
+
+export type Task = {
+  id: string;
+  name: string;
+  description: string | null;
+  estimated_time: number;
+  start_date: string;
+  end_date: string;
+  project_id: string | null;
+  assigned_employee_id: string | null;
+  status: "pending" | "in_progress" | "completed";
+  completion_date: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type TaskInsert = {
+  name: string;
+  description?: string | null;
+  estimated_time: number;
+  start_date: string;
+  end_date: string;
+  project_id?: string | null;
+  assigned_employee_id?: string | null;
+  status?: "pending" | "in_progress" | "completed";
+  completion_date?: string | null;
+};
+
+export type TaskUpdate = Partial<TaskInsert>;
+
+// Helper functions for CRUD operations
+export const employeeService = {
+  async getAll() {
+    const { data, error } = await supabase
+      .from("employees")
+      .select("*")
+      .order("name");
+
+    if (error) throw error;
+    return data;
+  },
+
+  async create(employee: EmployeeInsert) {
+    const { data, error } = await supabase
+      .from("employees")
+      .insert(employee)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id: string, employee: EmployeeUpdate) {
+    const { data, error } = await supabase
+      .from("employees")
+      .update(employee)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id: string) {
+    const { error } = await supabase.from("employees").delete().eq("id", id);
+
+    if (error) throw error;
+  },
+};
+
+export const projectService = {
+  async getAll() {
+    const { data, error } = await supabase
+      .from("workload_projects")
+      .select("*")
+      .order("name");
+
+    if (error) throw error;
+    return data;
+  },
+
+  async create(project: ProjectInsert) {
+    const { data, error } = await supabase
+      .from("workload_projects")
+      .insert(project)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id: string, project: ProjectUpdate) {
+    const { data, error } = await supabase
+      .from("workload_projects")
+      .update(project)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id: string) {
+    const { error } = await supabase
+      .from("workload_projects")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
+  },
+};
+
+export const taskService = {
+  async getAll() {
+    const { data, error } = await supabase
+      .from("workload_tasks")
+      .select(
+        `
+        *,
+        project:workload_projects(*),
+        assigned_employee:employees(*)
+      `,
+      )
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    return data;
+  },
+
+  async create(task: TaskInsert) {
+    const { data, error } = await supabase
+      .from("workload_tasks")
+      .insert(task)
+      .select(
+        `
+        *,
+        project:workload_projects(*),
+        assigned_employee:employees(*)
+      `,
+      )
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id: string, task: TaskUpdate) {
+    const { data, error } = await supabase
+      .from("workload_tasks")
+      .update(task)
+      .eq("id", id)
+      .select(
+        `
+        *,
+        project:workload_projects(*),
+        assigned_employee:employees(*)
+      `,
+      )
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id: string) {
+    const { error } = await supabase
+      .from("workload_tasks")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
+  },
+};
