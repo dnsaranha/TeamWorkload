@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
+import { ScrollArea } from "./ui/scroll-area";
 import { Textarea } from "./ui/textarea";
 import {
   Dialog,
@@ -921,7 +922,8 @@ const TaskManagement = () => {
                   Add a new task with details and time estimates.
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
+              <ScrollArea className="h-96">
+                <div className="grid gap-4 p-4">
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="name" className="text-right">
                     Task Name
@@ -1186,6 +1188,8 @@ const TaskManagement = () => {
                   </>
                 )}
               </div>
+                </div>
+              </ScrollArea>
               <DialogFooter>
                 <Button type="submit" onClick={handleCreateTask}>
                   Create Task
@@ -1460,7 +1464,8 @@ const TaskManagement = () => {
             </DialogDescription>
           </DialogHeader>
           {currentTask && (
-            <div className="grid gap-4 py-4">
+            <ScrollArea className="h-96">
+              <div className="grid gap-4 p-4">
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="edit-name" className="text-right">
                   Task Name
@@ -1784,6 +1789,9 @@ const TaskManagement = () => {
                 </Select>
               </div>
             </div>
+          )}
+              </div>
+            </ScrollArea>
           )}
           <DialogFooter>
             <Button type="submit" onClick={handleUpdateTask}>
