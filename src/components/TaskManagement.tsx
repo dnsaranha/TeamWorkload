@@ -73,6 +73,8 @@ const TaskManagement = () => {
     employee: "all",
     status: "all",
   });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [projectSearchTerm, setProjectSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
   const [isNewTaskDialogOpen, setIsNewTaskDialogOpen] = useState(false);
@@ -97,6 +99,7 @@ const TaskManagement = () => {
     repeats_weekly: false,
     repeat_days: [] as string[],
     hours_per_day: 0,
+    special_marker: "none",
   });
 
   const [newProject, setNewProject] = useState({
@@ -135,6 +138,31 @@ const TaskManagement = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Effect to automatically calculate estimated_time for new task
+  useEffect(() => {
+    if (newTask.repeats_weekly) {
+      const calculatedHours =
+        (newTask.repeat_days?.length || 0) * (newTask.hours_per_day || 0);
+      setNewTask((prev) => ({ ...prev, estimated_time: calculatedHours }));
+    }
+  }, [newTask.repeats_weekly, newTask.repeat_days, newTask.hours_per_day]);
+
+  // Effect to automatically calculate estimated_time for editing task
+  useEffect(() => {
+    if (currentTask?.repeats_weekly) {
+      const calculatedHours =
+        (currentTask.repeat_days?.length || 0) *
+        (currentTask.hours_per_day || 0);
+      setCurrentTask((prev) =>
+        prev ? { ...prev, estimated_time: calculatedHours } : null,
+      );
+    }
+  }, [
+    currentTask?.repeats_weekly,
+    currentTask?.repeat_days,
+    currentTask?.hours_per_day,
+  ]);
 
   const loadData = async () => {
     try {
@@ -177,6 +205,8 @@ const TaskManagement = () => {
         repeats_weekly: newTask.repeats_weekly,
         repeat_days: newTask.repeats_weekly ? newTask.repeat_days : null,
         hours_per_day: newTask.repeats_weekly ? newTask.hours_per_day : null,
+        special_marker:
+          newTask.special_marker === "none" ? null : newTask.special_marker,
       };
 
       const createdTask = await taskService.create(taskData);
@@ -195,6 +225,7 @@ const TaskManagement = () => {
         repeats_weekly: false,
         repeat_days: [] as string[],
         hours_per_day: 0,
+        special_marker: "none",
       });
       setIsNewTaskDialogOpen(false);
     } catch (error) {
@@ -230,6 +261,10 @@ const TaskManagement = () => {
         hours_per_day: currentTask.repeats_weekly
           ? currentTask.hours_per_day
           : null,
+        special_marker:
+          currentTask.special_marker === "none"
+            ? null
+            : currentTask.special_marker,
       };
 
       const updatedTask = await taskService.update(currentTask.id, updateData);
@@ -365,7 +400,22 @@ const TaskManagement = () => {
         new Date(task.start_date) <= new Date() &&
         new Date(task.end_date) >= new Date());
 
-    return projectMatch && employeeMatch && statusMatch;
+    const searchMatch =
+      !searchTerm ||
+      searchTerm
+        .toLowerCase()
+        .split(" ")
+        .every((word) => {
+          const taskText = `
+            ${task.name}
+            ${task.description || ""}
+            ${task.project?.name || ""}
+            ${task.assigned_employee?.name || ""}
+          `.toLowerCase();
+          return taskText.includes(word);
+        });
+
+    return projectMatch && employeeMatch && statusMatch && searchMatch;
   });
 
   // Export to Excel
@@ -374,10 +424,14 @@ const TaskManagement = () => {
       "Task Name": task.name,
       Description: task.description || "",
       Project: task.project?.name || "No project",
+      "Strategic Category": task.project?.categoria_estrategica || "",
       "Assigned To": task.assigned_employee?.name || "Unassigned",
       "Estimated Hours": task.estimated_time,
       "Start Date": task.start_date,
       "End Date": task.end_date,
+      "Repeats Weekly": task.repeats_weekly ? "Yes" : "No",
+      "Repeat Days": task.repeat_days?.join(", ") || "",
+      "Hours per Day": task.hours_per_day || "",
       "Created At": new Date(task.created_at).toLocaleDateString(),
     }));
 
@@ -408,6 +462,17 @@ const TaskManagement = () => {
         jsonData.forEach(async (row: any) => {
           if (row["Task Name"]) {
             try {
+              const repeatsWeekly =
+                row["Repeats Weekly"]?.toLowerCase() === "yes";
+              const repeatDays = repeatsWeekly
+                ? row["Repeat Days"]
+                    ?.split(",")
+                    .map((d: string) => d.trim()) || []
+                : null;
+              const hoursPerDay = repeatsWeekly
+                ? Number(row["Hours per Day"]) || 0
+                : null;
+
               const taskData = {
                 name: row["Task Name"],
                 description: row["Description"] || "",
@@ -416,10 +481,13 @@ const TaskManagement = () => {
                   row["Start Date"] || new Date().toISOString().split("T")[0],
                 end_date:
                   row["End Date"] || new Date().toISOString().split("T")[0],
-                project_id: null,
-                assigned_employee_id: null,
+                project_id: null, // Note: Project linking from import is not implemented
+                assigned_employee_id: null, // Note: Employee linking from import is not implemented
                 status: "pending" as "pending" | "in_progress" | "completed",
                 completion_date: null,
+                repeats_weekly: repeatsWeekly,
+                repeat_days: repeatDays,
+                hours_per_day: hoursPerDay,
               };
 
               const createdTask = await taskService.create(taskData);
@@ -677,7 +745,13 @@ const TaskManagement = () => {
     <div className="bg-background p-6 w-full">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Task Management</h1>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Search tasks..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-64"
+          />
           <Button
             variant="outline"
             onClick={() => setShowFilters(!showFilters)}
@@ -882,13 +956,19 @@ const TaskManagement = () => {
                     id="estimated_time"
                     type="number"
                     value={newTask.estimated_time}
+                    readOnly={newTask.repeats_weekly}
                     onChange={(e) =>
+                      !newTask.repeats_weekly &&
                       setNewTask({
                         ...newTask,
                         estimated_time: Number(e.target.value),
                       })
                     }
-                    className="col-span-3"
+                    className={`col-span-3 ${
+                      newTask.repeats_weekly
+                        ? "bg-gray-100 cursor-not-allowed"
+                        : ""
+                    }`}
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -990,6 +1070,31 @@ const TaskManagement = () => {
                     />
                   </div>
                 )}
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="special_marker" className="text-right">
+                    Marcador Especial
+                  </Label>
+                  <Select
+                    onValueChange={(value) =>
+                      setNewTask({ ...newTask, special_marker: value })
+                    }
+                    value={newTask.special_marker}
+                  >
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Selecione um marcador" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhum</SelectItem>
+                      <SelectItem value="major_release">
+                        Major Release
+                      </SelectItem>
+                      <SelectItem value="major_deployment">
+                        Major Deployment
+                      </SelectItem>
+                      <SelectItem value="major_theme">Major Theme</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="repeats_weekly" className="text-right">
                     Repetição Semanal
@@ -1120,12 +1225,24 @@ const TaskManagement = () => {
                     <SelectValue placeholder="All Projects" />
                   </SelectTrigger>
                   <SelectContent>
+                    <Input
+                      placeholder="Search projects..."
+                      value={projectSearchTerm}
+                      onChange={(e) => setProjectSearchTerm(e.target.value)}
+                      className="w-full mb-2"
+                    />
                     <SelectItem value="all">All Projects</SelectItem>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
+                    {projects
+                      .filter((project) =>
+                        project.name
+                          .toLowerCase()
+                          .includes(projectSearchTerm.toLowerCase()),
+                      )
+                      .map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1381,13 +1498,19 @@ const TaskManagement = () => {
                   id="edit-estimated_time"
                   type="number"
                   value={currentTask.estimated_time}
+                  readOnly={currentTask.repeats_weekly}
                   onChange={(e) =>
+                    !currentTask.repeats_weekly &&
                     setCurrentTask({
                       ...currentTask,
                       estimated_time: Number(e.target.value),
                     })
                   }
-                  className="col-span-3"
+                  className={`col-span-3 ${
+                    currentTask.repeats_weekly
+                      ? "bg-gray-100 cursor-not-allowed"
+                      : ""
+                  }`}
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -1516,6 +1639,32 @@ const TaskManagement = () => {
                   />
                 </div>
               )}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-special_marker" className="text-right">
+                  Marcador Especial
+                </Label>
+                <Select
+                  onValueChange={(value) =>
+                    setCurrentTask({
+                      ...currentTask,
+                      special_marker: value,
+                    })
+                  }
+                  value={currentTask.special_marker || "none"}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Selecione um marcador" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhum</SelectItem>
+                    <SelectItem value="major_release">Major Release</SelectItem>
+                    <SelectItem value="major_deployment">
+                      Major Deployment
+                    </SelectItem>
+                    <SelectItem value="major_theme">Major Theme</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="edit-repeats_weekly" className="text-right">
                   Repetição Semanal

@@ -18,6 +18,7 @@ import EmployeeList from "./EmployeeList";
 import TaskManagement from "./TaskManagement";
 import WorkloadSummary from "./WorkloadSummary";
 import ProjectVisualization from "./ProjectVisualization";
+import ProjectList from "./ProjectList";
 import UserProfile from "./UserProfile";
 import Roadmap from "./Roadmap";
 import {
@@ -350,8 +351,8 @@ const HomePage = () => {
 
           {activeTab === "projects" && (
             <div>
-              <h2 className="text-3xl font-bold mb-6">Project Visualization</h2>
-              <ProjectVisualization />
+              <h2 className="text-3xl font-bold mb-6">Projects</h2>
+              <ProjectList />
             </div>
           )}
 

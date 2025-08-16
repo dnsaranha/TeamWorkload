@@ -23,15 +23,7 @@ interface Task {
   updated_at: string;
 }
 
-interface Employee {
-  id: string;
-  name: string;
-  role: string;
-  weekly_hours: number;
-  skills: string[];
-  created_at: string;
-  updated_at: string;
-}
+import { type Employee } from "@/lib/supabaseClient";
 
 interface Project {
   id: string;
@@ -192,26 +184,19 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
       // Calculate working days between start and end date, considering employee's weekend work preference
       let workingDays = 0;
-      const currentDate = new Date(startDate);
+      const tempDate = new Date(startDate);
+      const employee = employees.find((emp) => emp.id === task.assigned_employee_id);
+      const worksWeekends = employee?.trabalha_fim_de_semana || false;
 
-      while (currentDate <= endDate) {
-        const dayOfWeek = currentDate.getDay();
+      while (tempDate <= endDate) {
+        const dayOfWeek = tempDate.getDay();
         const isCurrentWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
-        if (employeeId) {
-          const employee = employees.find((emp) => emp.id === employeeId);
-          const worksWeekends = employee?.trabalha_fim_de_semana || false;
-
-          // Count day if it's not weekend, or if it's weekend and employee works weekends
-          if (!isCurrentWeekend || worksWeekends) {
-            workingDays++;
-          }
-        } else {
-          // For general view, count all days
+        if (!isCurrentWeekend || worksWeekends) {
           workingDays++;
         }
 
-        currentDate.setDate(currentDate.getDate() + 1);
+        tempDate.setDate(tempDate.getDate() + 1);
       }
 
       const daysDiff = Math.max(1, workingDays);

@@ -3,7 +3,6 @@ import { Timeline } from "vis-timeline/standalone";
 import { DataSet } from "vis-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -24,19 +23,22 @@ import {
 import {
   taskService,
   projectService,
+  employeeService,
   type Task,
   type Project,
+  type Employee,
 } from "@/lib/supabaseClient";
 
 type TaskWithRelations = Task & {
   project: Project | null;
+  assigned_employee: Employee | null;
 };
 
 interface RoadmapItem {
   id: string;
   content: string;
   start: Date;
-  end: Date;
+  end?: Date;
   group: string;
   className: string;
   title: string;
@@ -64,12 +66,6 @@ const STRATEGIC_CATEGORIES = [
   { id: "marketing", name: "Marketing", color: "#EC4899" },
 ];
 
-const STATUS_COLORS = {
-  pending: "#F59E0B",
-  in_progress: "#3B82F6",
-  completed: "#10B981",
-};
-
 const COLORS = [
   "#3B82F6",
   "#10B981",
@@ -88,14 +84,16 @@ const Roadmap = () => {
   const timelineInstance = useRef<Timeline | null>(null);
   const [tasks, setTasks] = useState<TaskWithRelations[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [dynamicCategories, setDynamicCategories] = useState<
     { id: string; name: string; color: string }[]
   >([]);
-  const [filters, setFilters] = useState<FilterState>({
+  const [filters, setFilters] = useState<FilterState & { employee: string }>({
     categories: STRATEGIC_CATEGORIES.map((cat) => cat.id),
     status: ["pending", "in_progress", "completed"],
     timeScale: "months",
+    employee: "all",
   });
   const [showFilters, setShowFilters] = useState(false);
 
@@ -104,7 +102,7 @@ const Roadmap = () => {
   }, []);
 
   useEffect(() => {
-    if (tasks.length > 0 && timelineRef.current) {
+    if ((tasks.length > 0 || projects.length > 0) && timelineRef.current) {
       initializeTimeline();
     }
     return () => {
@@ -118,20 +116,21 @@ const Roadmap = () => {
         }
       }
     };
-  }, [tasks, filters]);
+  }, [tasks, projects, filters]);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [tasksData, projectsData] = await Promise.all([
+      const [tasksData, projectsData, employeesData] = await Promise.all([
         taskService.getAll(),
         projectService.getAll(),
+        employeeService.getAll(),
       ]);
 
       setTasks(tasksData as TaskWithRelations[]);
       setProjects(projectsData);
+      setEmployees(employeesData);
 
-      // Extract unique strategic categories from projects
       const uniqueCategories = projectsData
         .map((p) => p.categoria_estrategica)
         .filter(
@@ -147,7 +146,6 @@ const Roadmap = () => {
 
       setDynamicCategories(uniqueCategories);
 
-      // Update filters to include dynamic categories
       const allCategoryIds = [
         ...STRATEGIC_CATEGORIES.map((cat) => cat.id),
         ...uniqueCategories.map((cat) => cat.id),
@@ -163,110 +161,59 @@ const Roadmap = () => {
     }
   };
 
-  const getTaskCategory = (task: TaskWithRelations): string => {
-    // First, check if the project has a strategic category defined
-    if (task.project?.categoria_estrategica) {
-      // Map the strategic category to our predefined categories or use it directly
-      const strategicCategory =
-        task.project.categoria_estrategica.toLowerCase();
+  const getCategoryFor = (
+    item: TaskWithRelations | Project,
+    type: "task" | "project",
+  ): string => {
+    const strategicCategory =
+      type === "task"
+        ? (item as TaskWithRelations).project?.categoria_estrategica
+        : (item as Project).categoria_estrategica;
 
-      // Try to find a matching predefined category
-      const matchingCategory = STRATEGIC_CATEGORIES.find(
-        (cat) =>
-          cat.name.toLowerCase().includes(strategicCategory) ||
-          strategicCategory.includes(cat.name.toLowerCase()) ||
-          cat.id === strategicCategory,
+    if (strategicCategory) {
+      const normalizedCategory = strategicCategory
+        .toLowerCase()
+        .replace(/\s+/g, "_");
+      const allCategories = [...STRATEGIC_CATEGORIES, ...dynamicCategories];
+      const matchingCategory = allCategories.find(
+        (cat) => cat.id === normalizedCategory,
       );
-
-      if (matchingCategory) {
-        return matchingCategory.id;
-      }
-
-      // If no match found, create a dynamic category based on the strategic category
-      return strategicCategory.replace(/\s+/g, "_").toLowerCase();
+      if (matchingCategory) return matchingCategory.id;
+      return normalizedCategory;
     }
 
-    // Fallback to keyword-based categorization
+    if (type === "project") return "product_dev"; // Default for projects without category
+
     const text =
-      `${task.name} ${task.description || ""} ${task.project?.name || ""} ${task.project?.description || ""}`.toLowerCase();
-
-    if (
-      text.includes("usuário") ||
-      text.includes("user") ||
-      text.includes("cliente")
-    ) {
-      return "user_growth";
-    }
-    if (
-      text.includes("escala") ||
-      text.includes("performance") ||
-      text.includes("otimiz")
-    ) {
-      return "scalability";
-    }
-    if (
-      text.includes("churn") ||
-      text.includes("retenção") ||
-      text.includes("retention")
-    ) {
-      return "reduce_churn";
-    }
-    if (
-      text.includes("produto") ||
-      text.includes("feature") ||
-      text.includes("funcional")
-    ) {
-      return "product_dev";
-    }
-    if (
-      text.includes("infraestrutura") ||
-      text.includes("servidor") ||
-      text.includes("deploy")
-    ) {
-      return "infrastructure";
-    }
-    if (
-      text.includes("marketing") ||
-      text.includes("campanha") ||
-      text.includes("promo")
-    ) {
-      return "marketing";
-    }
-
-    return "product_dev"; // default category
-  };
-
-  const getSpecialMarker = (task: TaskWithRelations): string | undefined => {
-    const text = `${task.name} ${task.description || ""}`.toLowerCase();
-
-    if (text.includes("release") || text.includes("lançamento")) {
-      return "major_release";
-    }
-    if (text.includes("deploy") || text.includes("implantação")) {
-      return "major_deployment";
-    }
-    if (text.includes("theme") || text.includes("tema")) {
-      return "major_theme";
-    }
-
-    return undefined;
+      `${item.name} ${item.description || ""}`.toLowerCase();
+    if (text.includes("usuário")) return "user_growth";
+    if (text.includes("escala")) return "scalability";
+    if (text.includes("churn")) return "reduce_churn";
+    if (text.includes("infraestrutura")) return "infrastructure";
+    if (text.includes("marketing")) return "marketing";
+    return "product_dev";
   };
 
   const initializeTimeline = () => {
     if (!timelineRef.current) return;
 
-    // Filter tasks based on current filters
     const filteredTasks = tasks.filter((task) => {
-      const category = getTaskCategory(task);
+      const category = getCategoryFor(task, "task");
       const statusMatch = filters.status.includes(task.status);
       const categoryMatch = filters.categories.includes(category);
-      return statusMatch && categoryMatch;
+      const employeeMatch =
+        filters.employee === "all" ||
+        task.assigned_employee_id === filters.employee;
+      return statusMatch && categoryMatch && employeeMatch;
     });
 
-    // Combine predefined and dynamic categories
+    const filteredProjects = projects.filter((project) => {
+      const category = getCategoryFor(project, "project");
+      return filters.categories.includes(category);
+    });
+
     const allCategories = [...STRATEGIC_CATEGORIES, ...dynamicCategories];
 
-    // Create groups (strategic categories)
     const groups = new DataSet<RoadmapGroup>(
       allCategories
         .filter((cat) => filters.categories.includes(cat.id))
@@ -280,49 +227,56 @@ const Roadmap = () => {
         })),
     );
 
-    // Create timeline items
-    const items = new DataSet<RoadmapItem>(
-      filteredTasks.map((task) => {
-        const category = getTaskCategory(task);
-        const allCategories = [...STRATEGIC_CATEGORIES, ...dynamicCategories];
-        const categoryInfo = allCategories.find((cat) => cat.id === category);
-        const specialMarker = getSpecialMarker(task);
+    const taskItems = filteredTasks.map((task) => {
+      const category = getCategoryFor(task, "task");
+      const specialMarker = task.special_marker;
+      let className = `roadmap-item status-${task.status}`;
+      if (specialMarker) className += ` special-${specialMarker}`;
 
-        let className = `roadmap-item status-${task.status}`;
-        if (specialMarker) {
-          className += ` special-${specialMarker}`;
-        }
+      return {
+        id: `task-${task.id}`,
+        content: `<div class="roadmap-item-content">
+          <div class="item-title">${task.name}</div>
+          ${specialMarker ? `<div class="special-marker">${specialMarker.replace(/_/g, " ").toUpperCase()}</div>` : ""}
+          <div class="item-project">${task.project?.name || "Sem projeto"}</div>
+        </div>`,
+        start: new Date(task.start_date),
+        end: new Date(task.end_date),
+        group: category,
+        className,
+        title: `${task.name}\n\nProjeto: ${task.project?.name || "Sem projeto"}\nStatus: ${task.status}\nDuração: ${task.estimated_time}h`,
+        type: "range",
+      };
+    });
+
+    const projectMarkerItems = filteredProjects
+      .filter((p) => p.special_marker && p.end_date)
+      .map((project) => {
+        const category = getCategoryFor(project, "project");
+        const specialMarker = project.special_marker;
+        let className = `roadmap-item special-marker-project special-${specialMarker}`;
 
         return {
-          id: task.id,
+          id: `project-${project.id}`,
           content: `<div class="roadmap-item-content">
-            <div class="item-title">${task.name}</div>
-            ${specialMarker ? `<div class="special-marker">${specialMarker.replace("_", " ").toUpperCase()}</div>` : ""}
-            <div class="item-project">${task.project?.name || "Sem projeto"}</div>
+            <div class="item-title">${project.name} - ${specialMarker?.replace(/_/g, " ").toUpperCase()}</div>
           </div>`,
-          start: new Date(task.start_date),
-          end: new Date(task.end_date),
+          start: new Date(project.end_date!),
           group: category,
           className,
-          title: `${task.name}\n\nProjeto: ${task.project?.name || "Sem projeto"}\nStatus: ${task.status}\nDuração: ${task.estimated_time}h\n\nDescrição: ${task.description || "Sem descrição"}`,
-          type: "range",
+          title: `${project.name} - ${specialMarker?.replace(/_/g, " ").toUpperCase()}`,
+          type: "point",
         };
-      }),
-    );
+      });
 
-    // Timeline options
+    const items = new DataSet<RoadmapItem>([...taskItems, ...projectMarkerItems]);
+
     const options = {
-      groupOrder: (a: RoadmapGroup, b: RoadmapGroup) => {
-        const allCategories = [...STRATEGIC_CATEGORIES, ...dynamicCategories];
-        const orderA = allCategories.findIndex((cat) => cat.id === a.id);
-        const orderB = allCategories.findIndex((cat) => cat.id === b.id);
-        return orderA - orderB;
-      },
       orientation: "top",
       stack: true,
       showCurrentTime: true,
-      zoomMin: 1000 * 60 * 60 * 24 * 7, // 1 week
-      zoomMax: 1000 * 60 * 60 * 24 * 365 * 2, // 2 years
+      zoomMin: 1000 * 60 * 60 * 24 * 7,
+      zoomMax: 1000 * 60 * 60 * 24 * 365 * 2,
       editable: {
         add: false,
         updateTime: true,
@@ -330,61 +284,27 @@ const Roadmap = () => {
         remove: false,
       },
       onMove: (item: any, callback: any) => {
-        // Handle drag and drop updates
         handleItemMove(item, callback);
       },
       tooltip: {
         followMouse: true,
         overflowMethod: "cap",
       },
-      format: {
-        minorLabels: {
-          millisecond: "SSS",
-          second: "s",
-          minute: "HH:mm",
-          hour: "HH:mm",
-          weekday: "ddd D",
-          day: "D",
-          week: "w",
-          month: "MMM",
-          year: "YYYY",
-        },
-        majorLabels: {
-          millisecond: "HH:mm:ss",
-          second: "D MMMM HH:mm",
-          minute: "ddd D MMMM",
-          hour: "ddd D MMMM",
-          weekday: "MMMM YYYY",
-          day: "MMMM YYYY",
-          week: "MMMM YYYY",
-          month: "YYYY",
-          year: "",
-        },
-      },
     };
 
-    // Destroy existing timeline
     if (timelineInstance.current) {
-      try {
-        timelineInstance.current.destroy();
-      } catch (error) {
-        console.warn("Error destroying existing timeline:", error);
-      }
-      timelineInstance.current = null;
+      timelineInstance.current.destroy();
     }
 
-    // Create new timeline
     timelineInstance.current = new Timeline(
       timelineRef.current,
       items,
       groups,
-      options,
+      options as any,
     );
 
-    // Set initial view based on time scale
     const now = new Date();
     let start: Date, end: Date;
-
     switch (filters.timeScale) {
       case "weeks":
         start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 14);
@@ -394,26 +314,27 @@ const Roadmap = () => {
         start = new Date(now.getFullYear(), now.getMonth() - 3, 1);
         end = new Date(now.getFullYear(), now.getMonth() + 9, 0);
         break;
-      default: // months
+      default:
         start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
         end = new Date(now.getFullYear(), now.getMonth() + 4, 0);
     }
-
     timelineInstance.current.setWindow(start, end);
   };
 
   const handleItemMove = async (item: any, callback: any) => {
+    if (!item.id.startsWith("task-")) {
+      callback(null);
+      return;
+    }
     try {
-      // Update task in database
-      await taskService.update(item.id, {
+      await taskService.update(item.id.replace("task-", ""), {
         start_date: item.start.toISOString().split("T")[0],
         end_date: item.end.toISOString().split("T")[0],
       });
 
-      // Update local state
       setTasks((prevTasks) =>
         prevTasks.map((task) =>
-          task.id === item.id
+          task.id === item.id.replace("task-", "")
             ? {
                 ...task,
                 start_date: item.start.toISOString().split("T")[0],
@@ -422,33 +343,16 @@ const Roadmap = () => {
             : task,
         ),
       );
-
-      callback(item); // Confirm the move
+      callback(item);
     } catch (error) {
       console.error("Error updating task:", error);
-      callback(null); // Cancel the move
+      callback(null);
     }
   };
 
   const handleZoom = (direction: "in" | "out") => {
-    if (!timelineInstance.current) return;
-
-    try {
-      const range = timelineInstance.current.getWindow();
-      const interval = range.end.getTime() - range.start.getTime();
-      const center = new Date(
-        (range.start.getTime() + range.end.getTime()) / 2,
-      );
-
-      const factor = direction === "in" ? 0.7 : 1.4;
-      const newInterval = interval * factor;
-
-      const newStart = new Date(center.getTime() - newInterval / 2);
-      const newEnd = new Date(center.getTime() + newInterval / 2);
-
-      timelineInstance.current.setWindow(newStart, newEnd);
-    } catch (error) {
-      console.warn("Error during zoom operation:", error);
+    if (timelineInstance.current) {
+      timelineInstance.current.zoom(direction === "in" ? 0.2 : -0.2);
     }
   };
 
@@ -485,7 +389,6 @@ const Roadmap = () => {
   return (
     <div className="bg-background p-6 w-full">
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Target className="h-6 w-6 text-primary" />
@@ -522,7 +425,6 @@ const Roadmap = () => {
           </div>
         </div>
 
-        {/* Filters Panel */}
         {showFilters && (
           <Card>
             <CardHeader>
@@ -533,7 +435,6 @@ const Roadmap = () => {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Time Scale */}
                 <div>
                   <label className="block text-sm font-medium mb-2">
                     Escala de Tempo
@@ -555,7 +456,6 @@ const Roadmap = () => {
                   </Select>
                 </div>
 
-                {/* Categories */}
                 <div>
                   <label className="block text-sm font-medium mb-2">
                     Categorias Estratégicas
@@ -590,7 +490,6 @@ const Roadmap = () => {
                   </div>
                 </div>
 
-                {/* Status */}
                 <div>
                   <label className="block text-sm font-medium mb-2">
                     Status
@@ -622,12 +521,34 @@ const Roadmap = () => {
                     ))}
                   </div>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Funcionário
+                  </label>
+                  <Select
+                    value={filters.employee}
+                    onValueChange={(value) =>
+                      setFilters((prev) => ({ ...prev, employee: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {employees.map((employee) => (
+                        <SelectItem key={employee.id} value={employee.id}>
+                          {employee.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Legend */}
         <Card>
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
@@ -675,7 +596,6 @@ const Roadmap = () => {
           </CardContent>
         </Card>
 
-        {/* Timeline */}
         <Card>
           <CardContent className="p-0">
             <div
