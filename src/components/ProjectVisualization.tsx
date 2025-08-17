@@ -55,40 +55,6 @@ import {
   type Employee,
 } from "@/lib/supabaseClient";
 
-interface Project {
-  id: string;
-  name: string;
-  description?: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  created_at: string | null;
-  updated_at: string | null;
-}
-
-interface Task {
-  id: string;
-  name: string;
-  description?: string | null;
-  estimated_time: number;
-  start_date: string;
-  end_date: string;
-  assigned_employee_id: string | null;
-  project_id: string | null;
-  status: string | null;
-  created_at: string | null;
-  updated_at: string | null;
-}
-
-interface Employee {
-  id: string;
-  name: string;
-  role: string;
-  weekly_hours: number;
-  skills: any;
-  created_at: string | null;
-  updated_at: string | null;
-}
-
 const ProjectVisualization: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -107,6 +73,7 @@ const ProjectVisualization: React.FC = () => {
     description: "",
     start_date: new Date().toISOString().split("T")[0],
     end_date: new Date().toISOString().split("T")[0],
+    categoria_estrategica: "",
   });
 
   useEffect(() => {
@@ -142,6 +109,7 @@ const ProjectVisualization: React.FC = () => {
         description: "",
         start_date: new Date().toISOString().split("T")[0],
         end_date: new Date().toISOString().split("T")[0],
+        categoria_estrategica: "",
       });
       setIsNewProjectDialogOpen(false);
     } catch (error) {
@@ -158,6 +126,7 @@ const ProjectVisualization: React.FC = () => {
         description: currentProject.description,
         start_date: currentProject.start_date,
         end_date: currentProject.end_date,
+        categoria_estrategica: currentProject.categoria_estrategica,
       });
 
       const updatedProjects = projects.map((project) =>
@@ -457,6 +426,23 @@ const ProjectVisualization: React.FC = () => {
                         className="col-span-3"
                       />
                     </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="project-categoria" className="text-right">
+                        Categoria Estratégica
+                      </Label>
+                      <Input
+                        id="project-categoria"
+                        value={newProject.categoria_estrategica}
+                        onChange={(e) =>
+                          setNewProject({
+                            ...newProject,
+                            categoria_estrategica: e.target.value,
+                          })
+                        }
+                        placeholder="Digite a categoria estratégica"
+                        className="col-span-3"
+                      />
+                    </div>
                   </div>
                   <DialogFooter>
                     <Button type="submit" onClick={handleCreateProject}>
@@ -477,6 +463,7 @@ const ProjectVisualization: React.FC = () => {
                     <TableRow>
                       <TableHead>Project Name</TableHead>
                       <TableHead>Description</TableHead>
+                      <TableHead>Categoria Estratégica</TableHead>
                       <TableHead>Start Date</TableHead>
                       <TableHead>End Date</TableHead>
                       <TableHead>Tasks</TableHead>
@@ -486,13 +473,13 @@ const ProjectVisualization: React.FC = () => {
                   <TableBody>
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-6">
+                        <TableCell colSpan={7} className="text-center py-6">
                           Loading projects...
                         </TableCell>
                       </TableRow>
                     ) : projects.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-6">
+                        <TableCell colSpan={7} className="text-center py-6">
                           No projects found
                         </TableCell>
                       </TableRow>
@@ -508,6 +495,9 @@ const ProjectVisualization: React.FC = () => {
                             </TableCell>
                             <TableCell>
                               {project.description || "No description"}
+                            </TableCell>
+                            <TableCell>
+                              {project.categoria_estrategica || "Not set"}
                             </TableCell>
                             <TableCell>
                               {project.start_date
@@ -637,6 +627,26 @@ const ProjectVisualization: React.FC = () => {
                             end_date: e.target.value,
                           })
                         }
+                        className="col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label
+                        htmlFor="edit-project-categoria"
+                        className="text-right"
+                      >
+                        Categoria Estratégica
+                      </Label>
+                      <Input
+                        id="edit-project-categoria"
+                        value={currentProject.categoria_estrategica || ""}
+                        onChange={(e) =>
+                          setCurrentProject({
+                            ...currentProject,
+                            categoria_estrategica: e.target.value,
+                          })
+                        }
+                        placeholder="Digite a categoria estratégica"
                         className="col-span-3"
                       />
                     </div>

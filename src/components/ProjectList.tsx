@@ -31,7 +31,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+import { Textarea } from "./ui/textarea";
 import {
   PlusCircle,
   Pencil,
@@ -41,158 +48,134 @@ import {
   Upload,
 } from "lucide-react";
 import * as XLSX from "xlsx";
-import { employeeService, type Employee } from "@/lib/supabaseClient";
+import { projectService, type Project } from "@/lib/supabaseClient";
 
-const EmployeeList = () => {
-  const [employees, setEmployees] = useState<Employee[]>([]);
+const ProjectList = () => {
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
+  const [currentProject, setCurrentProject] = useState<Project | null>(null);
 
-  // Form state for new/edit employee
   const [formData, setFormData] = useState({
     name: "",
-    role: "",
-    weekly_hours: 40,
-    skills: "",
-    trabalha_fim_de_semana: false,
+    description: "",
+    start_date: new Date().toISOString().split("T")[0],
+    end_date: new Date().toISOString().split("T")[0],
+    categoria_estrategica: "",
+    special_marker: "none",
   });
 
-  // Load employees from database
   useEffect(() => {
-    loadEmployees();
+    loadProjects();
   }, []);
 
-  const loadEmployees = async () => {
+  const loadProjects = async () => {
     try {
       setLoading(true);
-      const data = await employeeService.getAll();
-      setEmployees(data);
+      const data = await projectService.getAll();
+      setProjects(data);
     } catch (error) {
-      console.error("Error loading employees:", error);
+      console.error("Error loading projects:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
+    const { name, value } = e.target;
     setFormData({
       ...formData,
-      [name]:
-        type === "checkbox"
-          ? checked
-          : name === "weekly_hours"
-            ? parseInt(value) || 0
-            : value,
+      [name]: value,
     });
   };
 
-  const handleAddEmployee = async () => {
+  const handleSelectChange = (name: string, value: string) => {
+    setFormData({
+      ...formData,
+      [name]: value,
+    });
+  };
+
+  const handleAddProject = async () => {
     try {
-      // Validate required fields
       if (!formData.name.trim()) {
         alert("Name is required");
         return;
       }
-      if (!formData.role.trim()) {
-        alert("Role is required");
-        return;
-      }
-      if (formData.weekly_hours <= 0) {
-        alert("Weekly hours must be greater than 0");
-        return;
-      }
 
-      const skillsArray = formData.skills
-        .split(",")
-        .map((skill) => skill.trim())
-        .filter((skill) => skill !== "");
-
-      const newEmployee = await employeeService.create({
+      const newProject = await projectService.create({
         name: formData.name.trim(),
-        role: formData.role.trim(),
-        weekly_hours: formData.weekly_hours,
-        skills: skillsArray,
-        trabalha_fim_de_semana: formData.trabalha_fim_de_semana,
+        description: formData.description.trim(),
+        start_date: formData.start_date,
+        end_date: formData.end_date,
+        categoria_estrategica: formData.categoria_estrategica.trim(),
+        special_marker:
+          formData.special_marker === "none" ? null : formData.special_marker,
       });
 
-      setEmployees([...employees, newEmployee]);
+      setProjects([...projects, newProject]);
       resetForm();
       setIsAddDialogOpen(false);
     } catch (error) {
-      console.error("Error adding employee:", error);
-      alert("Failed to add employee. Please try again.");
+      console.error("Error adding project:", error);
+      alert("Failed to add project. Please try again.");
     }
   };
 
-  const handleEditEmployee = async () => {
-    if (!currentEmployee) return;
+  const handleEditProject = async () => {
+    if (!currentProject) return;
 
     try {
-      // Validate required fields
       if (!formData.name.trim()) {
         alert("Name is required");
         return;
       }
-      if (!formData.role.trim()) {
-        alert("Role is required");
-        return;
-      }
-      if (formData.weekly_hours <= 0) {
-        alert("Weekly hours must be greater than 0");
-        return;
-      }
 
-      const skillsArray = formData.skills
-        .split(",")
-        .map((skill) => skill.trim())
-        .filter((skill) => skill !== "");
-
-      const updatedEmployee = await employeeService.update(currentEmployee.id, {
+      const updatedProject = await projectService.update(currentProject.id, {
         name: formData.name.trim(),
-        role: formData.role.trim(),
-        weekly_hours: formData.weekly_hours,
-        skills: skillsArray,
-        trabalha_fim_de_semana: formData.trabalha_fim_de_semana,
+        description: formData.description.trim(),
+        start_date: formData.start_date,
+        end_date: formData.end_date,
+        categoria_estrategica: formData.categoria_estrategica.trim(),
+        special_marker:
+          formData.special_marker === "none" ? null : formData.special_marker,
       });
 
-      const updatedEmployees = employees.map((emp) =>
-        emp.id === currentEmployee.id ? updatedEmployee : emp,
+      const updatedProjects = projects.map((proj) =>
+        proj.id === currentProject.id ? updatedProject : proj,
       );
 
-      setEmployees(updatedEmployees);
+      setProjects(updatedProjects);
       resetForm();
       setIsEditDialogOpen(false);
     } catch (error) {
-      console.error("Error updating employee:", error);
-      alert("Failed to update employee. Please try again.");
+      console.error("Error updating project:", error);
+      alert("Failed to update project. Please try again.");
     }
   };
 
-  const handleDeleteEmployee = async (id: string) => {
+  const handleDeleteProject = async (id: string) => {
     try {
-      await employeeService.delete(id);
-      setEmployees(employees.filter((emp) => emp.id !== id));
+      await projectService.delete(id);
+      setProjects(projects.filter((proj) => proj.id !== id));
     } catch (error) {
-      console.error("Error deleting employee:", error);
+      console.error("Error deleting project:", error);
     }
   };
 
-  const openEditDialog = (employee: Employee) => {
-    setCurrentEmployee(employee);
+  const openEditDialog = (project: Project) => {
+    setCurrentProject(project);
     setFormData({
-      name: employee.name,
-      role: employee.role,
-      weekly_hours: employee.weekly_hours,
-      skills: Array.isArray(employee.skills)
-        ? employee.skills.join(", ")
-        : typeof employee.skills === "string"
-          ? employee.skills
-          : "",
-      trabalha_fim_de_semana: employee.trabalha_fim_de_semana || false,
+      name: project.name,
+      description: project.description || "",
+      start_date: project.start_date || "",
+      end_date: project.end_date || "",
+      categoria_estrategica: project.categoria_estrategica || "",
+      special_marker: project.special_marker || "none",
     });
     setIsEditDialogOpen(true);
   };
@@ -200,37 +183,37 @@ const EmployeeList = () => {
   const resetForm = () => {
     setFormData({
       name: "",
-      role: "",
-      weekly_hours: 40,
-      skills: "",
-      trabalha_fim_de_semana: false,
+      description: "",
+      start_date: new Date().toISOString().split("T")[0],
+      end_date: new Date().toISOString().split("T")[0],
+      categoria_estrategica: "",
+      special_marker: "none",
     });
-    setCurrentEmployee(null);
+    setCurrentProject(null);
   };
 
-  const filteredEmployees = employees.filter(
-    (employee) =>
-      employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      employee.role.toLowerCase().includes(searchTerm.toLowerCase()),
+  const filteredProjects = projects.filter(
+    (project) =>
+      project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      project.description?.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const exportToExcel = () => {
-    const exportData = filteredEmployees.map((employee) => ({
-      Name: employee.name,
-      Role: employee.role,
-      "Weekly Hours": employee.weekly_hours,
-      "Weekend Work": employee.trabalha_fim_de_semana ? "Yes" : "No",
-      Skills: Array.isArray(employee.skills)
-        ? employee.skills.join(", ")
-        : "",
+    const exportData = filteredProjects.map((project) => ({
+      Name: project.name,
+      Description: project.description || "",
+      "Start Date": project.start_date,
+      "End Date": project.end_date,
+      "Strategic Category": project.categoria_estrategica || "",
+      "Special Marker": project.special_marker || "",
     }));
 
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Employees");
+    XLSX.utils.book_append_sheet(wb, ws, "Projects");
     XLSX.writeFile(
       wb,
-      `employees_export_${new Date().toISOString().split("T")[0]}.xlsx`,
+      `projects_export_${new Date().toISOString().split("T")[0]}.xlsx`,
     );
   };
 
@@ -250,31 +233,26 @@ const EmployeeList = () => {
         jsonData.forEach(async (row: any) => {
           if (row["Name"]) {
             try {
-              const skillsArray = row["Skills"]
-                ? row["Skills"]
-                    .toString()
-                    .split(",")
-                    .map((skill: string) => skill.trim())
-                : [];
-
-              const employeeData = {
+              const projectData = {
                 name: row["Name"],
-                role: row["Role"] || "",
-                weekly_hours: Number(row["Weekly Hours"]) || 40,
-                trabalha_fim_de_semana:
-                  row["Weekend Work"]?.toLowerCase() === "yes",
-                skills: skillsArray,
+                description: row["Description"] || "",
+                start_date:
+                  row["Start Date"] || new Date().toISOString().split("T")[0],
+                end_date:
+                  row["End Date"] || new Date().toISOString().split("T")[0],
+                categoria_estrategica: row["Strategic Category"] || "",
+                special_marker: row["Special Marker"] || null,
               };
 
-              const newEmployee = await employeeService.create(employeeData);
-              setEmployees((prev) => [...prev, newEmployee]);
+              const newProject = await projectService.create(projectData);
+              setProjects((prev) => [...prev, newProject]);
             } catch (error) {
-              console.error("Error importing employee:", error);
+              console.error("Error importing project:", error);
             }
           }
         });
 
-        alert("Import completed! Please refresh to see the new employees.");
+        alert("Import completed! Please refresh to see the new projects.");
       } catch (error) {
         console.error("Error reading file:", error);
         alert("Error reading file. Please make sure it's a valid Excel file.");
@@ -287,12 +265,12 @@ const EmployeeList = () => {
     <div className="bg-background p-6 w-full">
       <Card className="w-full">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Employee Management</CardTitle>
+          <CardTitle>Project Management</CardTitle>
           <div className="flex items-center space-x-2">
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search employees..."
+                placeholder="Search projects..."
                 className="pl-8 w-[250px]"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -313,14 +291,14 @@ const EmployeeList = () => {
                 accept=".xlsx,.xls,.csv"
                 onChange={handleFileImport}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                id="employee-file-import"
+                id="project-file-import"
               />
               <Button
                 variant="outline"
                 size="sm"
                 className="flex items-center gap-1"
                 onClick={() =>
-                  document.getElementById("employee-file-import")?.click()
+                  document.getElementById("project-file-import")?.click()
                 }
               >
                 <Upload className="h-4 w-4" />
@@ -331,14 +309,14 @@ const EmployeeList = () => {
               <DialogTrigger asChild>
                 <Button className="flex items-center gap-1">
                   <PlusCircle className="h-4 w-4" />
-                  Add Employee
+                  Add Project
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Add New Employee</DialogTitle>
+                  <DialogTitle>Add New Project</DialogTitle>
                   <DialogDescription>
-                    Enter the details for the new employee.
+                    Enter the details for the new project.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
@@ -355,66 +333,83 @@ const EmployeeList = () => {
                     />
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="role" className="text-right">
-                      Role
+                    <Label htmlFor="description" className="text-right">
+                      Description
                     </Label>
-                    <Input
-                      id="role"
-                      name="role"
-                      value={formData.role}
+                    <Textarea
+                      id="description"
+                      name="description"
+                      value={formData.description}
                       onChange={handleInputChange}
                       className="col-span-3"
                     />
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="weekly_hours" className="text-right">
-                      Weekly Hours
+                    <Label htmlFor="start_date" className="text-right">
+                      Start Date
                     </Label>
                     <Input
-                      id="weekly_hours"
-                      name="weekly_hours"
-                      type="number"
-                      value={formData.weekly_hours}
+                      id="start_date"
+                      name="start_date"
+                      type="date"
+                      value={formData.start_date}
                       onChange={handleInputChange}
                       className="col-span-3"
                     />
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="skills" className="text-right">
-                      Skills
+                    <Label htmlFor="end_date" className="text-right">
+                      End Date
                     </Label>
                     <Input
-                      id="skills"
-                      name="skills"
-                      value={formData.skills}
+                      id="end_date"
+                      name="end_date"
+                      type="date"
+                      value={formData.end_date}
                       onChange={handleInputChange}
-                      placeholder="React, TypeScript, Node.js"
                       className="col-span-3"
                     />
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label
-                      htmlFor="trabalha_fim_de_semana"
+                      htmlFor="categoria_estrategica"
                       className="text-right"
                     >
-                      Trabalha Fim de Semana
+                      Strategic Category
                     </Label>
-                    <div className="col-span-3 flex items-center space-x-2">
-                      <input
-                        id="trabalha_fim_de_semana"
-                        name="trabalha_fim_de_semana"
-                        type="checkbox"
-                        checked={formData.trabalha_fim_de_semana}
-                        onChange={handleInputChange}
-                        className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                      />
-                      <Label
-                        htmlFor="trabalha_fim_de_semana"
-                        className="text-sm"
-                      >
-                        Sim, trabalha aos sábados e domingos
-                      </Label>
-                    </div>
+                    <Input
+                      id="categoria_estrategica"
+                      name="categoria_estrategica"
+                      value={formData.categoria_estrategica}
+                      onChange={handleInputChange}
+                      className="col-span-3"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="special_marker" className="text-right">
+                      Special Marker
+                    </Label>
+                    <Select
+                      name="special_marker"
+                      onValueChange={(value) =>
+                        handleSelectChange("special_marker", value)
+                      }
+                      value={formData.special_marker}
+                    >
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Select a marker" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="major_release">
+                          Major Release
+                        </SelectItem>
+                        <SelectItem value="major_deployment">
+                          Major Deployment
+                        </SelectItem>
+                        <SelectItem value="major_theme">Major Theme</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <DialogFooter>
@@ -424,7 +419,7 @@ const EmployeeList = () => {
                   >
                     Cancel
                   </Button>
-                  <Button onClick={handleAddEmployee}>Add Employee</Button>
+                  <Button onClick={handleAddProject}>Add Project</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -435,10 +430,11 @@ const EmployeeList = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Weekly Hours</TableHead>
-                <TableHead>Weekend Work</TableHead>
-                <TableHead>Skills</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Start Date</TableHead>
+                <TableHead>End Date</TableHead>
+                <TableHead>Strategic Category</TableHead>
+                <TableHead>Special Marker</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -446,53 +442,29 @@ const EmployeeList = () => {
               {loading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={7}
                     className="text-center py-6 text-muted-foreground"
                   >
-                    Loading employees...
+                    Loading projects...
                   </TableCell>
                 </TableRow>
-              ) : filteredEmployees.length > 0 ? (
-                filteredEmployees.map((employee) => (
-                  <TableRow key={employee.id}>
+              ) : filteredProjects.length > 0 ? (
+                filteredProjects.map((project) => (
+                  <TableRow key={project.id}>
                     <TableCell className="font-medium">
-                      {employee.name}
+                      {project.name}
                     </TableCell>
-                    <TableCell>{employee.role}</TableCell>
-                    <TableCell>{employee.weekly_hours}h</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          employee.trabalha_fim_de_semana
-                            ? "default"
-                            : "secondary"
-                        }
-                      >
-                        {employee.trabalha_fim_de_semana ? "Sim" : "Não"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {Array.isArray(employee.skills) &&
-                          employee.skills.map((skill, index) => (
-                            <Badge key={index} variant="secondary">
-                              {skill}
-                            </Badge>
-                          ))}
-                        {typeof employee.skills === "string" &&
-                          employee.skills.split(",").map((skill, index) => (
-                            <Badge key={index} variant="secondary">
-                              {skill.trim()}
-                            </Badge>
-                          ))}
-                      </div>
-                    </TableCell>
+                    <TableCell>{project.description}</TableCell>
+                    <TableCell>{project.start_date}</TableCell>
+                    <TableCell>{project.end_date}</TableCell>
+                    <TableCell>{project.categoria_estrategica}</TableCell>
+                    <TableCell>{project.special_marker}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => openEditDialog(employee)}
+                          onClick={() => openEditDialog(project)}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -505,10 +477,10 @@ const EmployeeList = () => {
                           <AlertDialogContent>
                             <AlertDialogHeader>
                               <AlertDialogTitle>
-                                Delete Employee
+                                Delete Project
                               </AlertDialogTitle>
                               <AlertDialogDescription>
-                                Are you sure you want to delete {employee.name}?
+                                Are you sure you want to delete {project.name}?
                                 This action cannot be undone.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
@@ -516,7 +488,7 @@ const EmployeeList = () => {
                               <AlertDialogCancel>Cancel</AlertDialogCancel>
                               <AlertDialogAction
                                 onClick={() =>
-                                  handleDeleteEmployee(employee.id)
+                                  handleDeleteProject(project.id)
                                 }
                                 className="bg-destructive text-destructive-foreground"
                               >
@@ -532,10 +504,10 @@ const EmployeeList = () => {
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={7}
                     className="text-center py-6 text-muted-foreground"
                   >
-                    No employees found
+                    No projects found
                   </TableCell>
                 </TableRow>
               )}
@@ -544,13 +516,12 @@ const EmployeeList = () => {
         </CardContent>
       </Card>
 
-      {/* Edit Employee Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Employee</DialogTitle>
+            <DialogTitle>Edit Project</DialogTitle>
             <DialogDescription>
-              Update the employee's information.
+              Update the project's information.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -567,66 +538,83 @@ const EmployeeList = () => {
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-role" className="text-right">
-                Role
+              <Label htmlFor="edit-description" className="text-right">
+                Description
               </Label>
-              <Input
-                id="edit-role"
-                name="role"
-                value={formData.role}
+              <Textarea
+                id="edit-description"
+                name="description"
+                value={formData.description}
                 onChange={handleInputChange}
                 className="col-span-3"
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-weekly_hours" className="text-right">
-                Weekly Hours
+              <Label htmlFor="edit-start_date" className="text-right">
+                Start Date
               </Label>
               <Input
-                id="edit-weekly_hours"
-                name="weekly_hours"
-                type="number"
-                value={formData.weekly_hours}
+                id="edit-start_date"
+                name="start_date"
+                type="date"
+                value={formData.start_date}
                 onChange={handleInputChange}
                 className="col-span-3"
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-skills" className="text-right">
-                Skills
+              <Label htmlFor="edit-end_date" className="text-right">
+                End Date
               </Label>
               <Input
-                id="edit-skills"
-                name="skills"
-                value={formData.skills}
+                id="edit-end_date"
+                name="end_date"
+                type="date"
+                value={formData.end_date}
                 onChange={handleInputChange}
-                placeholder="React, TypeScript, Node.js"
                 className="col-span-3"
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label
-                htmlFor="edit-trabalha_fim_de_semana"
+                htmlFor="edit-categoria_estrategica"
                 className="text-right"
               >
-                Trabalha Fim de Semana
+                Strategic Category
               </Label>
-              <div className="col-span-3 flex items-center space-x-2">
-                <input
-                  id="edit-trabalha_fim_de_semana"
-                  name="trabalha_fim_de_semana"
-                  type="checkbox"
-                  checked={formData.trabalha_fim_de_semana}
-                  onChange={handleInputChange}
-                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                />
-                <Label
-                  htmlFor="edit-trabalha_fim_de_semana"
-                  className="text-sm"
-                >
-                  Sim, trabalha aos sábados e domingos
-                </Label>
-              </div>
+              <Input
+                id="edit-categoria_estrategica"
+                name="categoria_estrategica"
+                value={formData.categoria_estrategica}
+                onChange={handleInputChange}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-special_marker" className="text-right">
+                Special Marker
+              </Label>
+              <Select
+                name="special_marker"
+                onValueChange={(value) =>
+                  handleSelectChange("special_marker", value)
+                }
+                value={formData.special_marker}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select a marker" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="major_release">
+                    Major Release
+                  </SelectItem>
+                  <SelectItem value="major_deployment">
+                    Major Deployment
+                  </SelectItem>
+                  <SelectItem value="major_theme">Major Theme</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
@@ -636,7 +624,7 @@ const EmployeeList = () => {
             >
               Cancel
             </Button>
-            <Button onClick={handleEditEmployee}>Save Changes</Button>
+            <Button onClick={handleEditProject}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -644,4 +632,4 @@ const EmployeeList = () => {
   );
 };
 
-export default EmployeeList;
+export default ProjectList;

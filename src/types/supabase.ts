@@ -198,6 +198,7 @@ export type Database = {
           name: string
           role: string
           skills: Json | null
+          trabalha_fim_de_semana: boolean | null
           updated_at: string | null
           weekly_hours: number
         }
@@ -207,6 +208,7 @@ export type Database = {
           name: string
           role: string
           skills?: Json | null
+          trabalha_fim_de_semana?: boolean | null
           updated_at?: string | null
           weekly_hours?: number
         }
@@ -216,6 +218,7 @@ export type Database = {
           name?: string
           role?: string
           skills?: Json | null
+          trabalha_fim_de_semana?: boolean | null
           updated_at?: string | null
           weekly_hours?: number
         }
@@ -669,29 +672,35 @@ export type Database = {
       }
       workload_projects: {
         Row: {
+          categoria_estrategica: string | null
           created_at: string | null
           description: string | null
           end_date: string | null
           id: string
           name: string
+          special_marker: string | null
           start_date: string | null
           updated_at: string | null
         }
         Insert: {
+          categoria_estrategica?: string | null
           created_at?: string | null
           description?: string | null
           end_date?: string | null
           id?: string
           name: string
+          special_marker?: string | null
           start_date?: string | null
           updated_at?: string | null
         }
         Update: {
+          categoria_estrategica?: string | null
           created_at?: string | null
           description?: string | null
           end_date?: string | null
           id?: string
           name?: string
+          special_marker?: string | null
           start_date?: string | null
           updated_at?: string | null
         }
@@ -705,9 +714,13 @@ export type Database = {
           description: string | null
           end_date: string
           estimated_time: number
+          hours_per_day: number | null
           id: string
           name: string
           project_id: string | null
+          repeat_days: string[] | null
+          repeats_weekly: boolean | null
+          special_marker: string | null
           start_date: string
           status: string | null
           updated_at: string | null
@@ -719,9 +732,13 @@ export type Database = {
           description?: string | null
           end_date: string
           estimated_time?: number
+          hours_per_day?: number | null
           id?: string
           name: string
           project_id?: string | null
+          repeat_days?: string[] | null
+          repeats_weekly?: boolean | null
+          special_marker?: string | null
           start_date: string
           status?: string | null
           updated_at?: string | null
@@ -733,9 +750,13 @@ export type Database = {
           description?: string | null
           end_date?: string
           estimated_time?: number
+          hours_per_day?: number | null
           id?: string
           name?: string
           project_id?: string | null
+          repeat_days?: string[] | null
+          repeats_weekly?: boolean | null
+          special_marker?: string | null
           start_date?: string
           status?: string | null
           updated_at?: string | null

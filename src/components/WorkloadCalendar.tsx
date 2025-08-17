@@ -18,30 +18,21 @@ interface Task {
   end_date: string;
   assigned_employee_id: string;
   project_id: string;
-  status: "pending" | "in_progress" | "completed" | "cancelled";
+  status: "pending" | "in_progress" | "completed" | "cancelled" | null;
   created_at: string;
   updated_at: string;
 }
 
-interface Employee {
-  id: string;
-  name: string;
-  email: string;
-  weekly_hours: number;
-  skills: string[];
-  created_at: string;
-  updated_at: string;
-}
+import { type Employee } from "@/lib/supabaseClient";
 
 interface Project {
   id: string;
   name: string;
-  description?: string;
-  start_date: string;
-  end_date: string;
-  status: "active" | "completed" | "on_hold";
-  created_at: string;
-  updated_at: string;
+  description?: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 interface WorkloadCalendarProps {
@@ -183,22 +174,64 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
       ? dayTasks.filter((task) => task.assigned_employee_id === employeeId)
       : dayTasks;
 
+    // Check if it's weekend
+    const isWeekend = date.getDay() === 0 || date.getDay() === 6; // Sunday = 0, Saturday = 6
+
     const totalHours = filteredTasks.reduce((sum, task) => {
       // For multi-day tasks, distribute hours evenly across days
       const startDate = new Date(task.start_date);
       const endDate = new Date(task.end_date);
-      const daysDiff = Math.max(
-        1,
-        Math.ceil(
-          (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
-        ) + 1,
-      );
+
+      // Calculate working days between start and end date, considering employee's weekend work preference
+      let workingDays = 0;
+      const tempDate = new Date(startDate);
+      const employee = employees.find((emp) => emp.id === task.assigned_employee_id);
+      const worksWeekends = employee?.trabalha_fim_de_semana || false;
+
+      while (tempDate <= endDate) {
+        const dayOfWeek = tempDate.getDay();
+        const isCurrentWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+        if (!isCurrentWeekend || worksWeekends) {
+          workingDays++;
+        }
+
+        tempDate.setDate(tempDate.getDate() + 1);
+      }
+
+      const daysDiff = Math.max(1, workingDays);
+
+      // If current date is weekend and employee doesn't work weekends, don't count hours
+      if (employeeId && isWeekend) {
+        const employee = employees.find((emp) => emp.id === employeeId);
+        const worksWeekends = employee?.trabalha_fim_de_semana || false;
+        if (!worksWeekends) {
+          return sum; // Don't add hours for weekend days
+        }
+      }
+
       return sum + task.estimated_time / daysDiff;
     }, 0);
 
     if (employeeId) {
       const employee = employees.find((emp) => emp.id === employeeId);
-      const dailyCapacity = employee ? employee.weekly_hours / 5 : 8; // Assume 5 working days
+      const worksWeekends = employee?.trabalha_fim_de_semana || false;
+
+      // If it's weekend and employee doesn't work weekends, return zero capacity
+      if (isWeekend && !worksWeekends) {
+        return {
+          hours: 0,
+          percentage: 0,
+          capacity: 0,
+        };
+      }
+
+      // Calculate daily capacity based on whether employee works weekends
+      const workingDaysPerWeek = worksWeekends ? 7 : 5;
+      const dailyCapacity = employee
+        ? employee.weekly_hours / workingDaysPerWeek
+        : 8;
+
       return {
         hours: totalHours,
         percentage: (totalHours / dailyCapacity) * 100,
@@ -208,20 +241,32 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
     // For all employees view, calculate average workload
     const totalEmployees = employees.length;
-    const averageCapacity =
-      totalEmployees > 0
-        ? employees.reduce((sum, emp) => sum + emp.weekly_hours, 0) /
-          totalEmployees /
-          5
-        : 8;
+    if (totalEmployees === 0) {
+      return {
+        hours: totalHours,
+        percentage: 0,
+        capacity: 0,
+      };
+    }
+
+    // Calculate average capacity considering each employee's weekend work preference
+    const totalCapacity = employees.reduce((sum, emp) => {
+      const worksWeekends = emp.trabalha_fim_de_semana || false;
+      const workingDaysPerWeek = worksWeekends ? 7 : 5;
+      const dailyCapacity = emp.weekly_hours / workingDaysPerWeek;
+
+      // If it's weekend, only count employees who work weekends
+      if (isWeekend && !worksWeekends) {
+        return sum;
+      }
+
+      return sum + dailyCapacity;
+    }, 0);
 
     return {
       hours: totalHours,
-      percentage:
-        totalEmployees > 0
-          ? (totalHours / (averageCapacity * totalEmployees)) * 100
-          : 0,
-      capacity: averageCapacity * totalEmployees,
+      percentage: totalCapacity > 0 ? (totalHours / totalCapacity) * 100 : 0,
+      capacity: totalCapacity,
     };
   };
 

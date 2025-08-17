@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
+import { ScrollArea } from "./ui/scroll-area";
 import { Textarea } from "./ui/textarea";
 import {
   Dialog,
@@ -73,6 +74,8 @@ const TaskManagement = () => {
     employee: "all",
     status: "all",
   });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [projectSearchTerm, setProjectSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
   const [isNewTaskDialogOpen, setIsNewTaskDialogOpen] = useState(false);
@@ -94,6 +97,10 @@ const TaskManagement = () => {
     assigned_employee_id: "none",
     status: "pending" as "pending" | "in_progress" | "completed",
     completion_date: "",
+    repeats_weekly: false,
+    repeat_days: [] as string[],
+    hours_per_day: 0,
+    special_marker: "none",
   });
 
   const [newProject, setNewProject] = useState({
@@ -101,12 +108,62 @@ const TaskManagement = () => {
     description: "",
     start_date: new Date().toISOString().split("T")[0],
     end_date: new Date().toISOString().split("T")[0],
+    categoria_estrategica: "",
   });
+
+  // Strategic categories for projects
+  const [strategicCategories, setStrategicCategories] = useState<string[]>([]);
+
+  // Load existing strategic categories
+  useEffect(() => {
+    loadStrategicCategories();
+  }, []);
+
+  const loadStrategicCategories = async () => {
+    try {
+      const projectsData = await projectService.getAll();
+      const categories = projectsData
+        .map((p) => p.categoria_estrategica)
+        .filter(
+          (cat): cat is string =>
+            cat !== null && cat !== undefined && cat !== "",
+        )
+        .filter((cat, index, arr) => arr.indexOf(cat) === index); // Remove duplicates
+      setStrategicCategories(categories);
+    } catch (error) {
+      console.error("Error loading strategic categories:", error);
+    }
+  };
 
   // Load data from database
   useEffect(() => {
     loadData();
   }, []);
+
+  // Effect to automatically calculate estimated_time for new task
+  useEffect(() => {
+    if (newTask.repeats_weekly) {
+      const calculatedHours =
+        (newTask.repeat_days?.length || 0) * (newTask.hours_per_day || 0);
+      setNewTask((prev) => ({ ...prev, estimated_time: calculatedHours }));
+    }
+  }, [newTask.repeats_weekly, newTask.repeat_days, newTask.hours_per_day]);
+
+  // Effect to automatically calculate estimated_time for editing task
+  useEffect(() => {
+    if (currentTask?.repeats_weekly) {
+      const calculatedHours =
+        (currentTask.repeat_days?.length || 0) *
+        (currentTask.hours_per_day || 0);
+      setCurrentTask((prev) =>
+        prev ? { ...prev, estimated_time: calculatedHours } : null,
+      );
+    }
+  }, [
+    currentTask?.repeats_weekly,
+    currentTask?.repeat_days,
+    currentTask?.hours_per_day,
+  ]);
 
   const loadData = async () => {
     try {
@@ -146,6 +203,11 @@ const TaskManagement = () => {
           newTask.status === "completed" && newTask.completion_date
             ? newTask.completion_date
             : null,
+        repeats_weekly: newTask.repeats_weekly,
+        repeat_days: newTask.repeats_weekly ? newTask.repeat_days : null,
+        hours_per_day: newTask.repeats_weekly ? newTask.hours_per_day : null,
+        special_marker:
+          newTask.special_marker === "none" ? null : newTask.special_marker,
       };
 
       const createdTask = await taskService.create(taskData);
@@ -161,6 +223,10 @@ const TaskManagement = () => {
         assigned_employee_id: "none",
         status: "pending" as "pending" | "in_progress" | "completed",
         completion_date: "",
+        repeats_weekly: false,
+        repeat_days: [] as string[],
+        hours_per_day: 0,
+        special_marker: "none",
       });
       setIsNewTaskDialogOpen(false);
     } catch (error) {
@@ -172,9 +238,9 @@ const TaskManagement = () => {
     if (!currentTask) return;
 
     try {
-      const updatedTask = await taskService.update(currentTask.id, {
+      const updateData: any = {
         name: currentTask.name,
-        description: currentTask.description,
+        description: currentTask.description || null,
         estimated_time: currentTask.estimated_time,
         start_date: currentTask.start_date,
         end_date: currentTask.end_date,
@@ -189,16 +255,31 @@ const TaskManagement = () => {
           currentTask.status === "completed" && currentTask.completion_date
             ? currentTask.completion_date
             : null,
-      });
+        repeats_weekly: currentTask.repeats_weekly || false,
+        repeat_days: currentTask.repeats_weekly
+          ? currentTask.repeat_days
+          : null,
+        hours_per_day: currentTask.repeats_weekly
+          ? currentTask.hours_per_day
+          : null,
+        special_marker:
+          currentTask.special_marker === "none"
+            ? null
+            : currentTask.special_marker,
+      };
+
+      const updatedTask = await taskService.update(currentTask.id, updateData);
 
       const updatedTasks = tasks.map((task) =>
         task.id === currentTask.id ? (updatedTask as TaskWithRelations) : task,
       );
 
       setTasks(updatedTasks);
+      setCurrentTask(null);
       setIsEditTaskDialogOpen(false);
     } catch (error) {
       console.error("Error updating task:", error);
+      alert("Erro ao atualizar tarefa. Verifique os dados e tente novamente.");
     }
   };
 
@@ -238,11 +319,23 @@ const TaskManagement = () => {
       const createdProject = await projectService.create(newProject);
       setProjects([...projects, createdProject]);
 
+      // Update strategic categories if a new one was added
+      if (
+        newProject.categoria_estrategica &&
+        !strategicCategories.includes(newProject.categoria_estrategica)
+      ) {
+        setStrategicCategories([
+          ...strategicCategories,
+          newProject.categoria_estrategica,
+        ]);
+      }
+
       setNewProject({
         name: "",
         description: "",
         start_date: new Date().toISOString().split("T")[0],
         end_date: new Date().toISOString().split("T")[0],
+        categoria_estrategica: "",
       });
       setIsNewProjectDialogOpen(false);
     } catch (error) {
@@ -258,6 +351,37 @@ const TaskManagement = () => {
   const openAssignDialog = (task: TaskWithRelations) => {
     setCurrentTask(task);
     setIsAssignTaskDialogOpen(true);
+  };
+
+  // Helper function to handle repeat day changes
+  const handleRepeatDayChange = (day: string, checked: boolean) => {
+    if (checked) {
+      setNewTask({
+        ...newTask,
+        repeat_days: [...newTask.repeat_days, day],
+      });
+    } else {
+      setNewTask({
+        ...newTask,
+        repeat_days: newTask.repeat_days.filter((d) => d !== day),
+      });
+    }
+  };
+
+  const handleCurrentTaskRepeatDayChange = (day: string, checked: boolean) => {
+    if (!currentTask) return;
+    const currentDays = currentTask.repeat_days || [];
+    if (checked) {
+      setCurrentTask({
+        ...currentTask,
+        repeat_days: [...currentDays, day],
+      });
+    } else {
+      setCurrentTask({
+        ...currentTask,
+        repeat_days: currentDays.filter((d) => d !== day),
+      });
+    }
   };
 
   // Filter tasks based on selected filters
@@ -277,7 +401,22 @@ const TaskManagement = () => {
         new Date(task.start_date) <= new Date() &&
         new Date(task.end_date) >= new Date());
 
-    return projectMatch && employeeMatch && statusMatch;
+    const searchMatch =
+      !searchTerm ||
+      searchTerm
+        .toLowerCase()
+        .split(" ")
+        .every((word) => {
+          const taskText = `
+            ${task.name}
+            ${task.description || ""}
+            ${task.project?.name || ""}
+            ${task.assigned_employee?.name || ""}
+          `.toLowerCase();
+          return taskText.includes(word);
+        });
+
+    return projectMatch && employeeMatch && statusMatch && searchMatch;
   });
 
   // Export to Excel
@@ -286,10 +425,14 @@ const TaskManagement = () => {
       "Task Name": task.name,
       Description: task.description || "",
       Project: task.project?.name || "No project",
+      "Strategic Category": task.project?.categoria_estrategica || "",
       "Assigned To": task.assigned_employee?.name || "Unassigned",
       "Estimated Hours": task.estimated_time,
       "Start Date": task.start_date,
       "End Date": task.end_date,
+      "Repeats Weekly": task.repeats_weekly ? "Yes" : "No",
+      "Repeat Days": task.repeat_days?.join(", ") || "",
+      "Hours per Day": task.hours_per_day || "",
       "Created At": new Date(task.created_at).toLocaleDateString(),
     }));
 
@@ -320,6 +463,17 @@ const TaskManagement = () => {
         jsonData.forEach(async (row: any) => {
           if (row["Task Name"]) {
             try {
+              const repeatsWeekly =
+                row["Repeats Weekly"]?.toLowerCase() === "yes";
+              const repeatDays = repeatsWeekly
+                ? row["Repeat Days"]
+                    ?.split(",")
+                    .map((d: string) => d.trim()) || []
+                : null;
+              const hoursPerDay = repeatsWeekly
+                ? Number(row["Hours per Day"]) || 0
+                : null;
+
               const taskData = {
                 name: row["Task Name"],
                 description: row["Description"] || "",
@@ -328,10 +482,13 @@ const TaskManagement = () => {
                   row["Start Date"] || new Date().toISOString().split("T")[0],
                 end_date:
                   row["End Date"] || new Date().toISOString().split("T")[0],
-                project_id: null,
-                assigned_employee_id: null,
+                project_id: null, // Note: Project linking from import is not implemented
+                assigned_employee_id: null, // Note: Employee linking from import is not implemented
                 status: "pending" as "pending" | "in_progress" | "completed",
                 completion_date: null,
+                repeats_weekly: repeatsWeekly,
+                repeat_days: repeatDays,
+                hours_per_day: hoursPerDay,
               };
 
               const createdTask = await taskService.create(taskData);
@@ -589,7 +746,13 @@ const TaskManagement = () => {
     <div className="bg-background p-6 w-full">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Task Management</h1>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Search tasks..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-64"
+          />
           <Button
             variant="outline"
             onClick={() => setShowFilters(!showFilters)}
@@ -709,6 +872,31 @@ const TaskManagement = () => {
                     className="col-span-3"
                   />
                 </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="project-categoria" className="text-right">
+                    Categoria Estratégica
+                  </Label>
+                  <div className="col-span-3">
+                    <Input
+                      id="project-categoria"
+                      list="strategic-categories"
+                      value={newProject.categoria_estrategica}
+                      onChange={(e) =>
+                        setNewProject({
+                          ...newProject,
+                          categoria_estrategica: e.target.value,
+                        })
+                      }
+                      placeholder="Digite ou selecione uma categoria"
+                      className="w-full"
+                    />
+                    <datalist id="strategic-categories">
+                      {strategicCategories.map((category) => (
+                        <option key={category} value={category} />
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
               </div>
               <DialogFooter>
                 <Button type="submit" onClick={handleCreateProject}>
@@ -722,7 +910,10 @@ const TaskManagement = () => {
             onOpenChange={setIsNewTaskDialogOpen}
           >
             <DialogTrigger asChild>
-              <Button className="flex items-center gap-2">
+              <Button
+                className="flex items-center gap-2"
+                data-testid="create-new-task-button"
+              >
                 <Plus size={16} />
                 Create New Task
               </Button>
@@ -734,7 +925,8 @@ const TaskManagement = () => {
                   Add a new task with details and time estimates.
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
+              <ScrollArea className="h-96">
+                <div className="grid gap-4 p-4">
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="name" className="text-right">
                     Task Name
@@ -769,13 +961,19 @@ const TaskManagement = () => {
                     id="estimated_time"
                     type="number"
                     value={newTask.estimated_time}
+                    readOnly={newTask.repeats_weekly}
                     onChange={(e) =>
+                      !newTask.repeats_weekly &&
                       setNewTask({
                         ...newTask,
                         estimated_time: Number(e.target.value),
                       })
                     }
-                    className="col-span-3"
+                    className={`col-span-3 ${
+                      newTask.repeats_weekly
+                        ? "bg-gray-100 cursor-not-allowed"
+                        : ""
+                    }`}
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -877,7 +1075,123 @@ const TaskManagement = () => {
                     />
                   </div>
                 )}
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="special_marker" className="text-right">
+                    Marcador Especial
+                  </Label>
+                  <Select
+                    onValueChange={(value) =>
+                      setNewTask({ ...newTask, special_marker: value })
+                    }
+                    value={newTask.special_marker}
+                  >
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Selecione um marcador" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhum</SelectItem>
+                      <SelectItem value="major_release">
+                        Major Release
+                      </SelectItem>
+                      <SelectItem value="major_deployment">
+                        Major Deployment
+                      </SelectItem>
+                      <SelectItem value="major_theme">Major Theme</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="repeats_weekly" className="text-right">
+                    Repetição Semanal
+                  </Label>
+                  <div className="col-span-3 flex items-center space-x-2">
+                    <input
+                      id="repeats_weekly"
+                      type="checkbox"
+                      checked={newTask.repeats_weekly}
+                      onChange={(e) =>
+                        setNewTask({
+                          ...newTask,
+                          repeats_weekly: e.target.checked,
+                          repeat_days: e.target.checked
+                            ? newTask.repeat_days
+                            : [],
+                          hours_per_day: e.target.checked
+                            ? newTask.hours_per_day
+                            : 0,
+                        })
+                      }
+                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                    />
+                    <Label htmlFor="repeats_weekly" className="text-sm">
+                      Esta tarefa se repete semanalmente
+                    </Label>
+                  </div>
+                </div>
+                {newTask.repeats_weekly && (
+                  <>
+                    <div className="grid grid-cols-4 items-start gap-4">
+                      <Label className="text-right pt-2">Dias da Semana</Label>
+                      <div className="col-span-3 grid grid-cols-2 gap-2">
+                        {[
+                          { value: "monday", label: "Segunda" },
+                          { value: "tuesday", label: "Terça" },
+                          { value: "wednesday", label: "Quarta" },
+                          { value: "thursday", label: "Quinta" },
+                          { value: "friday", label: "Sexta" },
+                          { value: "saturday", label: "Sábado" },
+                          { value: "sunday", label: "Domingo" },
+                        ].map((day) => (
+                          <div
+                            key={day.value}
+                            className="flex items-center space-x-2"
+                          >
+                            <input
+                              id={`day-${day.value}`}
+                              type="checkbox"
+                              checked={newTask.repeat_days.includes(day.value)}
+                              onChange={(e) =>
+                                handleRepeatDayChange(
+                                  day.value,
+                                  e.target.checked,
+                                )
+                              }
+                              className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                            />
+                            <Label
+                              htmlFor={`day-${day.value}`}
+                              className="text-sm"
+                            >
+                              {day.label}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="hours_per_day" className="text-right">
+                        Horas por Dia
+                      </Label>
+                      <Input
+                        id="hours_per_day"
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        value={newTask.hours_per_day}
+                        onChange={(e) =>
+                          setNewTask({
+                            ...newTask,
+                            hours_per_day: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        className="col-span-3"
+                        placeholder="Ex: 2.5"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
+              </ScrollArea>
               <DialogFooter>
                 <Button type="submit" onClick={handleCreateTask}>
                   Create Task
@@ -917,12 +1231,24 @@ const TaskManagement = () => {
                     <SelectValue placeholder="All Projects" />
                   </SelectTrigger>
                   <SelectContent>
+                    <Input
+                      placeholder="Search projects..."
+                      value={projectSearchTerm}
+                      onChange={(e) => setProjectSearchTerm(e.target.value)}
+                      className="w-full mb-2"
+                    />
                     <SelectItem value="all">All Projects</SelectItem>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
+                    {projects
+                      .filter((project) =>
+                        project.name
+                          .toLowerCase()
+                          .includes(projectSearchTerm.toLowerCase()),
+                      )
+                      .map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1140,7 +1466,8 @@ const TaskManagement = () => {
             </DialogDescription>
           </DialogHeader>
           {currentTask && (
-            <div className="grid gap-4 py-4">
+            <ScrollArea className="h-96">
+              <div className="grid gap-4 p-4">
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="edit-name" className="text-right">
                   Task Name
@@ -1178,13 +1505,19 @@ const TaskManagement = () => {
                   id="edit-estimated_time"
                   type="number"
                   value={currentTask.estimated_time}
+                  readOnly={currentTask.repeats_weekly}
                   onChange={(e) =>
+                    !currentTask.repeats_weekly &&
                     setCurrentTask({
                       ...currentTask,
                       estimated_time: Number(e.target.value),
                     })
                   }
-                  className="col-span-3"
+                  className={`col-span-3 ${
+                    currentTask.repeats_weekly
+                      ? "bg-gray-100 cursor-not-allowed"
+                      : ""
+                  }`}
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -1314,6 +1647,124 @@ const TaskManagement = () => {
                 </div>
               )}
               <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-special_marker" className="text-right">
+                  Marcador Especial
+                </Label>
+                <Select
+                  onValueChange={(value) =>
+                    setCurrentTask({
+                      ...currentTask,
+                      special_marker: value,
+                    })
+                  }
+                  value={currentTask.special_marker || "none"}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Selecione um marcador" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhum</SelectItem>
+                    <SelectItem value="major_release">Major Release</SelectItem>
+                    <SelectItem value="major_deployment">
+                      Major Deployment
+                    </SelectItem>
+                    <SelectItem value="major_theme">Major Theme</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-repeats_weekly" className="text-right">
+                  Repetição Semanal
+                </Label>
+                <div className="col-span-3 flex items-center space-x-2">
+                  <input
+                    id="edit-repeats_weekly"
+                    type="checkbox"
+                    checked={currentTask.repeats_weekly || false}
+                    onChange={(e) =>
+                      setCurrentTask({
+                        ...currentTask,
+                        repeats_weekly: e.target.checked,
+                        repeat_days: e.target.checked
+                          ? currentTask.repeat_days || []
+                          : null,
+                        hours_per_day: e.target.checked
+                          ? currentTask.hours_per_day || 0
+                          : null,
+                      })
+                    }
+                    className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                  />
+                  <Label htmlFor="edit-repeats_weekly" className="text-sm">
+                    Esta tarefa se repete semanalmente
+                  </Label>
+                </div>
+              </div>
+              {currentTask.repeats_weekly && (
+                <>
+                  <div className="grid grid-cols-4 items-start gap-4">
+                    <Label className="text-right pt-2">Dias da Semana</Label>
+                    <div className="col-span-3 grid grid-cols-2 gap-2">
+                      {[
+                        { value: "monday", label: "Segunda" },
+                        { value: "tuesday", label: "Terça" },
+                        { value: "wednesday", label: "Quarta" },
+                        { value: "thursday", label: "Quinta" },
+                        { value: "friday", label: "Sexta" },
+                        { value: "saturday", label: "Sábado" },
+                        { value: "sunday", label: "Domingo" },
+                      ].map((day) => (
+                        <div
+                          key={day.value}
+                          className="flex items-center space-x-2"
+                        >
+                          <input
+                            id={`edit-day-${day.value}`}
+                            type="checkbox"
+                            checked={(currentTask.repeat_days || []).includes(
+                              day.value,
+                            )}
+                            onChange={(e) =>
+                              handleCurrentTaskRepeatDayChange(
+                                day.value,
+                                e.target.checked,
+                              )
+                            }
+                            className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                          />
+                          <Label
+                            htmlFor={`edit-day-${day.value}`}
+                            className="text-sm"
+                          >
+                            {day.label}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="edit-hours_per_day" className="text-right">
+                      Horas por Dia
+                    </Label>
+                    <Input
+                      id="edit-hours_per_day"
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={currentTask.hours_per_day || 0}
+                      onChange={(e) =>
+                        setCurrentTask({
+                          ...currentTask,
+                          hours_per_day: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                      className="col-span-3"
+                      placeholder="Ex: 2.5"
+                    />
+                  </div>
+                </>
+              )}
+              <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="edit-assigned-employee" className="text-right">
                   Responsável
                 </Label>
@@ -1339,7 +1790,8 @@ const TaskManagement = () => {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
+              </div>
+            </ScrollArea>
           )}
           <DialogFooter>
             <Button type="submit" onClick={handleUpdateTask}>
