@@ -21,7 +21,7 @@ export const userProfileService = {
       }
 
       const { data: profile, error } = await supabase
-        .from("user_profiles")
+        .from("profiles")
         .select("*")
         .eq("id", user.id)
         .single();
@@ -31,7 +31,14 @@ export const userProfileService = {
         return null;
       }
 
-      return profile;
+      if (!profile) {
+        return null;
+      }
+
+      return {
+        ...profile,
+        email: user.email || "",
+      };
     } catch (error) {
       console.error("Error getting current user:", error);
       return null;
@@ -51,7 +58,7 @@ export const userProfileService = {
       }
 
       const { data: profile, error } = await supabase
-        .from("user_profiles")
+        .from("profiles")
         .update({
           ...updates,
           updated_at: new Date().toISOString(),
@@ -86,7 +93,7 @@ export const userProfileService = {
 
       const now = new Date().toISOString();
       const { data: profile, error } = await supabase
-        .from("user_profiles")
+        .from("profiles")
         .insert({
           id: user.id,
           ...profileData,

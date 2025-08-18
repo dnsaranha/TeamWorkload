@@ -64,7 +64,16 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
       const { data, error } = await query;
       if (error) throw error;
-      setTasks(data || []);
+
+      const validStatusValues = ["pending", "in_progress", "completed"];
+      const cleanedData = (data || []).map((task) => {
+        if (!validStatusValues.includes(task.status)) {
+          return { ...task, status: "pending" };
+        }
+        return task;
+      });
+
+      setTasks(cleanedData);
     } catch (error) {
       console.error("Error loading tasks:", error);
     }
