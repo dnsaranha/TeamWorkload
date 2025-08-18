@@ -1512,7 +1512,7 @@ const TaskManagement = () => {
                 </Label>
                 <Textarea
                   id="edit-description"
-                  value={currentTask.description}
+                  value={currentTask.description || ""}
                   onChange={(e) =>
                     setCurrentTask({
                       ...currentTask,

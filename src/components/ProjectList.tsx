@@ -48,7 +48,7 @@ import {
   Upload,
 } from "lucide-react";
 import * as XLSX from "xlsx";
-import { projectService, type Project } from "@/lib/supabaseClient";
+import { projectService, type Project, type ProjectInsert } from "@/lib/supabaseClient";
 
 const ProjectList = () => {
   const [projects, setProjects] = useState<Project[]>([]);

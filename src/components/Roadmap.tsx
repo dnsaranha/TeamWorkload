@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Timeline } from "vis-timeline/standalone";
 import { DataSet } from "vis-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import {
   ZoomIn,
   ZoomOut,
@@ -19,6 +20,7 @@ import {
   Target,
   Rocket,
   Layers,
+  Search,
 } from "lucide-react";
 import {
   taskService,
@@ -55,6 +57,7 @@ interface FilterState {
   categories: string[];
   status: string[];
   timeScale: "weeks" | "months" | "quarters";
+  itemType: "all" | "tasks" | "projects";
 }
 
 const STRATEGIC_CATEGORIES = [
@@ -86,6 +89,7 @@ const Roadmap = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
   const [dynamicCategories, setDynamicCategories] = useState<
     { id: string; name: string; color: string }[]
   >([]);
@@ -94,12 +98,63 @@ const Roadmap = () => {
     status: ["pending", "in_progress", "completed"],
     timeScale: "months",
     employee: "all",
+    itemType: "all",
   });
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     loadData();
   }, []);
+
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((task) => {
+      const category = getCategoryFor(task, "task");
+      const statusMatch = filters.status.includes(task.status);
+      const categoryMatch = filters.categories.includes(category);
+      const employeeMatch =
+        filters.employee === "all" ||
+        task.assigned_employee_id === filters.employee;
+
+      const searchMatch =
+        !searchTerm ||
+        searchTerm
+          .toLowerCase()
+          .split(" ")
+          .every((word) => {
+            const taskText = `
+            ${task.name}
+            ${task.description || ""}
+            ${task.project?.name || ""}
+            ${task.assigned_employee?.name || ""}
+          `.toLowerCase();
+            return taskText.includes(word);
+          });
+
+      return statusMatch && categoryMatch && employeeMatch && searchMatch;
+    });
+  }, [tasks, filters, searchTerm]);
+
+  const filteredProjects = useMemo(() => {
+    return projects.filter((project) => {
+      const category = getCategoryFor(project, "project");
+      const categoryMatch = filters.categories.includes(category);
+
+      const searchMatch =
+        !searchTerm ||
+        searchTerm
+          .toLowerCase()
+          .split(" ")
+          .every((word) => {
+            const projectText = `
+            ${project.name}
+            ${project.description || ""}
+          `.toLowerCase();
+            return projectText.includes(word);
+          });
+
+      return categoryMatch && searchMatch;
+    });
+  }, [projects, filters, searchTerm]);
 
   useEffect(() => {
     if ((tasks.length > 0 || projects.length > 0) && timelineRef.current) {
@@ -116,7 +171,7 @@ const Roadmap = () => {
         }
       }
     };
-  }, [tasks, projects, filters]);
+  }, [filteredTasks, filteredProjects, filters]);
 
   const loadData = async () => {
     try {
@@ -131,18 +186,18 @@ const Roadmap = () => {
       setProjects(projectsData);
       setEmployees(employeesData);
 
-      const uniqueCategories = projectsData
-        .map((p) => p.categoria_estrategica)
-        .filter(
-          (cat): cat is string =>
-            cat !== null && cat !== undefined && cat !== "",
-        )
-        .filter((cat, index, arr) => arr.indexOf(cat) === index)
-        .map((cat, index) => ({
-          id: cat.replace(/\s+/g, "_").toLowerCase(),
-          name: cat,
-          color: COLORS[index % COLORS.length] || "#8884D8",
-        }));
+      const categoriesFromProjects = projectsData.map(p => p.categoria_estrategica);
+      const categoriesFromTasks = (tasksData as TaskWithRelations[]).map(t => t.project?.categoria_estrategica);
+
+      const allCategoriesInUse = [...categoriesFromProjects, ...categoriesFromTasks]
+        .filter((cat): cat is string => cat !== null && cat !== undefined && cat !== "")
+        .filter((cat, index, arr) => arr.indexOf(cat) === index);
+
+      const uniqueCategories = allCategoriesInUse.map((cat, index) => ({
+        id: cat.replace(/\s+/g, "_").toLowerCase(),
+        name: cat,
+        color: COLORS[index % COLORS.length] || "#8884D8",
+      }));
 
       setDynamicCategories(uniqueCategories);
 
@@ -197,21 +252,6 @@ const Roadmap = () => {
   const initializeTimeline = () => {
     if (!timelineRef.current) return;
 
-    const filteredTasks = tasks.filter((task) => {
-      const category = getCategoryFor(task, "task");
-      const statusMatch = filters.status.includes(task.status);
-      const categoryMatch = filters.categories.includes(category);
-      const employeeMatch =
-        filters.employee === "all" ||
-        task.assigned_employee_id === filters.employee;
-      return statusMatch && categoryMatch && employeeMatch;
-    });
-
-    const filteredProjects = projects.filter((project) => {
-      const category = getCategoryFor(project, "project");
-      return filters.categories.includes(category);
-    });
-
     const allCategories = [...STRATEGIC_CATEGORIES, ...dynamicCategories];
 
     const groups = new DataSet<RoadmapGroup>(
@@ -227,7 +267,7 @@ const Roadmap = () => {
         })),
     );
 
-    const taskItems = filteredTasks.map((task) => {
+    const taskItems = filters.itemType !== 'projects' ? filteredTasks.map((task) => {
       const category = getCategoryFor(task, "task");
       const specialMarker = task.special_marker;
       let className = `roadmap-item status-${task.status}`;
@@ -247,9 +287,9 @@ const Roadmap = () => {
         title: `${task.name}\n\nProjeto: ${task.project?.name || "Sem projeto"}\nStatus: ${task.status}\nDuração: ${task.estimated_time}h`,
         type: "range",
       };
-    });
+    }) : [];
 
-    const projectMarkerItems = filteredProjects
+    const projectMarkerItems = filters.itemType !== 'tasks' ? filteredProjects
       .filter((p) => p.special_marker && p.end_date)
       .map((project) => {
         const category = getCategoryFor(project, "project");
@@ -267,7 +307,7 @@ const Roadmap = () => {
           title: `${project.name} - ${specialMarker?.replace(/_/g, " ").toUpperCase()}`,
           type: "point",
         };
-      });
+      }) : [];
 
     const items = new DataSet<RoadmapItem>([...taskItems, ...projectMarkerItems]);
 
@@ -352,7 +392,21 @@ const Roadmap = () => {
 
   const handleZoom = (direction: "in" | "out") => {
     if (timelineInstance.current) {
-      timelineInstance.current.zoom(direction === "in" ? 0.2 : -0.2);
+      const { start, end } = timelineInstance.current.getWindow();
+      const interval = end.getTime() - start.getTime();
+      // The zoom is exponential, so we use a fixed factor.
+      const zoomFactor = 0.2;
+      let newStart, newEnd;
+
+      if (direction === 'in') {
+        newStart = new Date(start.getTime() + interval * zoomFactor);
+        newEnd = new Date(end.getTime() - interval * zoomFactor);
+      } else {
+        newStart = new Date(start.getTime() - interval * zoomFactor);
+        newEnd = new Date(end.getTime() + interval * zoomFactor);
+      }
+
+      timelineInstance.current.setWindow(newStart, newEnd, { animation: true });
     }
   };
 
@@ -395,6 +449,15 @@ const Roadmap = () => {
             <h1 className="text-2xl font-bold">Roadmap Estratégico</h1>
           </div>
           <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-64 pl-10"
+              />
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -434,7 +497,7 @@ const Roadmap = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div>
                   <label className="block text-sm font-medium mb-2">
                     Escala de Tempo
@@ -452,6 +515,27 @@ const Roadmap = () => {
                       <SelectItem value="weeks">Semanas</SelectItem>
                       <SelectItem value="months">Meses</SelectItem>
                       <SelectItem value="quarters">Trimestres</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Mostrar
+                  </label>
+                  <Select
+                    value={filters.itemType}
+                    onValueChange={(value: "all" | "tasks" | "projects") =>
+                      setFilters((prev) => ({ ...prev, itemType: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="tasks">Apenas Tarefas</SelectItem>
+                      <SelectItem value="projects">Apenas Projetos</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

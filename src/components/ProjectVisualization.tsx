@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   BarChart,
   Bar,
@@ -18,6 +18,8 @@ import {
   Clock,
   TrendingUp,
   CheckCircle,
+  Search,
+  Calendar as CalendarIcon,
 } from "lucide-react";
 import {
   projectService,
@@ -27,6 +29,10 @@ import {
   type Task,
   type Employee,
 } from "@/lib/supabaseClient";
+import { Input } from "./ui/input";
+import { DatePickerWithRange } from "./ui/date-picker-with-range";
+import { DateRange } from "react-day-picker";
+import { Card } from "./ui/card";
 
 interface ProjectVisualizationProps {
   activeView: "overview" | "workload" | "timeline";
@@ -37,6 +43,8 @@ const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({ activeView 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   useEffect(() => {
     loadData();
@@ -61,36 +69,57 @@ const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({ activeView 
     }
   };
 
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((task) => {
+      const searchMatch =
+        !searchTerm ||
+        searchTerm
+          .toLowerCase()
+          .split(" ")
+          .every((word) => {
+            const project = projects.find((p) => p.id === task.project_id);
+            const employee = employees.find(
+              (e) => e.id === task.assigned_employee_id,
+            );
+            const taskText = `
+            ${task.name}
+            ${task.description || ""}
+            ${project?.name || ""}
+            ${employee?.name || ""}
+          `.toLowerCase();
+            return taskText.includes(word);
+          });
+
+      const dateMatch =
+        !dateRange ||
+        !dateRange.from ||
+        (new Date(task.start_date) >= dateRange.from &&
+          (!dateRange.to || new Date(task.end_date) <= dateRange.to));
+
+      return searchMatch && dateMatch;
+    });
+  }, [tasks, searchTerm, dateRange, projects, employees]);
+
   const getProjectStats = () => {
     const stats = projects.map((project) => {
-      const projectTasks = tasks.filter(
+      const projectTasks = filteredTasks.filter(
         (task) => task.project_id === project.id,
       );
       const totalHours = projectTasks.reduce(
         (sum, task) => sum + task.estimated_time,
         0,
       );
-      const completedTasks = projectTasks.filter(
-        (task) => task.status === "completed",
-      ).length;
-      const totalTasks = projectTasks.length;
-      const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
-
       return {
         name: project.name,
         totalHours,
-        totalTasks,
-        completedTasks,
-        progress,
       };
     });
-
     return stats;
   };
 
   const getWorkloadData = () => {
     const workloadData = employees.map((employee) => {
-      const employeeTasks = tasks.filter(
+      const employeeTasks = filteredTasks.filter(
         (task) => task.assigned_employee_id === employee.id,
       );
       const totalHours = employeeTasks.reduce(
@@ -109,12 +138,11 @@ const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({ activeView 
         taskCount: employeeTasks.length,
       };
     });
-
     return workloadData;
   };
 
   const getStatusDistribution = () => {
-    const statusCounts = tasks.reduce(
+    const statusCounts = filteredTasks.reduce(
       (acc, task) => {
         const status = task.status || "unknown";
         acc[status] = (acc[status] || 0) + 1;
@@ -146,7 +174,7 @@ const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({ activeView 
   };
 
   const getTimelineData = () => {
-    const monthlyData = tasks.reduce(
+    const monthlyData = filteredTasks.reduce(
       (acc, task) => {
         const month = new Date(task.start_date).toLocaleDateString("en-US", {
           month: "short",
@@ -184,72 +212,31 @@ const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({ activeView 
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-medium text-gray-900">
+          {activeView.charAt(0).toUpperCase() + activeView.slice(1)} View
+        </h3>
+        <div className="flex items-center space-x-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-64 pl-10"
+            />
+          </div>
+          <DatePickerWithRange onDateChange={setDateRange} />
+        </div>
+      </div>
+
       {activeView === "overview" && (
         <div className="space-y-6">
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-center">
-                <TrendingUp className="h-8 w-8 text-blue-600" />
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-blue-600">
-                    Total Projects
-                  </p>
-                  <p className="text-2xl font-semibold text-blue-900">
-                    {projects.length}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <div className="flex items-center">
-                <CheckCircle className="h-8 w-8 text-green-600" />
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-green-600">
-                    Total Tasks
-                  </p>
-                  <p className="text-2xl font-semibold text-green-900">
-                    {tasks.length}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-              <div className="flex items-center">
-                <Users className="h-8 w-8 text-purple-600" />
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-purple-600">
-                    Team Members
-                  </p>
-                  <p className="text-2xl font-semibold text-purple-900">
-                    {employees.length}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-              <div className="flex items-center">
-                <Clock className="h-8 w-8 text-orange-600" />
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-orange-600">
-                    Total Hours
-                  </p>
-                  <p className="text-2xl font-semibold text-orange-900">
-                    {tasks.reduce(
-                      (sum, task) => sum + task.estimated_time,
-                      0,
-                    )}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Project Hours Chart */}
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
+            <Card>
+              <h3 className="text-lg font-medium text-gray-900 mb-4 p-4">
                 Project Hours Distribution
               </h3>
               <ResponsiveContainer width="100%" height={300}>
@@ -266,11 +253,11 @@ const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({ activeView 
                   <Bar dataKey="totalHours" fill="#3B82F6" />
                 </BarChart>
               </ResponsiveContainer>
-            </div>
+            </Card>
 
             {/* Task Status Distribution */}
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
+            <Card>
+              <h3 className="text-lg font-medium text-gray-900 mb-4 p-4">
                 Task Status Distribution
               </h3>
               <ResponsiveContainer width="100%" height={300}>
@@ -294,17 +281,17 @@ const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({ activeView 
                   <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
-            </div>
+            </Card>
           </div>
         </div>
       )}
 
       {activeView === "workload" && (
         <div className="space-y-6">
-          <h3 className="text-lg font-medium text-gray-900">
-            Employee Workload Analysis
-          </h3>
-          <div className="bg-gray-50 rounded-lg p-4">
+          <Card>
+            <h3 className="text-lg font-medium text-gray-900 p-4">
+              Employee Workload Analysis
+            </h3>
             <ResponsiveContainer width="100%" height={400}>
               <BarChart data={workloadData}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -323,72 +310,16 @@ const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({ activeView 
                 />
               </BarChart>
             </ResponsiveContainer>
-          </div>
-
-          {/* Workload Table */}
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Employee
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Tasks
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Total Hours
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Weekly Capacity
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Utilization
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {workloadData.map((employee, index) => (
-                  <tr key={index}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {employee.name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {employee.taskCount}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {employee.totalHours}h
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {employee.weeklyCapacity}h
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          employee.utilization > 100
-                            ? "bg-red-100 text-red-800"
-                            : employee.utilization >= 50
-                              ? "bg-yellow-100 text-yellow-800"
-                              : "bg-green-100 text-green-800"
-                        }`}
-                      >
-                        {employee.utilization.toFixed(1)}%
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          </Card>
         </div>
       )}
 
       {activeView === "timeline" && (
         <div className="space-y-6">
-          <h3 className="text-lg font-medium text-gray-900">
-            Project Timeline
-          </h3>
-          <div className="bg-gray-50 rounded-lg p-4">
+          <Card>
+            <h3 className="text-lg font-medium text-gray-900 p-4">
+              Project Timeline
+            </h3>
             <ResponsiveContainer width="100%" height={400}>
               <LineChart data={timelineData}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -411,7 +342,7 @@ const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({ activeView 
                 />
               </LineChart>
             </ResponsiveContainer>
-          </div>
+          </Card>
         </div>
       )}
     </div>

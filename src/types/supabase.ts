@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
@@ -98,6 +98,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      categorias_estrategicas: {
+        Row: {
+          categoria: string | null
+          created_at: string
+          id: string
+        }
+        Insert: {
+          categoria?: string | null
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          categoria?: string | null
+          created_at?: string
+          id?: string
+        }
+        Relationships: []
       }
       comments: {
         Row: {
@@ -412,6 +430,8 @@ export type Database = {
       }
       projects: {
         Row: {
+          category: string | null
+          color: string | null
           created_at: string
           description: string | null
           end_date: string | null
@@ -419,9 +439,12 @@ export type Database = {
           name: string
           owner_id: string
           start_date: string | null
+          status: string
           updated_at: string
         }
         Insert: {
+          category?: string | null
+          color?: string | null
           created_at?: string
           description?: string | null
           end_date?: string | null
@@ -429,9 +452,12 @@ export type Database = {
           name: string
           owner_id: string
           start_date?: string | null
+          status?: string
           updated_at?: string
         }
         Update: {
+          category?: string | null
+          color?: string | null
           created_at?: string
           description?: string | null
           end_date?: string | null
@@ -439,6 +465,7 @@ export type Database = {
           name?: string
           owner_id?: string
           start_date?: string | null
+          status?: string
           updated_at?: string
         }
         Relationships: [
@@ -575,6 +602,7 @@ export type Database = {
       }
       tasks: {
         Row: {
+          category: string | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -587,10 +615,12 @@ export type Database = {
           priority: number | null
           progress: number
           project_id: string
+          special_marker: string | null
           start_date: string
           updated_at: string
         }
         Insert: {
+          category?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -603,10 +633,12 @@ export type Database = {
           priority?: number | null
           progress?: number
           project_id: string
+          special_marker?: string | null
           start_date: string
           updated_at?: string
         }
         Update: {
+          category?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -619,6 +651,7 @@ export type Database = {
           priority?: number | null
           progress?: number
           project_id?: string
+          special_marker?: string | null
           start_date?: string
           updated_at?: string
         }
@@ -709,6 +742,8 @@ export type Database = {
       workload_tasks: {
         Row: {
           assigned_employee_id: string | null
+          assignee_id: string | null
+          category: string | null
           completion_date: string | null
           created_at: string | null
           description: string | null
@@ -727,6 +762,8 @@ export type Database = {
         }
         Insert: {
           assigned_employee_id?: string | null
+          assignee_id?: string | null
+          category?: string | null
           completion_date?: string | null
           created_at?: string | null
           description?: string | null
@@ -745,6 +782,8 @@ export type Database = {
         }
         Update: {
           assigned_employee_id?: string | null
+          assignee_id?: string | null
+          category?: string | null
           completion_date?: string | null
           created_at?: string | null
           description?: string | null
@@ -785,9 +824,9 @@ export type Database = {
     Functions: {
       can_access_task: {
         Args: {
+          required_role?: Database["public"]["Enums"]["user_role"]
           task_uuid: string
           user_uuid: string
-          required_role?: Database["public"]["Enums"]["user_role"]
         }
         Returns: boolean
       }
@@ -801,23 +840,23 @@ export type Database = {
       }
       create_project: {
         Args: {
-          project_name: string
           project_description: string
-          project_start_date: string
           project_end_date: string
+          project_name: string
           project_owner_id: string
+          project_start_date: string
         }
         Returns: string
       }
       create_task: {
         Args: {
-          task_name: string
-          task_description: string
-          task_start_date: string
-          task_duration: number
-          task_project_id: string
-          task_parent_id?: string
           task_assignees?: string[]
+          task_description: string
+          task_duration: number
+          task_name: string
+          task_parent_id?: string
+          task_project_id: string
+          task_start_date: string
         }
         Returns: string
       }
@@ -828,8 +867,8 @@ export type Database = {
       is_project_member: {
         Args: {
           project_uuid: string
-          user_uuid: string
           required_role?: Database["public"]["Enums"]["user_role"]
+          user_uuid: string
         }
         Returns: boolean
       }
