@@ -984,6 +984,7 @@ const TaskManagement = () => {
                     <Popover>
                       <PopoverTrigger asChild>
                         <Input
+                          id="startDate"
                           type="date"
                           value={newTask.start_date}
                           onChange={(e) =>
@@ -1004,6 +1005,7 @@ const TaskManagement = () => {
                   </Label>
                   <div className="col-span-3">
                     <Input
+                      id="endDate"
                       type="date"
                       value={newTask.end_date}
                       onChange={(e) =>
@@ -1031,6 +1033,29 @@ const TaskManagement = () => {
                       {projects.map((project) => (
                         <SelectItem key={project.id} value={project.id}>
                           {project.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="assigned_employee" className="text-right">
+                    Responsável
+                  </Label>
+                  <Select
+                    onValueChange={(value) =>
+                      setNewTask({ ...newTask, assigned_employee_id: value })
+                    }
+                    value={newTask.assigned_employee_id}
+                  >
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Select an employee" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Não atribuído</SelectItem>
+                      {employees.map((employee) => (
+                        <SelectItem key={employee.id} value={employee.id}>
+                          {employee.name}
                         </SelectItem>
                       ))}
                     </SelectContent>

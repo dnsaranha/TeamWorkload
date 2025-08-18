@@ -352,7 +352,26 @@ const HomePage = () => {
           {activeTab === "projects" && (
             <div>
               <h2 className="text-3xl font-bold mb-6">Projects</h2>
-              <ProjectList />
+              <Tabs defaultValue="projects" className="w-full">
+                <TabsList>
+                  <TabsTrigger value="projects">Projects</TabsTrigger>
+                  <TabsTrigger value="overview">Overview</TabsTrigger>
+                  <TabsTrigger value="workload">Workload</TabsTrigger>
+                  <TabsTrigger value="timeline">Timeline</TabsTrigger>
+                </TabsList>
+                <TabsContent value="projects">
+                  <ProjectList />
+                </TabsContent>
+                <TabsContent value="overview">
+                  <ProjectVisualization activeView="overview" />
+                </TabsContent>
+                <TabsContent value="workload">
+                  <ProjectVisualization activeView="workload" />
+                </TabsContent>
+                <TabsContent value="timeline">
+                  <ProjectVisualization activeView="timeline" />
+                </TabsContent>
+              </Tabs>
             </div>
           )}
 

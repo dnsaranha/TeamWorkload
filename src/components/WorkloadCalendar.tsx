@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -6,34 +6,16 @@ import {
   Users,
   Clock,
   AlertTriangle,
+  Repeat,
+  Search,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
-
-interface Task {
-  id: string;
-  name: string;
-  description?: string;
-  estimated_time: number;
-  start_date: string;
-  end_date: string;
-  assigned_employee_id: string;
-  project_id: string;
-  status: "pending" | "in_progress" | "completed" | "cancelled" | null;
-  created_at: string;
-  updated_at: string;
-}
-
-import { type Employee } from "@/lib/supabaseClient";
-
-interface Project {
-  id: string;
-  name: string;
-  description?: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  created_at: string | null;
-  updated_at: string | null;
-}
+import {
+  type Task,
+  type Employee,
+  type Project,
+} from "@/lib/supabaseClient";
+import { Input } from "./ui/input";
 
 interface WorkloadCalendarProps {
   selectedEmployeeId?: string;
@@ -45,11 +27,14 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   viewMode = "weekly",
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<
+    (Task & { is_recurring_instance?: boolean })[]
+  >([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"weekly" | "monthly">(viewMode);
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     loadData();
@@ -113,6 +98,30 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     }
   };
 
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((task) => {
+      const searchMatch =
+        !searchTerm ||
+        searchTerm
+          .toLowerCase()
+          .split(" ")
+          .every((word) => {
+            const project = projects.find((p) => p.id === task.project_id);
+            const employee = employees.find(
+              (e) => e.id === task.assigned_employee_id,
+            );
+            const taskText = `
+            ${task.name}
+            ${task.description || ""}
+            ${project?.name || ""}
+            ${employee?.name || ""}
+          `.toLowerCase();
+            return taskText.includes(word);
+          });
+      return searchMatch;
+    });
+  }, [tasks, searchTerm, projects, employees]);
+
   const getWeekDates = (date: Date) => {
     const week = [];
     const startOfWeek = new Date(date);
@@ -152,32 +161,69 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     return dates;
   };
 
-  const getTasksForDate = (date: Date) => {
+  const getTasksForDate = (
+    date: Date,
+  ): (Task & { is_recurring_instance?: boolean })[] => {
+    const dayTasks: (Task & { is_recurring_instance?: boolean })[] = [];
     const dateStr = date.toISOString().split("T")[0];
-    return tasks.filter((task) => {
-      const taskStart = task.start_date;
-      const taskEnd = task.end_date;
+    const dayOfWeek = date.getDay();
+    const dayNameToNumber: { [key: string]: number } = {
+      sunday: 0,
+      monday: 1,
+      tuesday: 2,
+      wednesday: 3,
+      thursday: 4,
+      friday: 5,
+      saturday: 6,
+    };
+    const dayNumberToName = Object.keys(dayNameToNumber).find(
+      (key) => dayNameToNumber[key] === dayOfWeek,
+    );
 
-      // Handle same-day tasks (start_date equals end_date)
-      if (taskStart === taskEnd) {
-        return taskStart === dateStr;
+    filteredTasks.forEach((task) => {
+      const taskStart = new Date(task.start_date);
+      const taskEnd = new Date(task.end_date);
+
+      if (task.repeats_weekly && task.repeat_days && dayNumberToName) {
+        if (
+          date >= taskStart &&
+          date <= taskEnd &&
+          task.repeat_days.includes(dayNumberToName)
+        ) {
+          dayTasks.push({
+            ...task,
+            id: `${task.id}-${dateStr}`,
+            start_date: dateStr,
+            end_date: dateStr,
+            estimated_time: task.hours_per_day || 0,
+            is_recurring_instance: true,
+          });
+        }
+      } else {
+        if (dateStr >= task.start_date && dateStr <= task.end_date) {
+          dayTasks.push(task);
+        }
       }
-
-      // Handle multi-day tasks
-      return dateStr >= taskStart && dateStr <= taskEnd;
     });
+
+    return dayTasks;
   };
 
   const calculateDayWorkload = (date: Date, employeeId?: string) => {
     const dayTasks = getTasksForDate(date);
-    const filteredTasks = employeeId
+    const filteredTasksByEmployee = employeeId
       ? dayTasks.filter((task) => task.assigned_employee_id === employeeId)
       : dayTasks;
 
     // Check if it's weekend
     const isWeekend = date.getDay() === 0 || date.getDay() === 6; // Sunday = 0, Saturday = 6
 
-    const totalHours = filteredTasks.reduce((sum, task) => {
+    const totalHours = filteredTasksByEmployee.reduce((sum, task) => {
+      // For recurring instances, estimated_time is already hours_per_day
+      if (task.is_recurring_instance) {
+        return sum + task.estimated_time;
+      }
+
       // For multi-day tasks, distribute hours evenly across days
       const startDate = new Date(task.start_date);
       const endDate = new Date(task.end_date);
@@ -185,7 +231,9 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
       // Calculate working days between start and end date, considering employee's weekend work preference
       let workingDays = 0;
       const tempDate = new Date(startDate);
-      const employee = employees.find((emp) => emp.id === task.assigned_employee_id);
+      const employee = employees.find(
+        (emp) => emp.id === task.assigned_employee_id,
+      );
       const worksWeekends = employee?.trabalha_fim_de_semana || false;
 
       while (tempDate <= endDate) {
@@ -353,9 +401,19 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
           </div>
 
           <div className="flex items-center space-x-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search tasks..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-64 pl-10"
+              />
+            </div>
             <button
               onClick={() => navigateDate("prev")}
               className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              title="Previous month"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
@@ -370,6 +428,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
             <button
               onClick={() => navigateDate("next")}
               className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              title="Next month"
             >
               <ChevronRight className="h-5 w-5" />
             </button>
@@ -457,8 +516,16 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                         className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate"
                         title={`${task.name} - ${employee?.name} (${project?.name})`}
                       >
-                        <div className="font-medium text-blue-900 truncate">
-                          {task.name}
+                        <div className="flex items-center justify-between">
+                          <div className="font-medium text-blue-900 truncate">
+                            {task.name}
+                          </div>
+                          {task.is_recurring_instance && (
+                            <Repeat
+                              className="h-3 w-3 text-blue-400 flex-shrink-0"
+                              aria-label="Recurring task"
+                            />
+                          )}
                         </div>
                         {!selectedEmployeeId && employee && (
                           <div className="text-blue-600 truncate">
