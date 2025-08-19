@@ -102,6 +102,39 @@ const Roadmap = () => {
   });
   const [showFilters, setShowFilters] = useState(false);
 
+  const getCategoryFor = (
+    item: TaskWithRelations | Project,
+    type: "task" | "project",
+  ): string => {
+    const strategicCategory =
+      type === "task"
+        ? (item as TaskWithRelations).project?.categoria_estrategica
+        : (item as Project).categoria_estrategica;
+
+    if (strategicCategory) {
+      const normalizedCategory = strategicCategory
+        .toLowerCase()
+        .replace(/\s+/g, "_");
+      const allCategories = [...STRATEGIC_CATEGORIES, ...dynamicCategories];
+      const matchingCategory = allCategories.find(
+        (cat) => cat.id === normalizedCategory,
+      );
+      if (matchingCategory) return matchingCategory.id;
+      return normalizedCategory;
+    }
+
+    if (type === "project") return "product_dev"; // Default for projects without category
+
+    const text =
+      `${item.name} ${item.description || ""}`.toLowerCase();
+    if (text.includes("usuário")) return "user_growth";
+    if (text.includes("escala")) return "scalability";
+    if (text.includes("churn")) return "reduce_churn";
+    if (text.includes("infraestrutura")) return "infrastructure";
+    if (text.includes("marketing")) return "marketing";
+    return "product_dev";
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -214,39 +247,6 @@ const Roadmap = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const getCategoryFor = (
-    item: TaskWithRelations | Project,
-    type: "task" | "project",
-  ): string => {
-    const strategicCategory =
-      type === "task"
-        ? (item as TaskWithRelations).project?.categoria_estrategica
-        : (item as Project).categoria_estrategica;
-
-    if (strategicCategory) {
-      const normalizedCategory = strategicCategory
-        .toLowerCase()
-        .replace(/\s+/g, "_");
-      const allCategories = [...STRATEGIC_CATEGORIES, ...dynamicCategories];
-      const matchingCategory = allCategories.find(
-        (cat) => cat.id === normalizedCategory,
-      );
-      if (matchingCategory) return matchingCategory.id;
-      return normalizedCategory;
-    }
-
-    if (type === "project") return "product_dev"; // Default for projects without category
-
-    const text =
-      `${item.name} ${item.description || ""}`.toLowerCase();
-    if (text.includes("usuário")) return "user_growth";
-    if (text.includes("escala")) return "scalability";
-    if (text.includes("churn")) return "reduce_churn";
-    if (text.includes("infraestrutura")) return "infrastructure";
-    if (text.includes("marketing")) return "marketing";
-    return "product_dev";
   };
 
   const initializeTimeline = () => {
