@@ -309,7 +309,25 @@ const Roadmap = () => {
         };
       }) : [];
 
-    const items = new DataSet<RoadmapItem>([...taskItems, ...projectMarkerItems]);
+    const projectRangeItems = filters.itemType !== 'tasks' ? filteredProjects.map((project) => {
+      const category = getCategoryFor(project, "project");
+      let className = `roadmap-item project-range`;
+
+      return {
+        id: `project-range-${project.id}`, // New ID scheme
+        content: `<div class="roadmap-item-content">
+          <div class="item-title">${project.name}</div>
+        </div>`,
+        start: new Date(project.start_date),
+        end: new Date(project.end_date),
+        group: category,
+        className,
+        title: `${project.name}\n\nCategoria: ${category}`,
+        type: "range",
+      };
+    }) : [];
+
+    const items = new DataSet<RoadmapItem>([...taskItems, ...projectMarkerItems, ...projectRangeItems]);
 
     const options = {
       orientation: "top",
@@ -362,30 +380,51 @@ const Roadmap = () => {
   };
 
   const handleItemMove = async (item: any, callback: any) => {
-    if (!item.id.startsWith("task-")) {
-      callback(null);
-      return;
-    }
-    try {
-      await taskService.update(item.id.replace("task-", ""), {
-        start_date: item.start.toISOString().split("T")[0],
-        end_date: item.end.toISOString().split("T")[0],
-      });
-
-      setTasks((prevTasks) =>
-        prevTasks.map((task) =>
-          task.id === item.id.replace("task-", "")
-            ? {
-                ...task,
-                start_date: item.start.toISOString().split("T")[0],
-                end_date: item.end.toISOString().split("T")[0],
-              }
-            : task,
-        ),
-      );
-      callback(item);
-    } catch (error) {
-      console.error("Error updating task:", error);
+    if (item.id.startsWith("task-")) {
+      try {
+        await taskService.update(item.id.replace("task-", ""), {
+          start_date: item.start.toISOString().split("T")[0],
+          end_date: item.end.toISOString().split("T")[0],
+        });
+        setTasks((prevTasks) =>
+          prevTasks.map((task) =>
+            task.id === item.id.replace("task-", "")
+              ? {
+                  ...task,
+                  start_date: item.start.toISOString().split("T")[0],
+                  end_date: item.end.toISOString().split("T")[0],
+                }
+              : task
+          )
+        );
+        callback(item);
+      } catch (error) {
+        console.error("Error updating task:", error);
+        callback(null);
+      }
+    } else if (item.id.startsWith("project-range-")) {
+      try {
+        await projectService.update(item.id.replace("project-range-", ""), {
+          start_date: item.start.toISOString().split("T")[0],
+          end_date: item.end.toISOString().split("T")[0],
+        });
+        setProjects((prevProjects) =>
+          prevProjects.map((project) =>
+            project.id === item.id.replace("project-range-", "")
+              ? {
+                  ...project,
+                  start_date: item.start.toISOString().split("T")[0],
+                  end_date: item.end.toISOString().split("T")[0],
+                }
+              : project
+          )
+        );
+        callback(item);
+      } catch (error) {
+        console.error("Error updating project:", error);
+        callback(null);
+      }
+    } else {
       callback(null);
     }
   };
