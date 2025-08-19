@@ -39,6 +39,7 @@ export type Project = {
   start_date: string | null;
   end_date: string | null;
   categoria_estrategica?: string | null;
+  special_marker?: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -49,6 +50,7 @@ export type ProjectInsert = {
   start_date?: string | null;
   end_date?: string | null;
   categoria_estrategica?: string | null;
+  special_marker?: string | null;
 };
 
 export type ProjectUpdate = Partial<ProjectInsert>;
@@ -62,11 +64,12 @@ export type Task = {
   end_date: string;
   project_id: string | null;
   assigned_employee_id: string | null;
-  status: "pending" | "in_progress" | "completed";
+  status: string | null;
   completion_date: string | null;
   repeats_weekly?: boolean;
   repeat_days?: string[] | null; // Days of the week for repetition
   hours_per_day?: number | null; // Hours per day for repeated tasks
+  special_marker?: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -79,11 +82,12 @@ export type TaskInsert = {
   end_date: string;
   project_id?: string | null;
   assigned_employee_id?: string | null;
-  status?: "pending" | "in_progress" | "completed";
+  status?: string | null;
   completion_date?: string | null;
   repeats_weekly?: boolean;
   repeat_days?: string[] | null;
   hours_per_day?: number | null;
+  special_marker?: string | null;
 };
 
 export type TaskUpdate = Partial<TaskInsert>;

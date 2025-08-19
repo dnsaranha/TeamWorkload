@@ -18,7 +18,7 @@ const UserProfile: React.FC<UserProfileProps> = ({
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({
-    name: "",
+    full_name: "",
     email: "",
   });
 
@@ -35,7 +35,7 @@ const UserProfile: React.FC<UserProfileProps> = ({
       setProfile(userProfile);
       if (userProfile) {
         setFormData({
-          name: userProfile.name,
+          full_name: userProfile.full_name,
           email: userProfile.email,
         });
       }
@@ -51,7 +51,7 @@ const UserProfile: React.FC<UserProfileProps> = ({
       if (!profile) return;
 
       const updatedProfile = await userProfileService.updateProfile({
-        name: formData.name,
+        full_name: formData.full_name,
         email: formData.email,
       });
 
@@ -67,7 +67,7 @@ const UserProfile: React.FC<UserProfileProps> = ({
   const handleCancel = () => {
     if (profile) {
       setFormData({
-        name: profile.name,
+        full_name: profile.full_name,
         email: profile.email,
       });
     }
@@ -122,16 +122,16 @@ const UserProfile: React.FC<UserProfileProps> = ({
                   {editing ? (
                     <input
                       type="text"
-                      value={formData.name}
+                      value={formData.full_name}
                       onChange={(e) =>
-                        setFormData({ ...formData, name: e.target.value })
+                        setFormData({ ...formData, full_name: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   ) : (
                     <div className="flex items-center space-x-2">
                       <User className="h-4 w-4 text-gray-400" />
-                      <span className="text-gray-900">{profile.name}</span>
+                      <span className="text-gray-900">{profile.full_name}</span>
                     </div>
                   )}
                 </div>
