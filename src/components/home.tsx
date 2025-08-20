@@ -21,6 +21,8 @@ import ProjectVisualization from "./ProjectVisualization";
 import ProjectList from "./ProjectList";
 import UserProfile from "./UserProfile";
 import Roadmap from "./Roadmap";
+import LogoutButton from "./auth/LogoutButton";
+import { useAuth } from "@/hooks/useAuth";
 import {
   employeeService,
   taskService,
@@ -37,6 +39,7 @@ const HomePage = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
     loadDashboardData();
@@ -223,21 +226,33 @@ const HomePage = () => {
 
         {!isMobile && (
           <div className="pt-4 border-t">
-            <Button
-              variant={activeTab === "profile" ? "default" : "ghost"}
-              className={`${sidebarCollapsed ? "w-8 h-8 p-0" : "w-full justify-start"} hover:bg-accent`}
-              onClick={() => setActiveTab("profile")}
-            >
-              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
-                U
-              </div>
-              {!sidebarCollapsed && (
-                <div className="ml-2 text-left">
-                  <p className="text-sm font-medium">User Name</p>
-                  <p className="text-xs text-muted-foreground">Administrator</p>
+            <div className="space-y-2">
+              <Button
+                variant={activeTab === "profile" ? "default" : "ghost"}
+                className={`${sidebarCollapsed ? "w-8 h-8 p-0" : "w-full justify-start"} hover:bg-accent`}
+                onClick={() => setActiveTab("profile")}
+              >
+                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
+                  {user?.user_metadata?.full_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || "U"}
                 </div>
-              )}
-            </Button>
+                {!sidebarCollapsed && (
+                  <div className="ml-2 text-left">
+                    <p className="text-sm font-medium">
+                      {user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Usuário"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {user?.email}
+                    </p>
+                  </div>
+                )}
+              </Button>
+              
+              <LogoutButton 
+                variant="ghost" 
+                size="sm"
+                showText={!sidebarCollapsed}
+              />
+            </div>
           </div>
         )}
       </div>

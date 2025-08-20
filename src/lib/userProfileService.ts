@@ -26,13 +26,35 @@ export const userProfileService = {
         .eq("id", user.id)
         .single();
 
-      if (error) {
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
         console.error("Error fetching user profile:", error);
         return null;
       }
 
       if (!profile) {
-        return null;
+        // Create profile if it doesn't exist
+        const newProfile = {
+          id: user.id,
+          email: user.email || "",
+          full_name: user.user_metadata?.full_name || "",
+          avatar_url: user.user_metadata?.avatar_url || null,
+        };
+
+        const { data: createdProfile, error: createError } = await supabase
+          .from("profiles")
+          .insert(newProfile)
+          .select()
+          .single();
+
+        if (createError) {
+          console.error("Error creating profile:", createError);
+          return null;
+        }
+
+        return {
+          ...createdProfile,
+          email: user.email || "",
+        };
       }
 
       return {
