@@ -200,6 +200,7 @@ const ProjectList = () => {
 
   const exportToExcel = () => {
     const exportData = filteredProjects.map((project) => ({
+      ID: project.id,
       Name: project.name,
       Description: project.description || "",
       "Start Date": project.start_date,
@@ -217,12 +218,12 @@ const ProjectList = () => {
     );
   };
 
-  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
@@ -230,29 +231,52 @@ const ProjectList = () => {
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        jsonData.forEach(async (row: any) => {
-          if (row["Name"]) {
-            try {
-              const projectData = {
-                name: row["Name"],
-                description: row["Description"] || "",
-                start_date:
-                  row["Start Date"] || new Date().toISOString().split("T")[0],
-                end_date:
-                  row["End Date"] || new Date().toISOString().split("T")[0],
-                categoria_estrategica: row["Strategic Category"] || "",
-                special_marker: row["Special Marker"] || null,
-              };
+        let createdCount = 0;
+        let updatedCount = 0;
+        let errorCount = 0;
 
-              const newProject = await projectService.create(projectData);
-              setProjects((prev) => [...prev, newProject]);
-            } catch (error) {
-              console.error("Error importing project:", error);
+        // Use a for...of loop to process rows sequentially to avoid overwhelming the service
+        for (const row of jsonData as any[]) {
+          try {
+            const projectData: Omit<Project, 'id' | 'created_at'> = {
+              name: row["Name"],
+              description: row["Description"] || null,
+              start_date: row["Start Date"] || new Date().toISOString().split("T")[0],
+              end_date: row["End Date"] || new Date().toISOString().split("T")[0],
+              categoria_estrategica: row["Strategic Category"] || null,
+              special_marker: row["Special Marker"] || null,
+            };
+
+            if (!projectData.name) {
+              // Skip rows without a name
+              continue;
             }
-          }
-        });
 
-        alert("Import completed! Please refresh to see the new projects.");
+            if (row["ID"]) {
+              await projectService.update(row["ID"], projectData);
+              updatedCount++;
+            } else {
+              await projectService.create(projectData as ProjectInsert);
+              createdCount++;
+            }
+          } catch (error) {
+            console.error("Error importing row:", row, error);
+            errorCount++;
+          }
+        }
+
+        alert(
+          `Import completed.\nCreated: ${createdCount}\nUpdated: ${updatedCount}\nErrors: ${errorCount}`
+        );
+
+        // Reload projects from the server to reflect all changes
+        loadProjects();
+
+        // Reset file input to allow re-uploading the same file
+        if (event.target) {
+          event.target.value = '';
+        }
+
       } catch (error) {
         console.error("Error reading file:", error);
         alert("Error reading file. Please make sure it's a valid Excel file.");
