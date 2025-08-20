@@ -422,17 +422,23 @@ const TaskManagement = () => {
   // Export to Excel
   const exportToExcel = () => {
     const exportData = filteredTasks.map((task) => ({
+      "ID": task.id,
       "Task Name": task.name,
-      Description: task.description || "",
-      Project: task.project?.name || "No project",
+      "Description": task.description || "",
+      "Project ID": task.project_id,
+      "Project Name": task.project?.name || "No project",
       "Strategic Category": task.project?.categoria_estrategica || "",
+      "Assigned Employee ID": task.assigned_employee_id,
       "Assigned To": task.assigned_employee?.name || "Unassigned",
       "Estimated Hours": task.estimated_time,
       "Start Date": task.start_date,
       "End Date": task.end_date,
+      "Status": task.status,
+      "Completion Date": task.completion_date,
       "Repeats Weekly": task.repeats_weekly ? "Yes" : "No",
       "Repeat Days": task.repeat_days?.join(", ") || "",
       "Hours per Day": task.hours_per_day || "",
+      "Special Marker": task.special_marker,
       "Created At": new Date(task.created_at).toLocaleDateString(),
     }));
 
@@ -446,12 +452,12 @@ const TaskManagement = () => {
   };
 
   // Import from Excel
-  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
@@ -459,47 +465,59 @@ const TaskManagement = () => {
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        // Process imported data and create tasks
-        jsonData.forEach(async (row: any) => {
-          if (row["Task Name"]) {
-            try {
-              const repeatsWeekly =
-                row["Repeats Weekly"]?.toLowerCase() === "yes";
-              const repeatDays = repeatsWeekly
-                ? row["Repeat Days"]
-                    ?.split(",")
-                    .map((d: string) => d.trim()) || []
-                : null;
-              const hoursPerDay = repeatsWeekly
-                ? Number(row["Hours per Day"]) || 0
-                : null;
+        let createdCount = 0;
+        let updatedCount = 0;
+        let errorCount = 0;
 
-              const taskData = {
-                name: row["Task Name"],
-                description: row["Description"] || "",
-                estimated_time: Number(row["Estimated Hours"]) || 1,
-                start_date:
-                  row["Start Date"] || new Date().toISOString().split("T")[0],
-                end_date:
-                  row["End Date"] || new Date().toISOString().split("T")[0],
-                project_id: null, // Note: Project linking from import is not implemented
-                assigned_employee_id: null, // Note: Employee linking from import is not implemented
-                status: "pending" as "pending" | "in_progress" | "completed",
-                completion_date: null,
-                repeats_weekly: repeatsWeekly,
-                repeat_days: repeatDays,
-                hours_per_day: hoursPerDay,
-              };
-
-              const createdTask = await taskService.create(taskData);
-              setTasks((prev) => [createdTask as TaskWithRelations, ...prev]);
-            } catch (error) {
-              console.error("Error importing task:", error);
+        for (const row of jsonData as any[]) {
+          try {
+            if (!row["Task Name"]) {
+              continue; // Skip rows without a name
             }
-          }
-        });
 
-        alert("Import completed! Please refresh to see the new tasks.");
+            const repeatsWeekly = (row["Repeats Weekly"]?.toString().toLowerCase() === "yes");
+            const repeatDays = repeatsWeekly ? (row["Repeat Days"]?.toString().split(",").map((d: string) => d.trim()) || []) : null;
+            const hoursPerDay = repeatsWeekly ? (Number(row["Hours per Day"]) || 0) : null;
+
+            const taskData = {
+              name: row["Task Name"],
+              description: row["Description"] || null,
+              estimated_time: Number(row["Estimated Hours"]) || 0,
+              start_date: row["Start Date"] || new Date().toISOString().split("T")[0],
+              end_date: row["End Date"] || new Date().toISOString().split("T")[0],
+              project_id: row["Project ID"] || null,
+              assigned_employee_id: row["Assigned Employee ID"] || null,
+              status: row["Status"] || "pending",
+              completion_date: row["Completion Date"] || null,
+              repeats_weekly: repeatsWeekly,
+              repeat_days: repeatDays,
+              hours_per_day: hoursPerDay,
+              special_marker: row["Special Marker"] || null,
+            };
+
+            if (row["ID"]) {
+              await taskService.update(row["ID"], taskData);
+              updatedCount++;
+            } else {
+              await taskService.create(taskData);
+              createdCount++;
+            }
+          } catch (error) {
+            console.error("Error importing row:", row, error);
+            errorCount++;
+          }
+        }
+
+        alert(
+          `Import completed.\nCreated: ${createdCount}\nUpdated: ${updatedCount}\nErrors: ${errorCount}`
+        );
+
+        loadData(); // Reload all data to reflect changes
+
+        if (event.target) {
+          event.target.value = ''; // Reset file input
+        }
+
       } catch (error) {
         console.error("Error reading file:", error);
         alert("Error reading file. Please make sure it's a valid Excel file.");
