@@ -581,7 +581,7 @@ const TaskManagement = () => {
         return false;
       }
 
-      const cellDayOfWeekJs = cellDate.getDay(); // Sunday: 0, ..., Saturday: 6
+      const cellDayOfWeekJs = cellDate.getUTCDay(); // FIX: Use getUTCDay() to prevent timezone shift
       const dayNames = [
         "sunday",
         "monday",
