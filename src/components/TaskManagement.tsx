@@ -566,47 +566,12 @@ const TaskManagement = () => {
     const [tempStartDate, setTempStartDate] = useState("");
     const [tempEndDate, setTempEndDate] = useState("");
 
-    const cellTasks = tasks.filter((task) => {
-      if (task.assigned_employee_id !== employee.id) {
-        return false;
-      }
-
-      // Important: Use T00:00:00Z to parse dates as UTC and avoid timezone shifts.
-      const cellDate = new Date(date + "T00:00:00Z");
-      const startDate = new Date(task.start_date + "T00:00:00Z");
-      const endDate = new Date(task.end_date + "T00:00:00Z");
-
-      // 1. Check if the cell's date is within the task's overall start/end range
-      if (cellDate < startDate || cellDate > endDate) {
-        return false;
-      }
-
-      const cellDayOfWeekJs = cellDate.getUTCDay(); // Use UTC day to be consistent
-      const dayNames = [
-        "sunday",
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-      ];
-      const cellDayName = dayNames[cellDayOfWeekJs];
-
-      // 2. For repeating tasks, visibility is strictly determined by repeat_days
-      if (task.repeats_weekly) {
-        return Array.isArray(task.repeat_days) && task.repeat_days.includes(cellDayName);
-      }
-
-      // 3. For non-repeating tasks, hide on weekends if the employee doesn't work them
-      const isWeekend = cellDayOfWeekJs === 0 || cellDayOfWeekJs === 6;
-      if (isWeekend && !employee.trabalha_fim_de_semana) {
-        return false;
-      }
-
-      // If all checks pass for a non-repeating task, show it
-      return true;
-    });
+    const cellTasks = tasks.filter(
+      (task) =>
+        task.assigned_employee_id === employee.id &&
+        task.start_date <= date &&
+        task.end_date >= date,
+    );
 
     const totalHours = cellTasks.reduce((sum, task) => {
       const startDate = new Date(task.start_date);
@@ -1598,7 +1563,7 @@ const TaskManagement = () => {
                     <PopoverContent className="w-auto p-0">
                       <Calendar
                         mode="single"
-                        selected={new Date(currentTask.start_date + "T00:00:00Z")}
+                        selected={new Date(currentTask.start_date)}
                         onSelect={(date) =>
                           date &&
                           setCurrentTask({
@@ -1630,7 +1595,7 @@ const TaskManagement = () => {
                     <PopoverContent className="w-auto p-0">
                       <Calendar
                         mode="single"
-                        selected={new Date(currentTask.end_date + "T00:00:00Z")}
+                        selected={new Date(currentTask.end_date)}
                         onSelect={(date) =>
                           date &&
                           setCurrentTask({

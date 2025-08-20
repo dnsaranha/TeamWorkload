@@ -133,38 +133,45 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
   const getWeekDates = (date: Date) => {
     const week = [];
-    const startOfWeek = new Date(date);
-    const day = startOfWeek.getDay();
-    const diff = startOfWeek.getDate() - day;
-    startOfWeek.setDate(diff);
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+    const dayOfMonth = date.getUTCDate();
+    const dayOfWeek = date.getUTCDay(); // 0 for Sunday, 1 for Monday, etc.
+
+    // Find the date of the Sunday for the current week
+    const sundayDate = new Date(Date.UTC(year, month, dayOfMonth - dayOfWeek));
 
     for (let i = 0; i < 7; i++) {
-      const day = new Date(startOfWeek);
-      day.setDate(startOfWeek.getDate() + i);
-      week.push(day);
+      const weekDay = new Date(sundayDate.valueOf());
+      weekDay.setUTCDate(sundayDate.getUTCDate() + i);
+      week.push(weekDay);
     }
     return week;
   };
 
   const getMonthDates = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const startDate = new Date(firstDay);
-    const endDate = new Date(lastDay);
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
 
-    // Adjust to start from Sunday
-    startDate.setDate(startDate.getDate() - startDate.getDay());
-    // Adjust to end on Saturday
-    endDate.setDate(endDate.getDate() + (6 - endDate.getDay()));
+    // First day of the month in UTC
+    const firstDay = new Date(Date.UTC(year, month, 1));
+    // Last day of the month in UTC
+    const lastDay = new Date(Date.UTC(year, month + 1, 0));
+
+    // Find the Sunday of the week where the month starts
+    const startDate = new Date(firstDay.valueOf());
+    startDate.setUTCDate(startDate.getUTCDate() - firstDay.getUTCDay());
+
+    // Find the Saturday of the week where the month ends
+    const endDate = new Date(lastDay.valueOf());
+    endDate.setUTCDate(endDate.getUTCDate() + (6 - lastDay.getUTCDay()));
 
     const dates = [];
-    const current = new Date(startDate);
+    const current = new Date(startDate.valueOf());
 
     while (current <= endDate) {
-      dates.push(new Date(current));
-      current.setDate(current.getDate() + 1);
+      dates.push(new Date(current.valueOf()));
+      current.setUTCDate(current.getUTCDate() + 1);
     }
 
     return dates;
@@ -175,7 +182,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   ): (Task & { is_recurring_instance?: boolean })[] => {
     const dayTasks: (Task & { is_recurring_instance?: boolean })[] = [];
     const dateStr = date.toISOString().split("T")[0];
-    const dayOfWeek = date.getDay();
+    const dayOfWeek = date.getUTCDay(); // FIX: Use UTC day
     const dayNameToNumber: { [key: string]: number } = {
       sunday: 0,
       monday: 1,
@@ -190,8 +197,9 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     );
 
     filteredTasks.forEach((task) => {
-      const taskStart = new Date(task.start_date);
-      const taskEnd = new Date(task.end_date);
+      // FIX: Parse all dates as UTC to ensure correct comparison
+      const taskStart = new Date(task.start_date + "T00:00:00Z");
+      const taskEnd = new Date(task.end_date + "T00:00:00Z");
 
       if (task.repeats_weekly && task.repeat_days && dayNumberToName) {
         if (
@@ -209,7 +217,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
           });
         }
       } else {
-        if (dateStr >= task.start_date && dateStr <= task.end_date) {
+        if (date >= taskStart && date <= taskEnd) {
           dayTasks.push(task);
         }
       }
@@ -225,7 +233,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
       : dayTasks;
 
     // Check if it's weekend
-    const isWeekend = date.getDay() === 0 || date.getDay() === 6; // Sunday = 0, Saturday = 6
+    const isWeekend = date.getUTCDay() === 0 || date.getUTCDay() === 6; // FIX: Use UTC day
 
     const totalHours = filteredTasksByEmployee.reduce((sum, task) => {
       // For recurring instances, estimated_time is already hours_per_day
@@ -234,26 +242,26 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
       }
 
       // For multi-day tasks, distribute hours evenly across days
-      const startDate = new Date(task.start_date);
-      const endDate = new Date(task.end_date);
+      const startDate = new Date(task.start_date + "T00:00:00Z");
+      const endDate = new Date(task.end_date + "T00:00:00Z");
 
       // Calculate working days between start and end date, considering employee's weekend work preference
       let workingDays = 0;
-      const tempDate = new Date(startDate);
+      const tempDate = new Date(startDate.valueOf());
       const employee = employees.find(
         (emp) => emp.id === task.assigned_employee_id,
       );
       const worksWeekends = employee?.trabalha_fim_de_semana || false;
 
       while (tempDate <= endDate) {
-        const dayOfWeek = tempDate.getDay();
+        const dayOfWeek = tempDate.getUTCDay(); // FIX: Use UTC day
         const isCurrentWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
         if (!isCurrentWeekend || worksWeekends) {
           workingDays++;
         }
 
-        tempDate.setDate(tempDate.getDate() + 1);
+        tempDate.setUTCDate(tempDate.getUTCDate() + 1); // FIX: Use UTC date setter
       }
 
       const daysDiff = Math.max(1, workingDays);
