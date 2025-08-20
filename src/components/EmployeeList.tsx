@@ -216,7 +216,6 @@ const EmployeeList = () => {
 
   const exportToExcel = () => {
     const exportData = filteredEmployees.map((employee) => ({
-      ID: employee.id,
       Name: employee.name,
       Role: employee.role,
       "Weekly Hours": employee.weekly_hours,
@@ -235,12 +234,12 @@ const EmployeeList = () => {
     );
   };
 
-  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = async (e) => {
+    reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
@@ -248,51 +247,34 @@ const EmployeeList = () => {
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        let createdCount = 0;
-        let updatedCount = 0;
-        let errorCount = 0;
+        jsonData.forEach(async (row: any) => {
+          if (row["Name"]) {
+            try {
+              const skillsArray = row["Skills"]
+                ? row["Skills"]
+                    .toString()
+                    .split(",")
+                    .map((skill: string) => skill.trim())
+                : [];
 
-        for (const row of jsonData as any[]) {
-          try {
-            if (!row["Name"]) {
-              continue; // Skip rows without a name
+              const employeeData = {
+                name: row["Name"],
+                role: row["Role"] || "",
+                weekly_hours: Number(row["Weekly Hours"]) || 40,
+                trabalha_fim_de_semana:
+                  row["Weekend Work"]?.toLowerCase() === "yes",
+                skills: skillsArray,
+              };
+
+              const newEmployee = await employeeService.create(employeeData);
+              setEmployees((prev) => [...prev, newEmployee]);
+            } catch (error) {
+              console.error("Error importing employee:", error);
             }
-
-            const skillsArray = row["Skills"]
-              ? row["Skills"].toString().split(",").map((skill: string) => skill.trim())
-              : [];
-
-            const employeeData = {
-              name: row["Name"],
-              role: row["Role"] || "",
-              weekly_hours: Number(row["Weekly Hours"]) || 40,
-              trabalha_fim_de_semana: (row["Weekend Work"]?.toString().toLowerCase() === "yes"),
-              skills: skillsArray,
-            };
-
-            if (row["ID"]) {
-              await employeeService.update(row["ID"], employeeData);
-              updatedCount++;
-            } else {
-              await employeeService.create(employeeData);
-              createdCount++;
-            }
-          } catch (error) {
-            console.error("Error importing row:", row, error);
-            errorCount++;
           }
-        }
+        });
 
-        alert(
-          `Import completed.\nCreated: ${createdCount}\nUpdated: ${updatedCount}\nErrors: ${errorCount}`
-        );
-
-        loadEmployees(); // Reload all data to reflect changes
-
-        if (event.target) {
-          event.target.value = ''; // Reset file input
-        }
-
+        alert("Import completed! Please refresh to see the new employees.");
       } catch (error) {
         console.error("Error reading file:", error);
         alert("Error reading file. Please make sure it's a valid Excel file.");
