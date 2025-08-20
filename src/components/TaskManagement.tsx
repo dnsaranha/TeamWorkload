@@ -571,17 +571,17 @@ const TaskManagement = () => {
         return false;
       }
 
-      // Important: Use T00:00:00 to avoid timezone-related date shifts
-      const cellDate = new Date(date + "T00:00:00");
-      const startDate = new Date(task.start_date + "T00:00:00");
-      const endDate = new Date(task.end_date + "T00:00:00");
+      // Important: Use T00:00:00Z to parse dates as UTC and avoid timezone shifts.
+      const cellDate = new Date(date + "T00:00:00Z");
+      const startDate = new Date(task.start_date + "T00:00:00Z");
+      const endDate = new Date(task.end_date + "T00:00:00Z");
 
       // 1. Check if the cell's date is within the task's overall start/end range
       if (cellDate < startDate || cellDate > endDate) {
         return false;
       }
 
-      const cellDayOfWeekJs = cellDate.getUTCDay(); // FIX: Use getUTCDay() to prevent timezone shift
+      const cellDayOfWeekJs = cellDate.getUTCDay(); // Use UTC day to be consistent
       const dayNames = [
         "sunday",
         "monday",
@@ -1598,7 +1598,7 @@ const TaskManagement = () => {
                     <PopoverContent className="w-auto p-0">
                       <Calendar
                         mode="single"
-                        selected={new Date(currentTask.start_date)}
+                        selected={new Date(currentTask.start_date + "T00:00:00Z")}
                         onSelect={(date) =>
                           date &&
                           setCurrentTask({
@@ -1630,7 +1630,7 @@ const TaskManagement = () => {
                     <PopoverContent className="w-auto p-0">
                       <Calendar
                         mode="single"
-                        selected={new Date(currentTask.end_date)}
+                        selected={new Date(currentTask.end_date + "T00:00:00Z")}
                         onSelect={(date) =>
                           date &&
                           setCurrentTask({
