@@ -282,7 +282,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
     if (employeeId) {
       const employee = employees.find((emp) => emp.id === employeeId);
-      const worksWeekends = employee?.trabalha_fim_de_semana || false;
+      const worksWeekends = employee?.trabalha_fim_de_semana === true;
 
       // If it's weekend and employee doesn't work weekends, return zero capacity
       if (isWeekend && !worksWeekends) {
@@ -290,6 +290,8 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
           hours: 0,
           percentage: 0,
           capacity: 0,
+          debug_isWeekend: isWeekend,
+          debug_worksWeekends: worksWeekends,
         };
       }
 
@@ -303,6 +305,8 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
         hours: totalHours,
         percentage: (totalHours / dailyCapacity) * 100,
         capacity: dailyCapacity,
+        debug_isWeekend: isWeekend,
+        debug_worksWeekends: worksWeekends,
       };
     }
 
@@ -313,12 +317,14 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
         hours: totalHours,
         percentage: 0,
         capacity: 0,
+        debug_isWeekend: isWeekend,
+        debug_worksWeekends: false, // Dummy value
       };
     }
 
     // Calculate average capacity considering each employee's weekend work preference
     const totalCapacity = employees.reduce((sum, emp) => {
-      const worksWeekends = emp.trabalha_fim_de_semana || false;
+      const worksWeekends = emp.trabalha_fim_de_semana === true;
       const workingDaysPerWeek = worksWeekends ? 7 : 5;
       const dailyCapacity = emp.weekly_hours / workingDaysPerWeek;
 
@@ -334,6 +340,8 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
       hours: totalHours,
       percentage: totalCapacity > 0 ? (totalHours / totalCapacity) * 100 : 0,
       capacity: totalCapacity,
+      debug_isWeekend: isWeekend,
+      debug_worksWeekends: false, // Dummy value
     };
   };
 
@@ -523,6 +531,14 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                     </span>
                   )}
                 </div>
+
+                {/* DEBUGGING OUTPUT */}
+                {selectedEmployeeId && (
+                  <div className="text-xs text-red-500 font-mono">
+                    <div>IW: {workload.debug_isWeekend ? "T" : "F"}</div>
+                    <div>WW: {workload.debug_worksWeekends ? "T" : "F"}</div>
+                  </div>
+                )}
 
                 <div className="space-y-1">
                   {dayTasks.slice(0, 3).map((task) => {
