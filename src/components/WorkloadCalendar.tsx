@@ -36,6 +36,17 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   const [view, setView] = useState<"weekly" | "monthly">(viewMode);
   const [searchTerm, setSearchTerm] = useState("");
 
+  const selectedEmployee = useMemo(() => {
+    if (!selectedEmployeeId) return null;
+    return employees.find((e) => e.id === selectedEmployeeId);
+  }, [selectedEmployeeId, employees]);
+
+  // Determine if weekends should be shown. Default to true if no employee is selected.
+  const worksWeekends = useMemo(() => {
+    if (!selectedEmployee) return true;
+    return selectedEmployee.trabalha_fim_de_semana === true;
+  }, [selectedEmployee]);
+
   useEffect(() => {
     loadData();
   }, [currentDate, selectedEmployeeId]);
@@ -380,8 +391,23 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     return projects.find((proj) => proj.id === projectId);
   };
 
+  const dayHeaders = worksWeekends
+    ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    : ["Mon", "Tue", "Wed", "Thu", "Fri"];
+
   const dates =
     view === "weekly" ? getWeekDates(currentDate) : getMonthDates(currentDate);
+
+  const displayDates = useMemo(() => {
+    if (worksWeekends) {
+      return dates;
+    }
+    // Filter out weekends if the employee doesn't work them
+    return dates.filter((date) => {
+      const day = date.getUTCDay();
+      return day !== 0 && day !== 6; // 0 = Sunday, 6 = Saturday
+    });
+  }, [dates, worksWeekends]);
 
   if (loading) {
     return (
@@ -483,11 +509,11 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
       <div className="p-6">
         <div
           className={`grid gap-2 ${
-            view === "weekly" ? "grid-cols-7" : "grid-cols-7"
+            worksWeekends ? "grid-cols-7" : "grid-cols-5"
           }`}
         >
           {/* Day Headers */}
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+          {dayHeaders.map((day) => (
             <div
               key={day}
               className="p-2 text-center text-sm font-medium text-gray-500 border-b border-gray-200"
@@ -497,7 +523,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
           ))}
 
           {/* Calendar Days */}
-          {dates.map((date, index) => {
+          {displayDates.map((date, index) => {
             const dayTasks = getTasksForDate(date);
             const workload = calculateDayWorkload(date, selectedEmployeeId);
             const isCurrentMonth =
