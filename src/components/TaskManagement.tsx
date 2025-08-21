@@ -598,9 +598,15 @@ const TaskManagement = () => {
         return Array.isArray(task.repeat_days) && task.repeat_days.includes(cellDayName);
       }
 
-      // 3. For non-repeating tasks, hide on weekends if the employee doesn't work them
-      const isWeekend = cellDayOfWeekJs === 0 || cellDayOfWeekJs === 6;
-      if (isWeekend && !employee.trabalha_fim_de_semana) {
+      // 3. For non-repeating tasks, hide on non-working days for the employee
+      const employeeWorkDays = employee.dias_de_trabalho || [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+      ];
+      if (!employeeWorkDays.includes(cellDayName)) {
         return false;
       }
 

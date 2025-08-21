@@ -17,7 +17,7 @@ export type Employee = {
   role: string;
   weekly_hours: number;
   skills: any; // Using any to match Supabase Json type
-  trabalha_fim_de_semana?: boolean;
+  dias_de_trabalho: string[] | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -27,7 +27,7 @@ export type EmployeeInsert = {
   role: string;
   weekly_hours: number;
   skills: any; // Using any to match Supabase Json type
-  trabalha_fim_de_semana?: boolean;
+  dias_de_trabalho?: string[] | null;
 };
 
 export type EmployeeUpdate = Partial<EmployeeInsert>;
