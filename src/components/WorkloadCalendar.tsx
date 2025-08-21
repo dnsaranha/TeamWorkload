@@ -44,7 +44,8 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   // Determine if weekends should be shown. Default to true if no employee is selected.
   const worksWeekends = useMemo(() => {
     if (!selectedEmployee) return true;
-    return selectedEmployee.trabalha_fim_de_semana === true;
+    // Use loose equality to handle non-boolean true values (e.g., "true", 1)
+    return selectedEmployee.trabalha_fim_de_semana == true;
   }, [selectedEmployee]);
 
   useEffect(() => {
@@ -262,8 +263,8 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
       const employee = employees.find(
         (emp) => emp.id === task.assigned_employee_id,
       );
-      // FIX: Use strict boolean check
-      const worksWeekends = employee?.trabalha_fim_de_semana === true;
+      // Use loose equality to handle non-boolean true values
+      const worksWeekends = employee?.trabalha_fim_de_semana == true;
 
       while (tempDate <= endDate) {
         const dayOfWeek = tempDate.getUTCDay(); // FIX: Use UTC day
@@ -281,8 +282,8 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
       // If current date is weekend and employee doesn't work weekends, don't count hours
       if (employeeId && isWeekend) {
         const employee = employees.find((emp) => emp.id === employeeId);
-        // FIX: Use strict boolean check
-        const worksWeekends = employee?.trabalha_fim_de_semana === true;
+        // Use loose equality to handle non-boolean true values
+        const worksWeekends = employee?.trabalha_fim_de_semana == true;
         if (!worksWeekends) {
           return sum; // Don't add hours for weekend days
         }
@@ -293,7 +294,8 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
     if (employeeId) {
       const employee = employees.find((emp) => emp.id === employeeId);
-      const worksWeekends = employee?.trabalha_fim_de_semana === true;
+      // Use loose equality to handle non-boolean true values
+      const worksWeekends = employee?.trabalha_fim_de_semana == true;
 
       // If it's weekend and employee doesn't work weekends, return zero capacity
       if (isWeekend && !worksWeekends) {
@@ -335,7 +337,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
     // Calculate average capacity considering each employee's weekend work preference
     const totalCapacity = employees.reduce((sum, emp) => {
-      const worksWeekends = emp.trabalha_fim_de_semana === true;
+      const worksWeekends = emp.trabalha_fim_de_semana == true;
       const workingDaysPerWeek = worksWeekends ? 7 : 5;
       const dailyCapacity = emp.weekly_hours / workingDaysPerWeek;
 
