@@ -251,7 +251,8 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
       const employee = employees.find(
         (emp) => emp.id === task.assigned_employee_id,
       );
-      const worksWeekends = employee?.trabalha_fim_de_semana || false;
+      // FIX: Use strict boolean check
+      const worksWeekends = employee?.trabalha_fim_de_semana === true;
 
       while (tempDate <= endDate) {
         const dayOfWeek = tempDate.getUTCDay(); // FIX: Use UTC day
@@ -269,7 +270,8 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
       // If current date is weekend and employee doesn't work weekends, don't count hours
       if (employeeId && isWeekend) {
         const employee = employees.find((emp) => emp.id === employeeId);
-        const worksWeekends = employee?.trabalha_fim_de_semana || false;
+        // FIX: Use strict boolean check
+        const worksWeekends = employee?.trabalha_fim_de_semana === true;
         if (!worksWeekends) {
           return sum; // Don't add hours for weekend days
         }
