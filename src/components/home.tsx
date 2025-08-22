@@ -34,6 +34,9 @@ const HomePage = () => {
   const [avgWorkload, setAvgWorkload] = useState(0);
   const [totalProjects, setTotalProjects] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(
+    null,
+  );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState(false);
@@ -326,10 +329,13 @@ const HomePage = () => {
 
               <div className="flex gap-6 h-[calc(100vh-280px)]">
                 <div className="flex-1">
-                  <WorkloadCalendar />
+                  <WorkloadCalendar selectedEmployeeId={selectedEmployeeId} />
                 </div>
                 <div className="w-80">
-                  <WorkloadSummary />
+                  <WorkloadSummary
+                    selectedEmployeeId={selectedEmployeeId}
+                    onEmployeeSelect={setSelectedEmployeeId}
+                  />
                 </div>
               </div>
             </div>

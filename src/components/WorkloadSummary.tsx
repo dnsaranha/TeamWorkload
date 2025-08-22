@@ -58,6 +58,8 @@ interface WorkloadSummaryProps {
   period?: string;
   onPeriodChange?: (period: string) => void;
   showCharts?: boolean;
+  selectedEmployeeId?: string | null;
+  onEmployeeSelect?: (employeeId: string | null) => void;
 }
 
 interface ChartConfig {
@@ -82,6 +84,8 @@ const WorkloadSummary = ({
   period = "This Week",
   onPeriodChange = () => {},
   showCharts = false,
+  selectedEmployeeId,
+  onEmployeeSelect,
 }: WorkloadSummaryProps) => {
   const [activeTab, setActiveTab] = useState(
     showCharts ? "charts" : "employees",
@@ -387,13 +391,32 @@ const WorkloadSummary = ({
           <ScrollArea className="h-[600px] pr-4">
             <TabsContent value="employees" className="mt-0">
               <div className="space-y-4">
+                {onEmployeeSelect && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => onEmployeeSelect(null)}
+                  >
+                    Show All Employees
+                  </Button>
+                )}
                 {loading ? (
                   <div className="text-center py-6">Loading employees...</div>
                 ) : displayEmployees.length === 0 ? (
                   <div className="text-center py-6">No employees found</div>
                 ) : (
                   displayEmployees.map((employee) => (
-                    <div key={employee.id} className="p-3 rounded-lg border">
+                    <div
+                      key={employee.id}
+                      className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                        selectedEmployeeId === employee.id
+                          ? "bg-primary/10 border-primary"
+                          : "hover:bg-accent"
+                      }`}
+                      onClick={() =>
+                        onEmployeeSelect && onEmployeeSelect(employee.id)
+                      }
+                    >
                       <div className="flex items-center gap-3 mb-3">
                         <Avatar>
                           <AvatarImage
