@@ -687,12 +687,6 @@ const TaskManagement = () => {
         <div className="text-xs text-gray-600 mb-1">
           {totalHours.toFixed(1)}h ({percentage.toFixed(0)}%)
         </div>
-        <div className="p-1 mt-1 border-t border-dashed border-red-400 bg-red-50 text-red-900 font-mono text-[10px] leading-tight">
-          <p>DATE: {date}</p>
-          <p>DAY: {cellDayName}</p>
-          <p>isWorkDay: {isWorkDay ? "TRUE" : "FALSE"}</p>
-          <p>WorkDays: {JSON.stringify(employee.dias_de_trabalho)}</p>
-        </div>
         <div className="space-y-1">
           {cellTasks.map((task) => (
             <div key={task.id}>
@@ -781,29 +775,27 @@ const TaskManagement = () => {
     }
   };
 
-  const getWeekDates = (startDate: Date) => {
-    const dates = [];
-    const tempDate = new Date(startDate); // Create a copy to avoid state mutation
-    // Find Monday of the week for the given startDate
-    const day = tempDate.getDay();
-    const diff = tempDate.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
-    const monday = new Date(tempDate.setDate(diff));
+  const getWeekDates = (date: Date) => {
+    const week = [];
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+    const dayOfMonth = date.getUTCDate();
+    const dayOfWeek = date.getUTCDay(); // 0 for Sunday, 1 for Monday, etc.
+
+    // Find the date of the Sunday for the current week
+    const sundayDate = new Date(Date.UTC(year, month, dayOfMonth - dayOfWeek));
 
     for (let i = 0; i < 7; i++) {
-      const date = new Date(monday);
-      date.setDate(date.getDate() + i);
-      // Format to YYYY-MM-DD, ensuring timezone doesn't shift the date
-      const year = date.getFullYear();
-      const month = (date.getMonth() + 1).toString().padStart(2, "0");
-      const dayOfMonth = date.getDate().toString().padStart(2, "0");
-      dates.push(`${year}-${month}-${dayOfMonth}`);
+      const weekDay = new Date(sundayDate.valueOf());
+      weekDay.setUTCDate(sundayDate.getUTCDate() + i);
+      week.push(weekDay);
     }
-    return dates;
+    return week;
   };
 
   const [gridStartDate, setGridStartDate] = useState(new Date());
 
-  const weekDates = getWeekDates(gridStartDate);
+  const weekDates = getWeekDates(gridStartDate).map(d => d.toISOString().split("T")[0]);
   const unassignedTasks = tasks.filter((task) => !task.assigned_employee_id);
 
   return (
