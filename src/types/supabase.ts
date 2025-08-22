@@ -213,30 +213,30 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
+          dias_de_trabalho: string[] | null
           name: string
           role: string
           skills: Json | null
-          trabalha_fim_de_semana: boolean | null
           updated_at: string | null
           weekly_hours: number
         }
         Insert: {
           created_at?: string | null
+          dias_de_trabalho?: string[] | null
           id?: string
           name: string
           role: string
           skills?: Json | null
-          trabalha_fim_de_semana?: boolean | null
           updated_at?: string | null
           weekly_hours?: number
         }
         Update: {
           created_at?: string | null
+          dias_de_trabalho?: string[] | null
           id?: string
           name?: string
           role?: string
           skills?: Json | null
-          trabalha_fim_de_semana?: boolean | null
           updated_at?: string | null
           weekly_hours?: number
         }

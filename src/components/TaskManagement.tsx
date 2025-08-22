@@ -422,23 +422,17 @@ const TaskManagement = () => {
   // Export to Excel
   const exportToExcel = () => {
     const exportData = filteredTasks.map((task) => ({
-      "ID": task.id,
       "Task Name": task.name,
-      "Description": task.description || "",
-      "Project ID": task.project_id,
-      "Project Name": task.project?.name || "No project",
+      Description: task.description || "",
+      Project: task.project?.name || "No project",
       "Strategic Category": task.project?.categoria_estrategica || "",
-      "Assigned Employee ID": task.assigned_employee_id,
       "Assigned To": task.assigned_employee?.name || "Unassigned",
       "Estimated Hours": task.estimated_time,
       "Start Date": task.start_date,
       "End Date": task.end_date,
-      "Status": task.status,
-      "Completion Date": task.completion_date,
       "Repeats Weekly": task.repeats_weekly ? "Yes" : "No",
       "Repeat Days": task.repeat_days?.join(", ") || "",
       "Hours per Day": task.hours_per_day || "",
-      "Special Marker": task.special_marker,
       "Created At": new Date(task.created_at).toLocaleDateString(),
     }));
 
@@ -452,12 +446,12 @@ const TaskManagement = () => {
   };
 
   // Import from Excel
-  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = async (e) => {
+    reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
@@ -465,59 +459,47 @@ const TaskManagement = () => {
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        let createdCount = 0;
-        let updatedCount = 0;
-        let errorCount = 0;
+        // Process imported data and create tasks
+        jsonData.forEach(async (row: any) => {
+          if (row["Task Name"]) {
+            try {
+              const repeatsWeekly =
+                row["Repeats Weekly"]?.toLowerCase() === "yes";
+              const repeatDays = repeatsWeekly
+                ? row["Repeat Days"]
+                    ?.split(",")
+                    .map((d: string) => d.trim()) || []
+                : null;
+              const hoursPerDay = repeatsWeekly
+                ? Number(row["Hours per Day"]) || 0
+                : null;
 
-        for (const row of jsonData as any[]) {
-          try {
-            if (!row["Task Name"]) {
-              continue; // Skip rows without a name
+              const taskData = {
+                name: row["Task Name"],
+                description: row["Description"] || "",
+                estimated_time: Number(row["Estimated Hours"]) || 1,
+                start_date:
+                  row["Start Date"] || new Date().toISOString().split("T")[0],
+                end_date:
+                  row["End Date"] || new Date().toISOString().split("T")[0],
+                project_id: null, // Note: Project linking from import is not implemented
+                assigned_employee_id: null, // Note: Employee linking from import is not implemented
+                status: "pending" as "pending" | "in_progress" | "completed",
+                completion_date: null,
+                repeats_weekly: repeatsWeekly,
+                repeat_days: repeatDays,
+                hours_per_day: hoursPerDay,
+              };
+
+              const createdTask = await taskService.create(taskData);
+              setTasks((prev) => [createdTask as TaskWithRelations, ...prev]);
+            } catch (error) {
+              console.error("Error importing task:", error);
             }
-
-            const repeatsWeekly = (row["Repeats Weekly"]?.toString().toLowerCase() === "yes");
-            const repeatDays = repeatsWeekly ? (row["Repeat Days"]?.toString().split(",").map((d: string) => d.trim()) || []) : null;
-            const hoursPerDay = repeatsWeekly ? (Number(row["Hours per Day"]) || 0) : null;
-
-            const taskData = {
-              name: row["Task Name"],
-              description: row["Description"] || null,
-              estimated_time: Number(row["Estimated Hours"]) || 0,
-              start_date: row["Start Date"] || new Date().toISOString().split("T")[0],
-              end_date: row["End Date"] || new Date().toISOString().split("T")[0],
-              project_id: row["Project ID"] || null,
-              assigned_employee_id: row["Assigned Employee ID"] || null,
-              status: row["Status"] || "pending",
-              completion_date: row["Completion Date"] || null,
-              repeats_weekly: repeatsWeekly,
-              repeat_days: repeatDays,
-              hours_per_day: hoursPerDay,
-              special_marker: row["Special Marker"] || null,
-            };
-
-            if (row["ID"]) {
-              await taskService.update(row["ID"], taskData);
-              updatedCount++;
-            } else {
-              await taskService.create(taskData);
-              createdCount++;
-            }
-          } catch (error) {
-            console.error("Error importing row:", row, error);
-            errorCount++;
           }
-        }
+        });
 
-        alert(
-          `Import completed.\nCreated: ${createdCount}\nUpdated: ${updatedCount}\nErrors: ${errorCount}`
-        );
-
-        loadData(); // Reload all data to reflect changes
-
-        if (event.target) {
-          event.target.value = ''; // Reset file input
-        }
-
+        alert("Import completed! Please refresh to see the new tasks.");
       } catch (error) {
         console.error("Error reading file:", error);
         alert("Error reading file. Please make sure it's a valid Excel file.");
@@ -584,12 +566,53 @@ const TaskManagement = () => {
     const [tempStartDate, setTempStartDate] = useState("");
     const [tempEndDate, setTempEndDate] = useState("");
 
-    const cellTasks = tasks.filter(
-      (task) =>
-        task.assigned_employee_id === employee.id &&
-        task.start_date <= date &&
-        task.end_date >= date,
-    );
+    const cellTasks = tasks.filter((task) => {
+      if (task.assigned_employee_id !== employee.id) {
+        return false;
+      }
+
+      // Important: Use T00:00:00Z to parse dates as UTC and avoid timezone shifts.
+      const cellDate = new Date(date + "T00:00:00Z");
+      const startDate = new Date(task.start_date + "T00:00:00Z");
+      const endDate = new Date(task.end_date + "T00:00:00Z");
+
+      // 1. Check if the cell's date is within the task's overall start/end range
+      if (cellDate < startDate || cellDate > endDate) {
+        return false;
+      }
+
+      const cellDayOfWeekJs = cellDate.getUTCDay(); // Use UTC day to be consistent
+      const dayNames = [
+        "sunday",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+      ];
+      const cellDayName = dayNames[cellDayOfWeekJs];
+
+      // 2. For repeating tasks, visibility is strictly determined by repeat_days
+      if (task.repeats_weekly) {
+        return Array.isArray(task.repeat_days) && task.repeat_days.includes(cellDayName);
+      }
+
+      // 3. For non-repeating tasks, hide on non-working days for the employee
+      const employeeWorkDays = employee.dias_de_trabalho || [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+      ];
+      if (!employeeWorkDays.includes(cellDayName)) {
+        return false;
+      }
+
+      // If all checks pass for a non-repeating task, show it
+      return true;
+    });
 
     const totalHours = cellTasks.reduce((sum, task) => {
       const startDate = new Date(task.start_date);
@@ -742,9 +765,16 @@ const TaskManagement = () => {
 
   const getWeekDates = (startDate: Date) => {
     const dates = [];
+    const start = new Date(
+      Date.UTC(
+        startDate.getUTCFullYear(),
+        startDate.getUTCMonth(),
+        startDate.getUTCDate(),
+      ),
+    );
     for (let i = 0; i < 7; i++) {
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + i);
+      const date = new Date(start);
+      date.setUTCDate(start.getUTCDate() + i);
       dates.push(date.toISOString().split("T")[0]);
     }
     return dates;
@@ -752,9 +782,15 @@ const TaskManagement = () => {
 
   const [gridStartDate, setGridStartDate] = useState(() => {
     const today = new Date();
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - today.getDay() + 1);
-    return monday;
+    const year = today.getUTCFullYear();
+    const month = today.getUTCMonth();
+    const date = today.getUTCDate();
+    const day = today.getUTCDay();
+    // Calculate Monday of the current week in UTC
+    const mondayUTCDate = new Date(
+      Date.UTC(year, month, date - day + (day === 0 ? -6 : 1)),
+    );
+    return mondayUTCDate;
   });
 
   const weekDates = getWeekDates(gridStartDate);
@@ -1581,7 +1617,7 @@ const TaskManagement = () => {
                     <PopoverContent className="w-auto p-0">
                       <Calendar
                         mode="single"
-                        selected={new Date(currentTask.start_date)}
+                        selected={new Date(currentTask.start_date + "T00:00:00Z")}
                         onSelect={(date) =>
                           date &&
                           setCurrentTask({
@@ -1613,7 +1649,7 @@ const TaskManagement = () => {
                     <PopoverContent className="w-auto p-0">
                       <Calendar
                         mode="single"
-                        selected={new Date(currentTask.end_date)}
+                        selected={new Date(currentTask.end_date + "T00:00:00Z")}
                         onSelect={(date) =>
                           date &&
                           setCurrentTask({
