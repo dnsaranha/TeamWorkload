@@ -195,9 +195,25 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   const getTasksForDate = (
     date: Date,
   ): (Task & { is_recurring_instance?: boolean })[] => {
+    const dayOfWeekName = dayNumberToName[date.getUTCDay()];
+
+    // If a specific employee is selected, check if it's a working day for them.
+    // If not, no tasks should be shown for this day.
+    if (selectedEmployee) {
+      const workDays = selectedEmployee.dias_de_trabalho || [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+      ];
+      if (!workDays.includes(dayOfWeekName)) {
+        return []; // Return empty array for non-working days
+      }
+    }
+
     const dayTasks: (Task & { is_recurring_instance?: boolean })[] = [];
     const dateStr = date.toISOString().split("T")[0];
-    const dayOfWeekName = dayNumberToName[date.getUTCDay()];
 
     filteredTasks.forEach((task) => {
       // FIX: Parse all dates as UTC to ensure correct comparison
