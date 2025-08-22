@@ -665,6 +665,18 @@ const TaskManagement = () => {
       setTempEndDate("");
     };
 
+    const cellDate = new Date(date + "T00:00:00Z");
+    const cellDayName = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ][cellDate.getUTCDay()];
+    const isWorkDay = (employee.dias_de_trabalho || []).includes(cellDayName);
+
     return (
       <div
         ref={drop}
@@ -674,6 +686,12 @@ const TaskManagement = () => {
       >
         <div className="text-xs text-gray-600 mb-1">
           {totalHours.toFixed(1)}h ({percentage.toFixed(0)}%)
+        </div>
+        <div className="p-1 mt-1 border-t border-dashed border-red-400 bg-red-50 text-red-900 font-mono text-[10px] leading-tight">
+          <p>DATE: {date}</p>
+          <p>DAY: {cellDayName}</p>
+          <p>isWorkDay: {isWorkDay ? "TRUE" : "FALSE"}</p>
+          <p>WorkDays: {JSON.stringify(employee.dias_de_trabalho)}</p>
         </div>
         <div className="space-y-1">
           {cellTasks.map((task) => (
