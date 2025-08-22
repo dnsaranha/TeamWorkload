@@ -614,22 +614,6 @@ const TaskManagement = () => {
       return true;
     });
 
-    const isWorkDayForCell = !cellTasks.some(
-      (task) =>
-        task.assigned_employee_id === employee.id &&
-        !employee.dias_de_trabalho?.includes(
-          [
-            "sunday",
-            "monday",
-            "tuesday",
-            "wednesday",
-            "thursday",
-            "friday",
-            "saturday",
-          ][new Date(date + "T00:00:00Z").getUTCDay()],
-        ),
-    );
-
     const totalHours = cellTasks.reduce((sum, task) => {
       const startDate = new Date(task.start_date);
       const endDate = new Date(task.end_date);
@@ -690,40 +674,6 @@ const TaskManagement = () => {
       >
         <div className="text-xs text-gray-600 mb-1">
           {totalHours.toFixed(1)}h ({percentage.toFixed(0)}%)
-        </div>
-        <div className="p-1 mt-1 border-t border-dashed border-red-400 bg-red-50 text-red-900 font-mono text-[10px] leading-tight">
-          <p>DATE: {date}</p>
-          <p>UID: {employee.id.substring(0, 8)}</p>
-          <p>
-            isWorkDay:{" "}
-            {employee.dias_de_trabalho?.includes(
-              [
-                "sunday",
-                "monday",
-                "tuesday",
-                "wednesday",
-                "thursday",
-                "friday",
-                "saturday",
-              ][new Date(date + "T00:00:00Z").getUTCDay()],
-            )
-              ? "TRUE"
-              : "FALSE"}
-          </p>
-          <p>
-            DAY:{" "}
-            {
-              [
-                "sunday",
-                "monday",
-                "tuesday",
-                "wednesday",
-                "thursday",
-                "friday",
-                "saturday",
-              ][new Date(date + "T00:00:00Z").getUTCDay()]
-            }
-          </p>
         </div>
         <div className="space-y-1">
           {cellTasks.map((task) => (
@@ -815,33 +765,25 @@ const TaskManagement = () => {
 
   const getWeekDates = (startDate: Date) => {
     const dates = [];
-    const start = new Date(
-      Date.UTC(
-        startDate.getUTCFullYear(),
-        startDate.getUTCMonth(),
-        startDate.getUTCDate(),
-      ),
-    );
+    const tempDate = new Date(startDate); // Create a copy to avoid state mutation
+    // Find Monday of the week for the given startDate
+    const day = tempDate.getDay();
+    const diff = tempDate.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+    const monday = new Date(tempDate.setDate(diff));
+
     for (let i = 0; i < 7; i++) {
-      const date = new Date(start);
-      date.setUTCDate(start.getUTCDate() + i);
-      dates.push(date.toISOString().split("T")[0]);
+      const date = new Date(monday);
+      date.setDate(date.getDate() + i);
+      // Format to YYYY-MM-DD, ensuring timezone doesn't shift the date
+      const year = date.getFullYear();
+      const month = (date.getMonth() + 1).toString().padStart(2, "0");
+      const dayOfMonth = date.getDate().toString().padStart(2, "0");
+      dates.push(`${year}-${month}-${dayOfMonth}`);
     }
     return dates;
   };
 
-  const [gridStartDate, setGridStartDate] = useState(() => {
-    const today = new Date();
-    const year = today.getUTCFullYear();
-    const month = today.getUTCMonth();
-    const date = today.getUTCDate();
-    const day = today.getUTCDay();
-    // Calculate Monday of the current week in UTC
-    const mondayUTCDate = new Date(
-      Date.UTC(year, month, date - day + (day === 0 ? -6 : 1)),
-    );
-    return mondayUTCDate;
-  });
+  const [gridStartDate, setGridStartDate] = useState(new Date());
 
   const weekDates = getWeekDates(gridStartDate);
   const unassignedTasks = tasks.filter((task) => !task.assigned_employee_id);
