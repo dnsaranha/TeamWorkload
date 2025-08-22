@@ -614,6 +614,22 @@ const TaskManagement = () => {
       return true;
     });
 
+    const isWorkDayForCell = !cellTasks.some(
+      (task) =>
+        task.assigned_employee_id === employee.id &&
+        !employee.dias_de_trabalho?.includes(
+          [
+            "sunday",
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+          ][new Date(date + "T00:00:00Z").getUTCDay()],
+        ),
+    );
+
     const totalHours = cellTasks.reduce((sum, task) => {
       const startDate = new Date(task.start_date);
       const endDate = new Date(task.end_date);
@@ -674,6 +690,40 @@ const TaskManagement = () => {
       >
         <div className="text-xs text-gray-600 mb-1">
           {totalHours.toFixed(1)}h ({percentage.toFixed(0)}%)
+        </div>
+        <div className="p-1 mt-1 border-t border-dashed border-red-400 bg-red-50 text-red-900 font-mono text-[10px] leading-tight">
+          <p>DATE: {date}</p>
+          <p>UID: {employee.id.substring(0, 8)}</p>
+          <p>
+            isWorkDay:{" "}
+            {employee.dias_de_trabalho?.includes(
+              [
+                "sunday",
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday",
+                "saturday",
+              ][new Date(date + "T00:00:00Z").getUTCDay()],
+            )
+              ? "TRUE"
+              : "FALSE"}
+          </p>
+          <p>
+            DAY:{" "}
+            {
+              [
+                "sunday",
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday",
+                "saturday",
+              ][new Date(date + "T00:00:00Z").getUTCDay()]
+            }
+          </p>
         </div>
         <div className="space-y-1">
           {cellTasks.map((task) => (
