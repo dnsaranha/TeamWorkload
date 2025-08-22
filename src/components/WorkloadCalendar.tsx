@@ -547,6 +547,18 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                   )}
                 </div>
 
+                <div className="p-1 mt-1 border-t border-dashed border-red-400 bg-red-50 text-red-900 font-mono text-[10px] leading-tight">
+                  <p>ID: {selectedEmployeeId || "null"}</p>
+                  <p>
+                    EMP:{" "}
+                    {selectedEmployee
+                      ? JSON.stringify(selectedEmployee.dias_de_trabalho)
+                      : "null"}
+                  </p>
+                  <p>DAY: {dayOfWeekName}</p>
+                  <p>isWorkDay: {isWorkDay ? "TRUE" : "FALSE"}</p>
+                </div>
+
                 <div className="space-y-1">
                   {isWorkDay &&
                     dayTasks.slice(0, 3).map((task) => {
