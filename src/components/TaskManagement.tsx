@@ -765,9 +765,16 @@ const TaskManagement = () => {
 
   const getWeekDates = (startDate: Date) => {
     const dates = [];
+    const start = new Date(
+      Date.UTC(
+        startDate.getUTCFullYear(),
+        startDate.getUTCMonth(),
+        startDate.getUTCDate(),
+      ),
+    );
     for (let i = 0; i < 7; i++) {
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + i);
+      const date = new Date(start);
+      date.setUTCDate(start.getUTCDate() + i);
       dates.push(date.toISOString().split("T")[0]);
     }
     return dates;
@@ -775,9 +782,15 @@ const TaskManagement = () => {
 
   const [gridStartDate, setGridStartDate] = useState(() => {
     const today = new Date();
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - today.getDay() + 1);
-    return monday;
+    const year = today.getUTCFullYear();
+    const month = today.getUTCMonth();
+    const date = today.getUTCDate();
+    const day = today.getUTCDay();
+    // Calculate Monday of the current week in UTC
+    const mondayUTCDate = new Date(
+      Date.UTC(year, month, date - day + (day === 0 ? -6 : 1)),
+    );
+    return mondayUTCDate;
   });
 
   const weekDates = getWeekDates(gridStartDate);
