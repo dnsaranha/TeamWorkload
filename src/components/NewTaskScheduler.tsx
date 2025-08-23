@@ -30,33 +30,49 @@ interface NewTaskSchedulerProps {
   onOpenChange: (isOpen: boolean) => void;
 }
 
+const ItemTypes = {
+  UNASSIGNED_TASK: 'unassigned_task',
+  ASSIGNED_TASK: 'assigned_task',
+};
+
 const dayNumberToName: { [key: number]: string } = {
   0: "sunday", 1: "monday", 2: "tuesday", 3: "wednesday", 4: "thursday", 5: "friday", 6: "saturday",
 };
 
 // --- Sub-components for the Scheduler ---
 
-// Draggable Unassigned Task
-const DraggableTask = ({ task }: { task: TaskWithRelations }) => {
+const DraggableUnassignedTask = ({ task }: { task: TaskWithRelations }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
-    type: "task",
+    type: ItemTypes.UNASSIGNED_TASK,
     item: { task },
     collect: (monitor) => ({ isDragging: monitor.isDragging() }),
   }));
   return (
-    <div ref={drag} className={`p-2 border-b flex items-center gap-2 ${isDragging ? 'opacity-50' : 'opacity-100'}`}>
+    <div ref={drag} className={`p-2 border-b flex items-center gap-2 cursor-move ${isDragging ? 'opacity-50' : 'opacity-100'}`}>
       <GripVertical className="h-4 w-4 text-gray-400" />
       <span className="text-sm">{task.name}</span>
     </div>
   );
 };
 
-// Droppable Cell in the Grid
+const DraggableAssignedTask = ({ task }: { task: TaskWithRelations }) => {
+    const [{ isDragging }, drag] = useDrag(() => ({
+      type: ItemTypes.ASSIGNED_TASK,
+      item: { task },
+      collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+    }));
+    return (
+        <div ref={drag} className="bg-blue-50 border border-blue-200 rounded p-1 text-xs truncate cursor-move" title={task.name}>
+           {task.name}
+        </div>
+    );
+};
+
 const DroppableCell = ({ date, employee, tasks, onTaskDrop }: { date: Date, employee: Employee, tasks: TaskWithRelations[], onTaskDrop: (task: Task, employeeId: string, date: Date) => void }) => {
   const [{ isOver }, drop] = useDrop(() => ({
-    accept: "task",
+    accept: [ItemTypes.UNASSIGNED_TASK, ItemTypes.ASSIGNED_TASK],
     drop: (item: { task: TaskWithRelations }) => onTaskDrop(item.task, employee.id, date),
-    collect: (monitor) => ({ isOver: monitor.isOver() }),
+    collect: (monitor) => ({ isOver: monitor.canDrop() && monitor.isOver() }),
   }));
 
   const dayName = dayNumberToName[date.getUTCDay()];
@@ -66,23 +82,23 @@ const DroppableCell = ({ date, employee, tasks, onTaskDrop }: { date: Date, empl
   const dailyCapacity = (employee.weekly_hours || 40) / (workDays.length || 5);
 
   const tasksForThisCell = tasks.filter(t => {
-    const taskDate = new Date(t.start_date + "T00:00:00Z");
-    return t.assigned_employee_id === employee.id && taskDate.getUTCDate() === date.getUTCDate() && taskDate.getUTCMonth() === date.getUTCMonth() && taskDate.getUTCFullYear() === date.getUTCFullYear();
+      if (t.assigned_employee_id !== employee.id) return false;
+      if (!t.start_date) return false;
+      const taskDate = new Date(t.start_date + "T00:00:00Z");
+      return taskDate.getTime() === new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
   });
 
   const hoursInCell = tasksForThisCell.reduce((sum, task) => sum + task.estimated_time, 0);
-  const isOverloaded = hoursInCell > dailyCapacity;
+  const isOverloaded = dailyCapacity > 0 && hoursInCell > dailyCapacity;
 
   return (
-    <div ref={drop} className={`border-r h-24 p-1 space-y-1 overflow-y-auto ${!isWorkDay ? 'bg-gray-200' : isOver ? 'bg-blue-100' : 'bg-white'}`}>
+    <div ref={drop} className={`border-r h-24 p-1 space-y-1 overflow-y-auto transition-colors ${!isWorkDay ? 'bg-gray-200 cursor-not-allowed' : isOver ? 'bg-blue-100' : 'bg-white'}`}>
       <div className="flex justify-between items-center text-xs text-gray-500">
-        <span>{hoursInCell.toFixed(1)}h / {dailyCapacity.toFixed(1)}h</span>
+        <span>{hoursInCell.toFixed(1)}h / {dailyCapacity > 0 ? dailyCapacity.toFixed(1) : '0.0'}h</span>
         {isOverloaded && <AlertTriangle className="h-4 w-4 text-red-500" />}
       </div>
-      {tasksForThisCell.map(task => (
-         <div key={task.id} className="bg-blue-50 border border-blue-200 rounded p-1 text-xs truncate" title={task.name}>
-           {task.name}
-         </div>
+      {isWorkDay && tasksForThisCell.map(task => (
+         <DraggableAssignedTask key={task.id} task={task} />
       ))}
     </div>
   );
@@ -121,7 +137,7 @@ const NewTaskScheduler: React.FC<NewTaskSchedulerProps> = ({
     if (isOpen) {
       loadData();
     }
-  }, [isOpen, currentDate]); // Reload data when week changes
+  }, [isOpen, currentDate]);
 
   const loadData = async () => {
     try {
@@ -140,19 +156,16 @@ const NewTaskScheduler: React.FC<NewTaskSchedulerProps> = ({
   };
 
   const handleTaskDrop = async (task: Task, employeeId: string, date: Date) => {
-    // This is where the core bug fix happens.
-    // The dropped `date` is a clean Date object. We format it to YYYY-MM-DD for the DB.
     const newDateStr = date.toISOString().split("T")[0];
 
     try {
       const updatedTask = await taskService.update(task.id, {
         assigned_employee_id: employeeId,
         start_date: newDateStr,
-        end_date: newDateStr, // Simple drop sets start and end to the same day
+        end_date: newDateStr,
       });
 
-      // Update local state to reflect the change immediately
-      setTasks(prevTasks => prevTasks.map(t => t.id === task.id ? updatedTask as TaskWithRelations : t));
+      setTasks(prevTasks => prevTasks.map(t => t.id === task.id ? { ...updatedTask, project: t.project, assigned_employee: t.assigned_employee } as TaskWithRelations : t));
 
     } catch (error) {
        console.error("Failed to update task on drop", error);
@@ -169,11 +182,11 @@ const NewTaskScheduler: React.FC<NewTaskSchedulerProps> = ({
           <DialogHeader>
             <DialogTitle>New Task Scheduler</DialogTitle>
             <DialogDescription>
-              Drag tasks from the unassigned list to schedule them.
+              Drag tasks to schedule them. Drag assigned tasks to move them.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex items-center justify-between p-4">
+          <div className="flex flex-col md:flex-row items-center justify-between p-4 gap-2">
             <Button
               variant="outline"
               onClick={() => {
@@ -199,20 +212,20 @@ const NewTaskScheduler: React.FC<NewTaskSchedulerProps> = ({
             </Button>
           </div>
 
-          <div className="grid grid-cols-12 gap-4 p-4">
-            <div className="col-span-3">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 p-4">
+            <div className="col-span-1 md:col-span-3 w-full">
               <h4 className="font-bold mb-2">Unassigned Tasks</h4>
-              <div className="p-2 border rounded-lg h-full max-h-[60vh] overflow-y-auto">
+              <div className="p-2 border rounded-lg h-48 md:h-full max-h-[60vh] overflow-y-auto">
                 {loading ? <p>Loading...</p> : unassignedTasks.map(task => (
-                  <DraggableTask key={task.id} task={task} />
+                  <DraggableUnassignedTask key={task.id} task={task} />
                 ))}
               </div>
             </div>
 
-            <div className="col-span-9">
-               <div className="border rounded-lg overflow-hidden">
-                  <div className="grid grid-cols-8 bg-gray-50">
-                    <div className="p-3 font-medium text-sm border-r">Employee</div>
+            <div className="col-span-1 md:col-span-9 w-full">
+               <div className="border rounded-lg overflow-x-auto">
+                  <div className="grid grid-cols-8 bg-gray-50 min-w-[800px]">
+                    <div className="p-3 font-medium text-sm border-r sticky left-0 bg-gray-50">Employee</div>
                     {weekDates.map((date) => (
                       <div key={date.toISOString()} className="p-3 font-medium text-sm border-r text-center">
                         <div>{format(date, "EEE")}</div>
@@ -221,8 +234,8 @@ const NewTaskScheduler: React.FC<NewTaskSchedulerProps> = ({
                     ))}
                   </div>
                   {loading ? <div className="p-4 text-center">Loading employees...</div> : employees.map((employee) => (
-                     <div key={employee.id} className="grid grid-cols-8 border-t">
-                        <div className="p-3 font-medium text-sm border-r bg-gray-50 flex items-center">
+                     <div key={employee.id} className="grid grid-cols-8 border-t min-w-[800px]">
+                        <div className="p-3 font-medium text-sm border-r bg-gray-50 flex items-center sticky left-0 bg-gray-50">
                            {employee.name}
                         </div>
                         {weekDates.map((date) => (
