@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { employeeService, type Employee } from "@/lib/supabaseClient";
+import { useImport } from "@/lib/useImport";
 
 const daysOfWeek = [
   { id: "sunday", label: "Sun" },
@@ -256,75 +257,64 @@ const EmployeeList = () => {
     );
   };
 
-  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleProcessEmployeeRow = async (row: any) => {
+    if (!row["Name"]) {
+      throw new Error("Name is required");
+    }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: "array" });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+    const skillsArray = row["Skills"]
+      ? row["Skills"]
+          .toString()
+          .split(",")
+          .map((skill: string) => skill.trim())
+      : [];
 
-        jsonData.forEach(async (row: any) => {
-          if (row["Name"]) {
-            try {
-              const skillsArray = row["Skills"]
-                ? row["Skills"]
-                    .toString()
-                    .split(",")
-                    .map((skill: string) => skill.trim())
-                : [];
+    const workingDays = row["Working Days"]
+      ? row["Working Days"]
+          .toString()
+          .split(",")
+          .map((day: string) => day.trim().toLowerCase())
+      : [];
 
-              const workingDays = row["Working Days"]
-                ? row["Working Days"]
-                    .toString()
-                    .split(",")
-                    .map((day: string) => day.trim().toLowerCase())
-                : [];
-
-              const employeeData: any = {
-                name: row["Name"],
-                role: row["Role"] || "",
-                weekly_hours: Number(row["Weekly Hours"]) || 40,
-                dias_de_trabalho: workingDays,
-                skills: skillsArray,
-              };
-
-              if (row["Employee ID"]) {
-                employeeData.id = row["Employee ID"];
-              }
-
-              const upsertedEmployee = await employeeService.upsert(employeeData);
-
-              setEmployees((prev) => {
-                const existingEmployeeIndex = prev.findIndex(e => e.id === upsertedEmployee.id);
-                if (existingEmployeeIndex > -1) {
-                  const newEmployees = [...prev];
-                  newEmployees[existingEmployeeIndex] = upsertedEmployee;
-                  return newEmployees;
-                } else {
-                  return [...prev, upsertedEmployee];
-                }
-              });
-
-            } catch (error) {
-              console.error("Error importing employee:", error);
-            }
-          }
-        });
-
-        alert("Import completed!");
-      } catch (error) {
-        console.error("Error reading file:", error);
-        alert("Error reading file. Please make sure it's a valid Excel file.");
-      }
+    const employeeData: any = {
+      name: row["Name"],
+      role: row["Role"] || "",
+      weekly_hours: Number(row["Weekly Hours"]) || 40,
+      dias_de_trabalho: workingDays,
+      skills: skillsArray,
     };
-    reader.readAsArrayBuffer(file);
+
+    let isUpdate = false;
+    if (row["Employee ID"]) {
+      employeeData.id = row["Employee ID"];
+      isUpdate = employees.some(e => e.id === employeeData.id);
+    }
+
+    const upsertedEmployee = await employeeService.upsert(employeeData);
+
+    setEmployees((prev) => {
+      const existingEmployeeIndex = prev.findIndex(e => e.id === upsertedEmployee.id);
+      if (existingEmployeeIndex > -1) {
+        const newEmployees = [...prev];
+        newEmployees[existingEmployeeIndex] = upsertedEmployee;
+        return newEmployees;
+      } else {
+        return [...prev, upsertedEmployee];
+      }
+    });
+
+    return { created: !isUpdate, updated: isUpdate };
   };
+
+  const {
+    isLoading: isImporting,
+    summary: importSummary,
+    isSummaryDialogOpen,
+    setIsSummaryDialogOpen,
+    handleFileImport,
+  } = useImport({
+    onProcessRow: handleProcessEmployeeRow,
+  });
 
   return (
     <div className="bg-background p-6 w-full">
@@ -365,9 +355,19 @@ const EmployeeList = () => {
                 onClick={() =>
                   document.getElementById("employee-file-import")?.click()
                 }
+                disabled={isImporting}
               >
-                <Upload className="h-4 w-4" />
-                Import
+                {isImporting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                    Importing...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" />
+                    Import
+                  </>
+                )}
               </Button>
             </div>
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -679,6 +679,25 @@ const EmployeeList = () => {
             </Button>
             <Button onClick={handleEditEmployee}>Save Changes</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isSummaryDialogOpen} onOpenChange={setIsSummaryDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Import Summary</DialogTitle>
+                <DialogDescription>
+                    The file has been processed. Here is the summary:
+                </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+                <p>Total rows processed: {importSummary.total}</p>
+                <p>Employees created: {importSummary.created}</p>
+                <p>Employees updated: {importSummary.updated}</p>
+                <p>Errors: {importSummary.errors}</p>
+            </div>
+            <DialogFooter>
+                <Button onClick={() => setIsSummaryDialogOpen(false)}>Close</Button>
+            </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

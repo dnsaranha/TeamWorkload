@@ -49,6 +49,7 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { projectService, type Project, type ProjectInsert } from "@/lib/supabaseClient";
+import { useImport } from "@/lib/useImport";
 
 const ProjectList = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -218,64 +219,53 @@ const ProjectList = () => {
     );
   };
 
-  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleProcessProjectRow = async (row: any) => {
+    if (!row["Name"]) {
+      throw new Error("Name is required");
+    }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: "array" });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-        jsonData.forEach(async (row: any) => {
-          if (row["Name"]) {
-            try {
-              const projectData: any = {
-                name: row["Name"],
-                description: row["Description"] || "",
-                start_date:
-                  row["Start Date"] || new Date().toISOString().split("T")[0],
-                end_date:
-                  row["End Date"] || new Date().toISOString().split("T")[0],
-                categoria_estrategica: row["Strategic Category"] || "",
-                special_marker: row["Special Marker"] || null,
-              };
-
-              if (row["Project ID"]) {
-                projectData.id = row["Project ID"];
-              }
-
-              const upsertedProject = await projectService.upsert(projectData);
-
-              setProjects((prev) => {
-                const existingProjectIndex = prev.findIndex(p => p.id === upsertedProject.id);
-                if (existingProjectIndex > -1) {
-                  const newProjects = [...prev];
-                  newProjects[existingProjectIndex] = upsertedProject;
-                  return newProjects;
-                } else {
-                  return [...prev, upsertedProject];
-                }
-              });
-
-            } catch (error) {
-              console.error("Error importing project:", error);
-            }
-          }
-        });
-
-        alert("Import completed!");
-      } catch (error) {
-        console.error("Error reading file:", error);
-        alert("Error reading file. Please make sure it's a valid Excel file.");
-      }
+    const projectData: any = {
+      name: row["Name"],
+      description: row["Description"] || "",
+      start_date:
+        row["Start Date"] || new Date().toISOString().split("T")[0],
+      end_date:
+        row["End Date"] || new Date().toISOString().split("T")[0],
+      categoria_estrategica: row["Strategic Category"] || "",
+      special_marker: row["Special Marker"] || null,
     };
-    reader.readAsArrayBuffer(file);
+
+    let isUpdate = false;
+    if (row["Project ID"]) {
+      projectData.id = row["Project ID"];
+      isUpdate = projects.some(p => p.id === projectData.id);
+    }
+
+    const upsertedProject = await projectService.upsert(projectData);
+
+    setProjects((prev) => {
+      const existingProjectIndex = prev.findIndex(p => p.id === upsertedProject.id);
+      if (existingProjectIndex > -1) {
+        const newProjects = [...prev];
+        newProjects[existingProjectIndex] = upsertedProject;
+        return newProjects;
+      } else {
+        return [...prev, upsertedProject];
+      }
+    });
+
+    return { created: !isUpdate, updated: isUpdate };
   };
+
+  const {
+    isLoading: isImporting,
+    summary: importSummary,
+    isSummaryDialogOpen,
+    setIsSummaryDialogOpen,
+    handleFileImport,
+  } = useImport({
+    onProcessRow: handleProcessProjectRow,
+  });
 
   return (
     <div className="bg-background p-6 w-full">
@@ -316,9 +306,19 @@ const ProjectList = () => {
                 onClick={() =>
                   document.getElementById("project-file-import")?.click()
                 }
+                disabled={isImporting}
               >
-                <Upload className="h-4 w-4" />
-                Import
+                {isImporting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                    Importing...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" />
+                    Import
+                  </>
+                )}
               </Button>
             </div>
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -642,6 +642,25 @@ const ProjectList = () => {
             </Button>
             <Button onClick={handleEditProject}>Save Changes</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isSummaryDialogOpen} onOpenChange={setIsSummaryDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Import Summary</DialogTitle>
+                <DialogDescription>
+                    The file has been processed. Here is the summary:
+                </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+                <p>Total rows processed: {importSummary.total}</p>
+                <p>Projects created: {importSummary.created}</p>
+                <p>Projects updated: {importSummary.updated}</p>
+                <p>Errors: {importSummary.errors}</p>
+            </div>
+            <DialogFooter>
+                <Button onClick={() => setIsSummaryDialogOpen(false)}>Close</Button>
+            </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

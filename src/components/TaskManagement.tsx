@@ -56,6 +56,7 @@ import {
   type Project,
   type Employee,
 } from "@/lib/supabaseClient";
+import { useImport } from "@/lib/useImport";
 
 type TaskWithRelations = Task & {
   project: Project | null;
@@ -448,100 +449,6 @@ const TaskManagement = () => {
     );
   };
 
-  // Import from Excel
-  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: "array" });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-        // Process imported data and create/update tasks
-        jsonData.forEach(async (row: any) => {
-          if (row["Task Name"]) {
-            try {
-              const repeatsWeekly =
-                row["Repeats Weekly"]?.toLowerCase() === "yes";
-              const repeatDays = repeatsWeekly
-                ? row["Repeat Days"]
-                    ?.split(",")
-                    .map((d: string) => d.trim()) || []
-                : null;
-              const hoursPerDay = repeatsWeekly
-                ? Number(row["Hours per Day"]) || 0
-                : null;
-
-              let projectId = row["Project ID"];
-              if (!projectId && row["Project"]) {
-                const project = projects.find(p => p.name === row["Project"]);
-                if (project) {
-                  projectId = project.id;
-                }
-              }
-
-              let employeeId = row["Assigned To ID"];
-              if (!employeeId && row["Assigned To"]) {
-                const employee = employees.find(e => e.name === row["Assigned To"]);
-                if (employee) {
-                  employeeId = employee.id;
-                }
-              }
-
-              const taskData: any = {
-                name: row["Task Name"],
-                description: row["Description"] || "",
-                estimated_time: Number(row["Estimated Hours"]) || 1,
-                start_date:
-                  row["Start Date"] || new Date().toISOString().split("T")[0],
-                end_date:
-                  row["End Date"] || new Date().toISOString().split("T")[0],
-                project_id: projectId || null,
-                assigned_employee_id: employeeId || null,
-                status: "pending",
-                completion_date: null,
-                repeats_weekly: repeatsWeekly,
-                repeat_days: repeatDays,
-                hours_per_day: hoursPerDay,
-              };
-
-              if (row["Task ID"]) {
-                taskData.id = row["Task ID"];
-              }
-
-              const upsertedTask = await taskService.upsert(taskData);
-
-              setTasks((prev) => {
-                const existingTaskIndex = prev.findIndex(t => t.id === upsertedTask.id);
-                if (existingTaskIndex > -1) {
-                  const newTasks = [...prev];
-                  newTasks[existingTaskIndex] = upsertedTask as TaskWithRelations;
-                  return newTasks;
-                } else {
-                  return [upsertedTask as TaskWithRelations, ...prev];
-                }
-              });
-
-            } catch (error) {
-              console.error("Error importing task:", error);
-            }
-          }
-        });
-
-        alert("Import completed!");
-      } catch (error) {
-        console.error("Error reading file:", error);
-        alert("Error reading file. Please make sure it's a valid Excel file.");
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  };
-
   const clearFilters = () => {
     setFilters({
       project: "all",
@@ -549,6 +456,87 @@ const TaskManagement = () => {
       status: "all",
     });
   };
+
+  const handleProcessTaskRow = async (row: any) => {
+    if (!row["Task Name"]) {
+        throw new Error("Task Name is required");
+    }
+
+    const repeatsWeekly = row["Repeats Weekly"]?.toLowerCase() === "yes";
+    const repeatDays = repeatsWeekly
+        ? row["Repeat Days"]
+            ?.split(",")
+            .map((d: string) => d.trim()) || []
+        : null;
+    const hoursPerDay = repeatsWeekly
+        ? Number(row["Hours per Day"]) || 0
+        : null;
+
+    let projectId = row["Project ID"];
+    if (!projectId && row["Project"]) {
+        const project = projects.find(p => p.name === row["Project"]);
+        if (project) {
+        projectId = project.id;
+        }
+    }
+
+    let employeeId = row["Assigned To ID"];
+    if (!employeeId && row["Assigned To"]) {
+        const employee = employees.find(e => e.name === row["Assigned To"]);
+        if (employee) {
+        employeeId = employee.id;
+        }
+    }
+
+    const taskData: any = {
+        name: row["Task Name"],
+        description: row["Description"] || "",
+        estimated_time: Number(row["Estimated Hours"]) || 1,
+        start_date:
+        row["Start Date"] || new Date().toISOString().split("T")[0],
+        end_date:
+        row["End Date"] || new Date().toISOString().split("T")[0],
+        project_id: projectId || null,
+        assigned_employee_id: employeeId || null,
+        status: "pending",
+        completion_date: null,
+        repeats_weekly: repeatsWeekly,
+        repeat_days: repeatDays,
+        hours_per_day: hoursPerDay,
+    };
+
+    let isUpdate = false;
+    if (row["Task ID"]) {
+        taskData.id = row["Task ID"];
+        isUpdate = tasks.some(t => t.id === taskData.id)
+    }
+
+    const upsertedTask = await taskService.upsert(taskData);
+
+    setTasks((prev) => {
+        const existingTaskIndex = prev.findIndex(t => t.id === upsertedTask.id);
+        if (existingTaskIndex > -1) {
+            const newTasks = [...prev];
+            newTasks[existingTaskIndex] = upsertedTask as TaskWithRelations;
+            return newTasks;
+        } else {
+            return [upsertedTask as TaskWithRelations, ...prev];
+        }
+    });
+
+    return { created: !isUpdate, updated: isUpdate };
+  };
+
+  const {
+    isLoading: isImporting,
+    summary: importSummary,
+    isSummaryDialogOpen,
+    setIsSummaryDialogOpen,
+    handleFileImport,
+  } = useImport({
+    onProcessRow: handleProcessTaskRow,
+  });
+
 
   // Drag and Drop Grid Components
   const DraggableTask = ({ task }: { task: TaskWithRelations }) => {
@@ -877,9 +865,19 @@ const TaskManagement = () => {
               variant="outline"
               className="flex items-center gap-2"
               onClick={() => document.getElementById("file-import")?.click()}
+              disabled={isImporting}
             >
-              <Upload size={16} />
-              Import
+              {isImporting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                  Importing...
+                </>
+              ) : (
+                <>
+                  <Upload size={16} />
+                  Import
+                </>
+              )}
             </Button>
           </div>
           <Dialog
@@ -2129,6 +2127,25 @@ const TaskManagement = () => {
               Fechar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isSummaryDialogOpen} onOpenChange={setIsSummaryDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Import Summary</DialogTitle>
+                <DialogDescription>
+                    The file has been processed. Here is the summary:
+                </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+                <p>Total rows processed: {importSummary.total}</p>
+                <p>Tasks created: {importSummary.created}</p>
+                <p>Tasks updated: {importSummary.updated}</p>
+                <p>Errors: {importSummary.errors}</p>
+            </div>
+            <DialogFooter>
+                <Button onClick={() => setIsSummaryDialogOpen(false)}>Close</Button>
+            </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
