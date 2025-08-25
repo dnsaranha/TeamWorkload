@@ -422,10 +422,13 @@ const TaskManagement = () => {
   // Export to Excel
   const exportToExcel = () => {
     const exportData = filteredTasks.map((task) => ({
+      "Task ID": task.id,
       "Task Name": task.name,
       Description: task.description || "",
+      "Project ID": task.project_id,
       Project: task.project?.name || "No project",
       "Strategic Category": task.project?.categoria_estrategica || "",
+      "Assigned To ID": task.assigned_employee_id,
       "Assigned To": task.assigned_employee?.name || "Unassigned",
       "Estimated Hours": task.estimated_time,
       "Start Date": task.start_date,
@@ -459,7 +462,7 @@ const TaskManagement = () => {
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        // Process imported data and create tasks
+        // Process imported data and create/update tasks
         jsonData.forEach(async (row: any) => {
           if (row["Task Name"]) {
             try {
@@ -474,7 +477,23 @@ const TaskManagement = () => {
                 ? Number(row["Hours per Day"]) || 0
                 : null;
 
-              const taskData = {
+              let projectId = row["Project ID"];
+              if (!projectId && row["Project"]) {
+                const project = projects.find(p => p.name === row["Project"]);
+                if (project) {
+                  projectId = project.id;
+                }
+              }
+
+              let employeeId = row["Assigned To ID"];
+              if (!employeeId && row["Assigned To"]) {
+                const employee = employees.find(e => e.name === row["Assigned To"]);
+                if (employee) {
+                  employeeId = employee.id;
+                }
+              }
+
+              const taskData: any = {
                 name: row["Task Name"],
                 description: row["Description"] || "",
                 estimated_time: Number(row["Estimated Hours"]) || 1,
@@ -482,24 +501,39 @@ const TaskManagement = () => {
                   row["Start Date"] || new Date().toISOString().split("T")[0],
                 end_date:
                   row["End Date"] || new Date().toISOString().split("T")[0],
-                project_id: null, // Note: Project linking from import is not implemented
-                assigned_employee_id: null, // Note: Employee linking from import is not implemented
-                status: "pending" as "pending" | "in_progress" | "completed",
+                project_id: projectId || null,
+                assigned_employee_id: employeeId || null,
+                status: "pending",
                 completion_date: null,
                 repeats_weekly: repeatsWeekly,
                 repeat_days: repeatDays,
                 hours_per_day: hoursPerDay,
               };
 
-              const createdTask = await taskService.create(taskData);
-              setTasks((prev) => [createdTask as TaskWithRelations, ...prev]);
+              if (row["Task ID"]) {
+                taskData.id = row["Task ID"];
+              }
+
+              const upsertedTask = await taskService.upsert(taskData);
+
+              setTasks((prev) => {
+                const existingTaskIndex = prev.findIndex(t => t.id === upsertedTask.id);
+                if (existingTaskIndex > -1) {
+                  const newTasks = [...prev];
+                  newTasks[existingTaskIndex] = upsertedTask as TaskWithRelations;
+                  return newTasks;
+                } else {
+                  return [upsertedTask as TaskWithRelations, ...prev];
+                }
+              });
+
             } catch (error) {
               console.error("Error importing task:", error);
             }
           }
         });
 
-        alert("Import completed! Please refresh to see the new tasks.");
+        alert("Import completed!");
       } catch (error) {
         console.error("Error reading file:", error);
         alert("Error reading file. Please make sure it's a valid Excel file.");

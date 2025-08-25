@@ -200,6 +200,7 @@ const ProjectList = () => {
 
   const exportToExcel = () => {
     const exportData = filteredProjects.map((project) => ({
+      "Project ID": project.id,
       Name: project.name,
       Description: project.description || "",
       "Start Date": project.start_date,
@@ -233,7 +234,7 @@ const ProjectList = () => {
         jsonData.forEach(async (row: any) => {
           if (row["Name"]) {
             try {
-              const projectData = {
+              const projectData: any = {
                 name: row["Name"],
                 description: row["Description"] || "",
                 start_date:
@@ -244,15 +245,30 @@ const ProjectList = () => {
                 special_marker: row["Special Marker"] || null,
               };
 
-              const newProject = await projectService.create(projectData);
-              setProjects((prev) => [...prev, newProject]);
+              if (row["Project ID"]) {
+                projectData.id = row["Project ID"];
+              }
+
+              const upsertedProject = await projectService.upsert(projectData);
+
+              setProjects((prev) => {
+                const existingProjectIndex = prev.findIndex(p => p.id === upsertedProject.id);
+                if (existingProjectIndex > -1) {
+                  const newProjects = [...prev];
+                  newProjects[existingProjectIndex] = upsertedProject;
+                  return newProjects;
+                } else {
+                  return [...prev, upsertedProject];
+                }
+              });
+
             } catch (error) {
               console.error("Error importing project:", error);
             }
           }
         });
 
-        alert("Import completed! Please refresh to see the new projects.");
+        alert("Import completed!");
       } catch (error) {
         console.error("Error reading file:", error);
         alert("Error reading file. Please make sure it's a valid Excel file.");
