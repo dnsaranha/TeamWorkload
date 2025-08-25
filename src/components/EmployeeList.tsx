@@ -237,6 +237,7 @@ const EmployeeList = () => {
 
   const exportToExcel = () => {
     const exportData = filteredEmployees.map((employee) => ({
+      "Employee ID": employee.id,
       Name: employee.name,
       Role: employee.role,
       "Weekly Hours": employee.weekly_hours,
@@ -285,7 +286,7 @@ const EmployeeList = () => {
                     .map((day: string) => day.trim().toLowerCase())
                 : [];
 
-              const employeeData = {
+              const employeeData: any = {
                 name: row["Name"],
                 role: row["Role"] || "",
                 weekly_hours: Number(row["Weekly Hours"]) || 40,
@@ -293,15 +294,30 @@ const EmployeeList = () => {
                 skills: skillsArray,
               };
 
-              const newEmployee = await employeeService.create(employeeData);
-              setEmployees((prev) => [...prev, newEmployee]);
+              if (row["Employee ID"]) {
+                employeeData.id = row["Employee ID"];
+              }
+
+              const upsertedEmployee = await employeeService.upsert(employeeData);
+
+              setEmployees((prev) => {
+                const existingEmployeeIndex = prev.findIndex(e => e.id === upsertedEmployee.id);
+                if (existingEmployeeIndex > -1) {
+                  const newEmployees = [...prev];
+                  newEmployees[existingEmployeeIndex] = upsertedEmployee;
+                  return newEmployees;
+                } else {
+                  return [...prev, upsertedEmployee];
+                }
+              });
+
             } catch (error) {
               console.error("Error importing employee:", error);
             }
           }
         });
 
-        alert("Import completed! Please refresh to see the new employees.");
+        alert("Import completed!");
       } catch (error) {
         console.error("Error reading file:", error);
         alert("Error reading file. Please make sure it's a valid Excel file.");
