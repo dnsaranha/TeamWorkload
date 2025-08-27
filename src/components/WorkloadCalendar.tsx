@@ -9,13 +9,37 @@ import {
   Repeat,
   Search,
 } from "lucide-react";
-import { supabase } from "../lib/supabaseClient";
 import {
+  supabase,
+  taskService,
   type Task,
   type Employee,
   type Project,
 } from "@/lib/supabaseClient";
 import { Input } from "./ui/input";
+import { useDrop } from "react-dnd";
+import { ItemTypes, type DragItem } from "./DraggableTask";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { format } from "date-fns";
+import { EditTaskDialog } from "./EditTaskDialog";
+import { CreateTaskDialog } from "./CreateTaskDialog";
+import { Button } from "./ui/button";
+import { Plus } from "lucide-react";
 
 const dayNumberToName: { [key: number]: string } = {
   0: "sunday",
@@ -45,6 +69,49 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"weekly" | "monthly">(viewMode);
   const [searchTerm, setSearchTerm] = useState("");
+  const [expandedDate, setExpandedDate] = useState<Date | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+
+  const handleDeleteTask = async () => {
+    if (!taskToDelete) return;
+    try {
+      await taskService.delete(taskToDelete.id);
+      setTaskToDelete(null);
+      await loadData();
+      if (expandedDate && getTasksForDate(expandedDate).length <= 1) {
+        setExpandedDate(null);
+      }
+    } catch (error) {
+      console.error("Error deleting task:", error);
+      alert("Failed to delete task.");
+    }
+  };
+
+  const handleDayClick = (date: Date) => {
+    if (getTasksForDate(date).length > 0) {
+      setExpandedDate(date);
+    }
+  };
+
+  const handleDeallocateTask = async (taskId: string) => {
+    try {
+      await taskService.update(taskId, {
+        assigned_employee_id: null,
+      });
+      await loadData();
+      if (expandedDate) {
+        // Close dialog if no tasks are left
+        if (getTasksForDate(expandedDate).length <= 1) {
+          setExpandedDate(null);
+        }
+      }
+    } catch (error) {
+      console.error("Error de-allocating task:", error);
+      alert("Failed to de-allocate task.");
+    }
+  };
 
   const selectedEmployee = useMemo(() => {
     if (!selectedEmployeeId) return null;
@@ -63,6 +130,31 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
       console.error("Error loading calendar data:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDropTask = async (
+    task: Task,
+    employeeId: string | undefined,
+    date: Date,
+  ) => {
+    if (!employeeId) {
+      alert("Please select an employee to assign the task.");
+      return;
+    }
+
+    const dateStr = date.toISOString().split("T")[0];
+
+    try {
+      await taskService.update(task.id, {
+        assigned_employee_id: employeeId,
+        start_date: dateStr,
+        end_date: dateStr,
+      });
+      await loadData();
+    } catch (error) {
+      console.error("Error assigning task:", error);
+      alert("Failed to assign task.");
     }
   };
 
@@ -383,6 +475,40 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     return projects.find((proj) => proj.id === projectId);
   };
 
+  const getTaskHoursForDay = (task: Task, date: Date): number => {
+    if ((task as any).is_recurring_instance) {
+      return task.hours_per_day || 0;
+    }
+
+    const startDate = new Date(task.start_date + "T00:00:00Z");
+    const endDate = new Date(task.end_date + "T00:00:00Z");
+
+    let workingDays = 0;
+    const tempDate = new Date(startDate.valueOf());
+    const taskEmployee = employees.find(
+      (emp) => emp.id === task.assigned_employee_id,
+    );
+
+    const employeeWorkDays = taskEmployee?.dias_de_trabalho || [
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+    ];
+
+    while (tempDate <= endDate) {
+      const currentDayName = dayNumberToName[tempDate.getUTCDay()];
+      if (employeeWorkDays.includes(currentDayName)) {
+        workingDays++;
+      }
+      tempDate.setUTCDate(tempDate.getUTCDate() + 1);
+    }
+
+    const daysDiff = Math.max(1, workingDays);
+    return task.estimated_time / daysDiff;
+  };
+
   const dates =
     view === "weekly" ? getWeekDates(currentDate) : getMonthDates(currentDate);
 
@@ -406,6 +532,10 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
               <Calendar className="h-5 w-5 mr-2" />
               Workload Calendar
             </h2>
+            <Button onClick={() => setIsCreateTaskOpen(true)} className="ml-4">
+              <Plus className="h-4 w-4 mr-2" />
+              Create Task
+            </Button>
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => setView("weekly")}
@@ -518,94 +648,216 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
               date.toDateString() === new Date().toDateString();
 
             return (
-              <div
+              <DayCell
                 key={index}
-                className={`min-h-[120px] p-2 border border-gray-200 rounded-lg ${
-                  isCurrentMonth ? "bg-white" : "bg-gray-50"
-                } ${
-                  !isWorkDay && selectedEmployeeId ? "bg-gray-100" : ""
-                } ${isToday ? "ring-2 ring-blue-500" : ""}`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span
-                    className={`text-sm font-medium ${
-                      isCurrentMonth ? "text-gray-900" : "text-gray-400"
-                    } ${
-                      !isWorkDay && selectedEmployeeId ? "text-gray-400" : ""
-                    }`}
-                  >
-                    {date.getDate()}
-                  </span>
-                  {isWorkDay && workload.percentage > 0 && (
-                    <span
-                      className={`text-xs px-2 py-1 rounded-full font-semibold ${getWorkloadColor(
-                        workload.percentage,
-                      )}`}
-                    >
-                      {Math.round(workload.percentage)}%
-                    </span>
-                  )}
-                </div>
-
-                <div className="space-y-1">
-                  {isWorkDay &&
-                    dayTasks.slice(0, 3).map((task) => {
-                      const employee = getEmployee(task.assigned_employee_id);
-                      const project = getProject(task.project_id);
-
-                      return (
-                        <div
-                          key={task.id}
-                          className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate"
-                          title={`${task.name} - ${employee?.name} (${project?.name})`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="font-medium text-blue-900 truncate">
-                              {task.name}
-                            </div>
-                            {task.is_recurring_instance && (
-                              <Repeat
-                                className="h-3 w-3 text-blue-400 flex-shrink-0"
-                                aria-label="Recurring task"
-                              />
-                            )}
-                          </div>
-                          {!selectedEmployeeId && employee && (
-                            <div className="text-blue-600 truncate">
-                              {employee.name}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-
-                  {isWorkDay && dayTasks.length > 3 && (
-                    <div className="text-xs text-gray-500 text-center">
-                      +{dayTasks.length - 3} more
-                    </div>
-                  )}
-                </div>
-
-                {isWorkDay && workload.hours > 0 && (
-                  <div className="mt-2 text-xs text-gray-600">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <Clock className="h-3 w-3 mr-1" />
-                        {workload.hours.toFixed(1)}h
-                      </div>
-                      {workload.capacity > 0 && (
-                        <div className="text-xs text-gray-500">
-                          /{workload.capacity.toFixed(1)}h
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+                date={date}
+                isCurrentMonth={isCurrentMonth}
+                isToday={isToday}
+                isWorkDay={isWorkDay}
+                workload={workload}
+                dayTasks={dayTasks}
+                selectedEmployeeId={selectedEmployeeId}
+                getEmployee={getEmployee}
+                getProject={getProject}
+                onDropTask={handleDropTask}
+                getWorkloadColor={getWorkloadColor}
+                onDayClick={handleDayClick}
+              />
             );
           })}
         </div>
       </div>
+      {expandedDate && (
+        <Dialog open={!!expandedDate} onOpenChange={() => setExpandedDate(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Tasks for {format(expandedDate, "PPP")}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              {getTasksForDate(expandedDate).map((task) => (
+                <div key={task.id} className="flex items-center justify-between p-2 rounded-lg bg-gray-50">
+                  <div>
+                    <div className="font-medium">{task.name}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {getTaskHoursForDay(task, expandedDate).toFixed(1)} hours
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setEditingTask(task)}>Edit</Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleDeallocateTask(task.id)}>
+                      De-allocate
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => setTaskToDelete(task)}>
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+      {editingTask && (
+        <EditTaskDialog
+          isOpen={!!editingTask}
+          onOpenChange={(isOpen) => !isOpen && setEditingTask(null)}
+          task={editingTask}
+          projects={projects}
+          employees={employees}
+          onTaskUpdated={() => {
+            setEditingTask(null);
+            loadData();
+          }}
+        />
+      )}
+      {taskToDelete && (
+        <AlertDialog open={!!taskToDelete} onOpenChange={(isOpen) => !isOpen && setTaskToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete the task "{taskToDelete.name}".
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteTask}>Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+      <CreateTaskDialog
+        isOpen={isCreateTaskOpen}
+        onOpenChange={setIsCreateTaskOpen}
+        projects={projects}
+        employees={employees}
+        onTaskCreated={() => {
+          setIsCreateTaskOpen(false);
+          loadData();
+        }}
+      />
+    </div>
+  );
+};
+
+const DayCell = (props: any) => {
+  const {
+    date,
+    isCurrentMonth,
+    isToday,
+    isWorkDay,
+    workload,
+    dayTasks,
+    selectedEmployeeId,
+    getEmployee,
+    getProject,
+    onDropTask,
+    getWorkloadColor,
+    onDayClick,
+  } = props;
+
+  const [{ isOver, canDrop }, drop] = useDrop(
+    () => ({
+      accept: ItemTypes.TASK,
+      drop: (item: DragItem) => onDropTask(item.task, selectedEmployeeId, date),
+      canDrop: () => isWorkDay && !!selectedEmployeeId,
+      collect: (monitor) => ({
+        isOver: monitor.isOver(),
+        canDrop: monitor.canDrop(),
+      }),
+    }),
+    [date, selectedEmployeeId, isWorkDay],
+  );
+
+  const isActive = isOver && canDrop;
+  let dropzoneBgClass = "";
+  if (isActive) {
+    dropzoneBgClass = "bg-blue-100 ring-2 ring-blue-400";
+  } else if (canDrop) {
+    dropzoneBgClass = "bg-green-50";
+  }
+
+  return (
+    <div
+      ref={drop}
+      onClick={() => onDayClick(date)}
+      className={`min-h-[120px] p-2 border border-gray-200 rounded-lg transition-colors cursor-pointer ${
+        isCurrentMonth ? "bg-white" : "bg-gray-50"
+      } ${
+        !isWorkDay && selectedEmployeeId ? "bg-gray-100" : ""
+      } ${isToday ? "ring-2 ring-blue-500" : ""} ${dropzoneBgClass}`}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span
+          className={`text-sm font-medium ${
+            isCurrentMonth ? "text-gray-900" : "text-gray-400"
+          } ${!isWorkDay && selectedEmployeeId ? "text-gray-400" : ""}`}
+        >
+          {date.getDate()}
+        </span>
+        {isWorkDay && workload.percentage > 0 && (
+          <span
+            className={`text-xs px-2 py-1 rounded-full font-semibold ${getWorkloadColor(
+              workload.percentage,
+            )}`}
+          >
+            {Math.round(workload.percentage)}%
+          </span>
+        )}
+      </div>
+
+      <div className="space-y-1">
+        {isWorkDay &&
+          dayTasks.slice(0, 3).map((task: any) => {
+            const employee = getEmployee(task.assigned_employee_id);
+            const project = getProject(task.project_id);
+
+            return (
+              <div
+                key={task.id}
+                className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate"
+                title={`${task.name} - ${employee?.name} (${project?.name})`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="font-medium text-blue-900 truncate">
+                    {task.name}
+                  </div>
+                  {task.is_recurring_instance && (
+                    <Repeat
+                      className="h-3 w-3 text-blue-400 flex-shrink-0"
+                      aria-label="Recurring task"
+                    />
+                  )}
+                </div>
+                {!selectedEmployeeId && employee && (
+                  <div className="text-blue-600 truncate">{employee.name}</div>
+                )}
+              </div>
+            );
+          })}
+
+        {isWorkDay && dayTasks.length > 3 && (
+          <div className="text-xs text-gray-500 text-center">
+            +{dayTasks.length - 3} more
+          </div>
+        )}
+      </div>
+
+      {isWorkDay && workload.hours > 0 && (
+        <div className="mt-2 text-xs text-gray-600">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <Clock className="h-3 w-3 mr-1" />
+              {workload.hours.toFixed(1)}h
+            </div>
+            {workload.capacity > 0 && (
+              <div className="text-xs text-gray-500">
+                /{workload.capacity.toFixed(1)}h
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
