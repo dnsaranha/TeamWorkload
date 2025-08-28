@@ -670,33 +670,35 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
       </div>
       {expandedDate && (
         <Dialog open={!!expandedDate} onOpenChange={() => setExpandedDate(null)}>
-          <DialogContent>
+          <DialogContent className="h-[500px] flex flex-col">
             <DialogHeader>
               <DialogTitle>Tasks for {format(expandedDate, "PPP")}</DialogTitle>
             </DialogHeader>
-            <ScrollArea className="max-h-96">
-              <div className="space-y-4 pr-4">
-                {getTasksForDate(expandedDate).map((task) => (
-                  <div key={task.id} className="flex items-center justify-between p-2 rounded-lg bg-gray-50">
-                    <div>
-                      <div className="font-medium">{task.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {getTaskHoursForDay(task, expandedDate).toFixed(1)} hours
+            <div className="flex-grow overflow-auto">
+              <ScrollArea className="h-full">
+                <div className="space-y-4 pr-4">
+                  {getTasksForDate(expandedDate).map((task) => (
+                    <div key={task.id} className="flex items-center justify-between p-2 rounded-lg bg-gray-50">
+                      <div>
+                        <div className="font-medium">{task.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {getTaskHoursForDay(task, expandedDate).toFixed(1)} hours
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setEditingTask(task)}>Edit</Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeallocateTask(task.id)}>
+                          De-allocate
+                        </Button>
+                        <Button variant="destructive" size="sm" onClick={() => setTaskToDelete(task)}>
+                          Delete
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setEditingTask(task)}>Edit</Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeallocateTask(task.id)}>
-                        De-allocate
-                      </Button>
-                      <Button variant="destructive" size="sm" onClick={() => setTaskToDelete(task)}>
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
           </DialogContent>
         </Dialog>
       )}

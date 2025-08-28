@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import WorkloadCalendar from "./WorkloadCalendar";
 import EmployeeList from "./EmployeeList";
-import TaskManagement from "./TaskManagement";
+import TaskGrid from "./TaskGrid";
 import WorkloadSummary from "./WorkloadSummary";
 import ProjectVisualization from "./ProjectVisualization";
 import ProjectList from "./ProjectList";
@@ -355,7 +355,7 @@ const HomePage = () => {
           {activeTab === "tasks" && (
             <div>
               <h2 className="text-3xl font-bold mb-6">Task Management</h2>
-              <TaskManagement />
+              <TaskGrid />
             </div>
           )}
 
