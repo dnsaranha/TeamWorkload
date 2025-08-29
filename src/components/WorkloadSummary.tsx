@@ -37,7 +37,6 @@ import {
   type Employee,
   type Project,
 } from "@/lib/supabaseClient";
-import UnallocatedTasks from "./UnallocatedTasks";
 
 type TaskWithRelations = Task & {
   project: Project | null;
@@ -379,11 +378,10 @@ const WorkloadSummary = ({
         </div>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList
-            className={`grid w-full ${showCharts ? "grid-cols-4" : "grid-cols-3"}`}
+            className={`grid w-full ${showCharts ? "grid-cols-3" : "grid-cols-2"}`}
           >
             <TabsTrigger value="employees">Employees</TabsTrigger>
             <TabsTrigger value="projects">Projects</TabsTrigger>
-            <TabsTrigger value="unallocated">Unallocated</TabsTrigger>
             {showCharts && <TabsTrigger value="charts">Charts</TabsTrigger>}
           </TabsList>
         </Tabs>
@@ -521,10 +519,6 @@ const WorkloadSummary = ({
                   ))
                 )}
               </div>
-            </TabsContent>
-
-            <TabsContent value="unallocated" className="mt-0">
-              <UnallocatedTasks />
             </TabsContent>
 
             {showCharts && (

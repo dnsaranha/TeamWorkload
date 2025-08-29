@@ -15,14 +15,12 @@ import {
 } from "lucide-react";
 import WorkloadCalendar from "./WorkloadCalendar";
 import EmployeeList from "./EmployeeList";
-import TaskGrid from "./TaskGrid";
+import TaskManagement from "./TaskManagement";
 import WorkloadSummary from "./WorkloadSummary";
 import ProjectVisualization from "./ProjectVisualization";
 import ProjectList from "./ProjectList";
 import UserProfile from "./UserProfile";
 import Roadmap from "./Roadmap";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import {
   employeeService,
   taskService,
@@ -329,19 +327,17 @@ const HomePage = () => {
                 </Card>
               </div>
 
-              <DndProvider backend={HTML5Backend}>
-                <div className="flex gap-6 h-[calc(100vh-280px)]">
-                  <div className="flex-1">
-                    <WorkloadCalendar selectedEmployeeId={selectedEmployeeId} />
-                  </div>
-                  <div className="w-80">
-                    <WorkloadSummary
-                      selectedEmployeeId={selectedEmployeeId}
-                      onEmployeeSelect={setSelectedEmployeeId}
-                    />
-                  </div>
+              <div className="flex gap-6 h-[calc(100vh-280px)]">
+                <div className="flex-1">
+                  <WorkloadCalendar selectedEmployeeId={selectedEmployeeId} />
                 </div>
-              </DndProvider>
+                <div className="w-80">
+                  <WorkloadSummary
+                    selectedEmployeeId={selectedEmployeeId}
+                    onEmployeeSelect={setSelectedEmployeeId}
+                  />
+                </div>
+              </div>
             </div>
           )}
 
@@ -355,7 +351,7 @@ const HomePage = () => {
           {activeTab === "tasks" && (
             <div>
               <h2 className="text-3xl font-bold mb-6">Task Management</h2>
-              <TaskGrid />
+              <TaskManagement />
             </div>
           )}
 
