@@ -126,6 +126,7 @@ const WorkloadView = () => {
               projects={projects}
               selectedEmployeeId={selectedEmployeeId}
               onWeekClick={handleWeekClick}
+                onTaskDrop={handleTaskDrop}
             />
           ) : (
             detailedWeekStart && (

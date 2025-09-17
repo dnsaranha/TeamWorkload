@@ -7,6 +7,8 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Edit, Save } from 'lucide-react';
+import { ScrollArea } from './ui/scroll-area';
+import { calculateDayWorkload } from '@/lib/workloadUtils';
 
 interface DetailedWeekViewProps {
   tasks: Task[];
@@ -28,48 +30,58 @@ const DetailedWeekView: React.FC<DetailedWeekViewProps> = ({
   onGoBack,
 }) => {
   return (
-    <div className="p-4 bg-white rounded-lg shadow-sm border border-gray-200">
-      <div className="flex justify-between items-center mb-4">
+    <div className="p-4 bg-white rounded-lg shadow-sm border border-gray-200 h-full flex flex-col">
+      <div className="flex justify-between items-center mb-4 flex-shrink-0">
         <h2 className="text-xl font-semibold">Detailed Week View</h2>
         <button onClick={onGoBack} className="text-blue-600 hover:underline">
           &larr; Back to Summary
         </button>
       </div>
-      <div className="grid" style={{ gridTemplateColumns: `150px repeat(7, 1fr)` }}>
-        {/* Header */}
-        <div className="font-semibold p-2 border-b border-r">Employee</div>
-        {weekDates.map(date => (
-          <div key={date.toISOString()} className="font-semibold p-2 text-center border-b">
-            <div>{format(date, 'EEE')}</div>
-            <div className="text-xs text-gray-500">{format(date, 'dd/MM')}</div>
-          </div>
-        ))}
-
-        {/* Body */}
-        {employees.map(employee => (
-          <React.Fragment key={employee.id}>
-            <div className="p-2 border-r flex items-center bg-gray-50">
-              <div className="font-medium">{employee.name}</div>
+      <ScrollArea className="flex-grow">
+        <div className="grid" style={{ gridTemplateColumns: `150px repeat(7, 1fr)` }}>
+          {/* Header */}
+          <div className="font-semibold p-2 border-b border-r sticky top-0 bg-white z-10">Employee</div>
+          {weekDates.map(date => (
+            <div key={date.toISOString()} className="font-semibold p-2 text-center border-b sticky top-0 bg-white z-10">
+              <div>{format(date, 'EEE')}</div>
+              <div className="text-xs text-gray-500">{format(date, 'dd/MM')}</div>
             </div>
-            {weekDates.map(date => (
-              <DroppableCell
-                key={date.toISOString()}
-                date={date}
-                employee={employee}
-                tasks={tasks}
-                projects={projects}
-                onTaskDrop={onTaskDrop}
-                onTaskUpdate={onTaskUpdate}
-              />
-            ))}
-          </React.Fragment>
-        ))}
-      </div>
+          ))}
+
+          {/* Body */}
+          {employees.map(employee => (
+            <React.Fragment key={employee.id}>
+              <div className="p-2 border-r flex items-center bg-gray-50 sticky left-0">
+                <div className="font-medium">{employee.name}</div>
+              </div>
+              {weekDates.map(date => (
+                <DroppableCell
+                  key={date.toISOString()}
+                  date={date}
+                  employee={employee}
+                  tasks={tasks}
+                  projects={projects}
+                allEmployees={employees}
+                  onTaskDrop={onTaskDrop}
+                  onTaskUpdate={onTaskUpdate}
+                />
+              ))}
+            </React.Fragment>
+          ))}
+        </div>
+      </ScrollArea>
     </div>
   );
 };
 
-const DroppableCell = ({ date, employee, tasks, onTaskDrop, onTaskUpdate, projects }: { date: Date; employee: Employee; tasks: Task[]; onTaskDrop: DetailedWeekViewProps['onTaskDrop'], onTaskUpdate: DetailedWeekViewProps['onTaskUpdate'], projects: Project[] }) => {
+const getWorkloadColor = (percentage: number) => {
+  if (percentage > 100) return "bg-red-100";
+  if (percentage >= 50) return "bg-yellow-100";
+  if (percentage > 0) return "bg-green-100";
+  return "bg-white";
+};
+
+const DroppableCell = ({ date, employee, tasks, onTaskDrop, onTaskUpdate, projects, allEmployees }: { date: Date; employee: Employee; tasks: Task[]; onTaskDrop: DetailedWeekViewProps['onTaskDrop'], onTaskUpdate: DetailedWeekViewProps['onTaskUpdate'], projects: Project[], allEmployees: Employee[] }) => {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const dateString = date.toISOString().split('T')[0];
@@ -78,6 +90,8 @@ const DroppableCell = ({ date, employee, tasks, onTaskDrop, onTaskUpdate, projec
     task.start_date <= dateString &&
     task.end_date >= dateString
   );
+
+  const workload = calculateDayWorkload(date, tasks, allEmployees, employee.id);
 
   const [{ isOver }, drop] = useDrop(() => ({
     accept: 'task',
@@ -113,8 +127,9 @@ const DroppableCell = ({ date, employee, tasks, onTaskDrop, onTaskUpdate, projec
   return (
     <div
       ref={drop}
-      className={`p-2 border-b min-h-[100px] transition-colors ${isOver ? 'bg-blue-50' : ''}`}
+      className={`p-1 border-b min-h-[100px] transition-colors ${isOver ? 'bg-blue-50' : getWorkloadColor(workload.percentage)}`}
     >
+      <div className="text-xs text-gray-500 text-right">{workload.hours.toFixed(1)}h ({Math.round(workload.percentage)}%)</div>
       {cellTasks.map(task => (
         editingTask?.id === task.id ? (
           <div key={task.id} className="p-2 bg-white rounded border border-blue-500">

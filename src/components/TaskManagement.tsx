@@ -431,8 +431,8 @@ const TaskManagement = () => {
       "Assigned To ID": task.assigned_employee_id,
       "Assigned To": task.assigned_employee?.name || "Unassigned",
       "Estimated Hours": task.estimated_time,
-      "Start Date": task.start_date,
-      "End Date": task.end_date,
+      "Start Date": format(new Date(task.start_date), "dd/MM/yyyy"),
+      "End Date": format(new Date(task.end_date), "dd/MM/yyyy"),
       "Repeats Weekly": task.repeats_weekly ? "Yes" : "No",
       "Repeat Days": task.repeat_days?.join(", ") || "",
       "Hours per Day": task.hours_per_day || "",
@@ -449,6 +449,17 @@ const TaskManagement = () => {
   };
 
   // Import from Excel
+  const parseDate = (dateString: string) => {
+    if (!dateString || typeof dateString !== 'string') return new Date().toISOString().split("T")[0];
+    const parts = dateString.split('/');
+    if (parts.length === 3) {
+      // Re-arrange from dd/MM/yyyy to yyyy-MM-dd for reliable parsing
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    // If it's not in dd/MM/yyyy format, try to parse it directly (e.g., yyyy-MM-dd)
+    return dateString;
+  };
+
   const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -497,10 +508,8 @@ const TaskManagement = () => {
                 name: row["Task Name"],
                 description: row["Description"] || "",
                 estimated_time: Number(row["Estimated Hours"]) || 1,
-                start_date:
-                  row["Start Date"] || new Date().toISOString().split("T")[0],
-                end_date:
-                  row["End Date"] || new Date().toISOString().split("T")[0],
+                start_date: parseDate(row["Start Date"]),
+                end_date: parseDate(row["End Date"]),
                 project_id: projectId || null,
                 assigned_employee_id: employeeId || null,
                 status: "pending",

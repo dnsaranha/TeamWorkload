@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -9,22 +9,14 @@ import {
   Repeat,
   Search,
 } from "lucide-react";
+import { useDrop } from "react-dnd";
 import {
   type Task,
   type Employee,
   type Project,
 } from "@/lib/supabaseClient";
 import { Input } from "./ui/input";
-
-const dayNumberToName: { [key: number]: string } = {
-  0: "sunday",
-  1: "monday",
-  2: "tuesday",
-  3: "wednesday",
-  4: "thursday",
-  5: "friday",
-  6: "saturday",
-};
+import { calculateDayWorkload, getTasksForDate } from "@/lib/workloadUtils";
 
 interface WorkloadCalendarProps {
   tasks: (Task & { is_recurring_instance?: boolean })[];
@@ -33,6 +25,7 @@ interface WorkloadCalendarProps {
   selectedEmployeeId?: string;
   viewMode?: "weekly" | "monthly";
   onWeekClick?: (weekStartDate: Date) => void;
+  onTaskDrop: (taskId: string, employeeId: string, date: string) => void;
 }
 
 const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
@@ -42,6 +35,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   selectedEmployeeId,
   viewMode = "weekly",
   onWeekClick,
+  onTaskDrop,
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<"weekly" | "monthly">(viewMode);
@@ -81,9 +75,8 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     const year = date.getUTCFullYear();
     const month = date.getUTCMonth();
     const dayOfMonth = date.getUTCDate();
-    const dayOfWeek = date.getUTCDay(); // 0 for Sunday, 1 for Monday, etc.
+    const dayOfWeek = date.getUTCDay();
 
-    // Find the date of the Sunday for the current week
     const sundayDate = new Date(Date.UTC(year, month, dayOfMonth - dayOfWeek));
 
     for (let i = 0; i < 7; i++) {
@@ -97,185 +90,19 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   const getMonthDates = (date: Date) => {
     const year = date.getUTCFullYear();
     const month = date.getUTCMonth();
-
-    // First day of the month in UTC
     const firstDay = new Date(Date.UTC(year, month, 1));
-    // Last day of the month in UTC
     const lastDay = new Date(Date.UTC(year, month + 1, 0));
-
-    // Find the Sunday of the week where the month starts
     const startDate = new Date(firstDay.valueOf());
     startDate.setUTCDate(startDate.getUTCDate() - firstDay.getUTCDay());
-
-    // Find the Saturday of the week where the month ends
     const endDate = new Date(lastDay.valueOf());
     endDate.setUTCDate(endDate.getUTCDate() + (6 - lastDay.getUTCDay()));
-
     const dates = [];
-    const current = new Date(startDate.valueOf());
-
+    let current = new Date(startDate.valueOf());
     while (current <= endDate) {
       dates.push(new Date(current.valueOf()));
       current.setUTCDate(current.getUTCDate() + 1);
     }
-
     return dates;
-  };
-
-  const getTasksForDate = (
-    date: Date,
-  ): (Task & { is_recurring_instance?: boolean })[] => {
-    const dayOfWeekName = dayNumberToName[date.getUTCDay()];
-
-    // If a specific employee is selected, check if it's a working day for them.
-    // If not, no tasks should be shown for this day.
-    if (selectedEmployee) {
-      const workDays = selectedEmployee.dias_de_trabalho || [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-      ];
-      if (!workDays.includes(dayOfWeekName)) {
-        return []; // Return empty array for non-working days
-      }
-    }
-
-    const dayTasks: (Task & { is_recurring_instance?: boolean })[] = [];
-    const dateStr = date.toISOString().split("T")[0];
-
-    filteredTasks.forEach((task) => {
-      // FIX: Parse all dates as UTC to ensure correct comparison
-      const taskStart = new Date(task.start_date + "T00:00:00Z");
-      const taskEnd = new Date(task.end_date + "T00:00:00Z");
-
-      if (task.repeats_weekly && task.repeat_days && dayOfWeekName) {
-        if (
-          date >= taskStart &&
-          date <= taskEnd &&
-          task.repeat_days.includes(dayOfWeekName)
-        ) {
-          dayTasks.push({
-            ...task,
-            id: `${task.id}-${dateStr}`,
-            start_date: dateStr,
-            end_date: dateStr,
-            estimated_time: task.hours_per_day || 0,
-            is_recurring_instance: true,
-          });
-        }
-      } else {
-        if (date >= taskStart && date <= taskEnd) {
-          dayTasks.push(task);
-        }
-      }
-    });
-
-    return dayTasks;
-  };
-
-  const calculateDayWorkload = (date: Date, employeeId?: string) => {
-    const dayTasks = getTasksForDate(date);
-    const filteredTasksByEmployee = employeeId
-      ? dayTasks.filter((task) => task.assigned_employee_id === employeeId)
-      : dayTasks;
-
-    const dayOfWeekName = dayNumberToName[date.getUTCDay()];
-
-    // For single employee view, if it's not a workday, they have 0 capacity.
-    if (employeeId) {
-      const employee = employees.find((emp) => emp.id === employeeId);
-      // Default to Mon-Fri if dias_de_trabalho is not set.
-      const workDays = employee?.dias_de_trabalho || [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-      ];
-      const isWorkDay = workDays.includes(dayOfWeekName);
-
-      if (!isWorkDay) {
-        return { hours: 0, percentage: 0, capacity: 0 };
-      }
-    }
-
-    const totalHours = filteredTasksByEmployee.reduce((sum, task) => {
-      if (task.is_recurring_instance) {
-        return sum + task.estimated_time;
-      }
-
-      const startDate = new Date(task.start_date + "T00:00:00Z");
-      const endDate = new Date(task.end_date + "T00:00:00Z");
-
-      let workingDays = 0;
-      const tempDate = new Date(startDate.valueOf());
-      const taskEmployee = employees.find(
-        (emp) => emp.id === task.assigned_employee_id,
-      );
-
-      // Default to Mon-Fri if not specified
-      const employeeWorkDays = taskEmployee?.dias_de_trabalho || [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-      ];
-
-      while (tempDate <= endDate) {
-        const currentDayName = dayNumberToName[tempDate.getUTCDay()];
-        if (employeeWorkDays.includes(currentDayName)) {
-          workingDays++;
-        }
-        tempDate.setUTCDate(tempDate.getUTCDate() + 1);
-      }
-
-      const daysDiff = Math.max(1, workingDays);
-      return sum + task.estimated_time / daysDiff;
-    }, 0);
-
-    if (employeeId) {
-      const employee = employees.find((emp) => emp.id === employeeId);
-      const numWorkDays = employee?.dias_de_trabalho?.length || 5;
-      const dailyCapacity =
-        employee && numWorkDays > 0 ? employee.weekly_hours / numWorkDays : 0;
-
-      return {
-        hours: totalHours,
-        percentage:
-          dailyCapacity > 0 ? (totalHours / dailyCapacity) * 100 : 0,
-        capacity: dailyCapacity,
-      };
-    }
-
-    // For all employees view, calculate average workload
-    const totalCapacity = employees.reduce((sum, emp) => {
-      const workDays = emp.dias_de_trabalho || [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-      ];
-      const isWorkDay = workDays.includes(dayOfWeekName);
-
-      if (!isWorkDay) {
-        return sum;
-      }
-
-      const numWorkDays = workDays.length || 5;
-      const dailyCapacity =
-        numWorkDays > 0 ? emp.weekly_hours / numWorkDays : 0;
-      return sum + dailyCapacity;
-    }, 0);
-
-    return {
-      hours: totalHours,
-      percentage: totalCapacity > 0 ? (totalHours / totalCapacity) * 100 : 0,
-      capacity: totalCapacity,
-    };
   };
 
   const getWorkloadColor = (percentage: number) => {
@@ -318,7 +145,6 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-      {/* Header */}
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-4">
@@ -349,7 +175,6 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
               </button>
             </div>
           </div>
-
           <div className="flex items-center space-x-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -384,8 +209,6 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
             </button>
           </div>
         </div>
-
-        {/* Legend */}
         <div className="flex items-center space-x-6 text-sm">
           <div className="flex items-center space-x-2">
             <div className="w-3 h-3 bg-green-100 border border-green-300 rounded"></div>
@@ -401,11 +224,8 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
           </div>
         </div>
       </div>
-
-      {/* Calendar Grid */}
       <div className="p-6">
         <div className="grid grid-cols-7 gap-2">
-          {/* Day Headers */}
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
             <div
               key={day}
@@ -414,8 +234,6 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
               {day}
             </div>
           ))}
-
-          {/* Calendar Days */}
           {Array.from({ length: dates.length / 7 }).map((_, weekIndex) => (
             <div
               key={weekIndex}
@@ -423,40 +241,44 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
               onClick={() => onWeekClick && onWeekClick(dates[weekIndex * 7])}
             >
               {dates.slice(weekIndex * 7, weekIndex * 7 + 7).map((date, dayIndex) => {
-                const dayOfWeekName = dayNumberToName[date.getUTCDay()];
-                let isWorkDay = true;
-                if (selectedEmployee) {
-                  const workDays = selectedEmployee.dias_de_trabalho || [
-                    "monday", "tuesday", "wednesday", "thursday", "friday",
-                  ];
-                  isWorkDay = workDays.includes(dayOfWeekName);
-                }
-
-                const dayTasks = getTasksForDate(date);
-                const workload = calculateDayWorkload(date, selectedEmployeeId);
+                const dayTasks = getTasksForDate(date, filteredTasks, selectedEmployee);
+                const workload = calculateDayWorkload(date, filteredTasks, employees, selectedEmployeeId);
                 const isCurrentMonth = date.getUTCMonth() === currentDate.getUTCMonth();
                 const isToday = date.toDateString() === new Date().toDateString();
 
+                const [{ isOver, canDrop }, drop] = useDrop(() => ({
+                  accept: "task",
+                  drop: (item: { task: Task }) => {
+                    if (selectedEmployeeId) {
+                      onTaskDrop(item.task.id, selectedEmployeeId, date.toISOString().split("T")[0]);
+                    }
+                  },
+                  canDrop: () => !!selectedEmployeeId,
+                  collect: (monitor) => ({
+                    isOver: monitor.isOver(),
+                    canDrop: monitor.canDrop(),
+                  }),
+                }), [selectedEmployeeId, date, onTaskDrop]);
+
                 return (
                   <div
+                    ref={drop}
                     key={dayIndex}
                     className={`min-h-[120px] p-2 border rounded-lg cursor-pointer hover:bg-gray-100 transition-colors ${
                       isCurrentMonth ? "bg-white" : "bg-gray-50"
                     } ${
-                      !isWorkDay && selectedEmployeeId ? "bg-gray-100" : ""
-                    } ${isToday ? "ring-2 ring-blue-500" : ""}`}
+                      !selectedEmployee ? "cursor-default hover:bg-transparent" : ""
+                    } ${isToday ? "ring-2 ring-blue-500" : ""} ${isOver && canDrop ? 'bg-blue-100' : ''}`}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <span
                         className={`text-sm font-medium ${
                           isCurrentMonth ? "text-gray-900" : "text-gray-400"
-                        } ${
-                          !isWorkDay && selectedEmployeeId ? "text-gray-400" : ""
                         }`}
                       >
                         {date.getDate()}
                       </span>
-                      {isWorkDay && workload.percentage > 0 && (
+                      {workload.percentage > 0 && (
                         <span
                           className={`text-xs px-2 py-1 rounded-full font-semibold ${getWorkloadColor(
                             workload.percentage,
@@ -466,46 +288,42 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                         </span>
                       )}
                     </div>
-
                     <div className="space-y-1">
-                      {isWorkDay &&
-                        dayTasks.slice(0, 3).map((task) => {
-                          const employee = getEmployee(task.assigned_employee_id);
-                          const project = getProject(task.project_id);
-                          return (
-                            <div
-                              key={task.id}
-                              className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate"
-                              title={`${task.name} - ${employee?.name} (${project?.name})`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="font-medium text-blue-900 truncate">
-                                  {task.name}
-                                </div>
-                                {task.is_recurring_instance && (
-                                  <Repeat
-                                    className="h-3 w-3 text-blue-400 flex-shrink-0"
-                                    aria-label="Recurring task"
-                                  />
-                                )}
+                      {dayTasks.slice(0, 3).map((task) => {
+                        const employee = getEmployee(task.assigned_employee_id);
+                        const project = getProject(task.project_id);
+                        return (
+                          <div
+                            key={task.id}
+                            className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate"
+                            title={`${task.name} - ${employee?.name} (${project?.name})`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="font-medium text-blue-900 truncate">
+                                {task.name}
                               </div>
-                              {!selectedEmployeeId && employee && (
-                                <div className="text-blue-600 truncate">
-                                  {employee.name}
-                                </div>
+                              {task.is_recurring_instance && (
+                                <Repeat
+                                  className="h-3 w-3 text-blue-400 flex-shrink-0"
+                                  aria-label="Recurring task"
+                                />
                               )}
                             </div>
-                          );
-                        })}
-
-                      {isWorkDay && dayTasks.length > 3 && (
+                            {!selectedEmployeeId && employee && (
+                              <div className="text-blue-600 truncate">
+                                {employee.name}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {dayTasks.length > 3 && (
                         <div className="text-xs text-gray-500 text-center">
                           +{dayTasks.length - 3} more
                         </div>
                       )}
                     </div>
-
-                    {isWorkDay && workload.hours > 0 && (
+                    {workload.hours > 0 && (
                       <div className="mt-2 text-xs text-gray-600">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center">
