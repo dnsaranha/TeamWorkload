@@ -9,7 +9,7 @@ import {
   Repeat,
   Search,
 } from "lucide-react";
-import { supabase } from "../lib/supabaseClient";
+import { useDrag, useDrop } from "react-dnd";
 import {
   type Task,
   type Employee,
@@ -28,21 +28,25 @@ const dayNumberToName: { [key: number]: string } = {
 };
 
 interface WorkloadCalendarProps {
+  tasks: (Task & { is_recurring_instance?: boolean })[];
+  employees: Employee[];
+  projects: Project[];
   selectedEmployeeId?: string;
   viewMode?: "weekly" | "monthly";
+  onTaskDrop: (taskId: string, employeeId: string, date: string) => void;
+  onDayClick: (date: Date, employeeId: string) => void;
 }
 
 const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
+  tasks,
+  employees,
+  projects,
   selectedEmployeeId,
   viewMode = "weekly",
+  onTaskDrop,
+  onDayClick,
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [tasks, setTasks] = useState<
-    (Task & { is_recurring_instance?: boolean })[]
-  >([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"weekly" | "monthly">(viewMode);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -50,77 +54,6 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     if (!selectedEmployeeId) return null;
     return employees.find((e) => e.id === selectedEmployeeId);
   }, [selectedEmployeeId, employees]);
-
-  useEffect(() => {
-    loadData();
-  }, [currentDate, selectedEmployeeId]);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      await Promise.all([loadTasks(), loadEmployees(), loadProjects()]);
-    } catch (error) {
-      console.error("Error loading calendar data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadTasks = async () => {
-    try {
-      let query = supabase
-        .from("workload_tasks")
-        .select("*")
-        .order("start_date", { ascending: true });
-
-      if (selectedEmployeeId) {
-        query = query.eq("assigned_employee_id", selectedEmployeeId);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-
-      const validStatusValues = ["pending", "in_progress", "completed"];
-      const cleanedData = (data || []).map((task) => {
-        if (!validStatusValues.includes(task.status)) {
-          return { ...task, status: "pending" };
-        }
-        return task;
-      });
-
-      setTasks(cleanedData);
-    } catch (error) {
-      console.error("Error loading tasks:", error);
-    }
-  };
-
-  const loadEmployees = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("employees")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (error) throw error;
-      setEmployees(data || []);
-    } catch (error) {
-      console.error("Error loading employees:", error);
-    }
-  };
-
-  const loadProjects = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("workload_projects")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (error) throw error;
-      setProjects(data || []);
-    } catch (error) {
-      console.error("Error loading projects:", error);
-    }
-  };
 
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
@@ -386,16 +319,6 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   const dates =
     view === "weekly" ? getWeekDates(currentDate) : getMonthDates(currentDate);
 
-  if (loading) {
-    return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
       {/* Header */}
@@ -517,14 +440,34 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
             const isToday =
               date.toDateString() === new Date().toDateString();
 
+            const [{ isOver }, drop] = useDrop(() => ({
+              accept: "task",
+              drop: (item: { task: Task }) => {
+                if (selectedEmployeeId) {
+                  onTaskDrop(item.task.id, selectedEmployeeId, date.toISOString().split("T")[0]);
+                }
+                // Handle drop for all-employees view if needed
+              },
+              collect: (monitor) => ({
+                isOver: monitor.isOver(),
+              }),
+            }), [selectedEmployeeId, date, onTaskDrop]);
+
             return (
               <div
+                ref={drop}
                 key={index}
-                className={`min-h-[120px] p-2 border border-gray-200 rounded-lg ${
+                className={`min-h-[120px] p-2 border border-gray-200 rounded-lg cursor-pointer ${
                   isCurrentMonth ? "bg-white" : "bg-gray-50"
                 } ${
                   !isWorkDay && selectedEmployeeId ? "bg-gray-100" : ""
-                } ${isToday ? "ring-2 ring-blue-500" : ""}`}
+                } ${isToday ? "ring-2 ring-blue-500" : ""}
+                  ${isOver && selectedEmployeeId ? "bg-blue-100" : ""}`}
+                onClick={() => {
+                  if (selectedEmployeeId) {
+                    onDayClick(date, selectedEmployeeId);
+                  }
+                }}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span
@@ -549,35 +492,16 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
                 <div className="space-y-1">
                   {isWorkDay &&
-                    dayTasks.slice(0, 3).map((task) => {
-                      const employee = getEmployee(task.assigned_employee_id);
-                      const project = getProject(task.project_id);
-
-                      return (
-                        <div
-                          key={task.id}
-                          className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate"
-                          title={`${task.name} - ${employee?.name} (${project?.name})`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="font-medium text-blue-900 truncate">
-                              {task.name}
-                            </div>
-                            {task.is_recurring_instance && (
-                              <Repeat
-                                className="h-3 w-3 text-blue-400 flex-shrink-0"
-                                aria-label="Recurring task"
-                              />
-                            )}
-                          </div>
-                          {!selectedEmployeeId && employee && (
-                            <div className="text-blue-600 truncate">
-                              {employee.name}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    dayTasks.slice(0, 3).map((task) => (
+                      <DraggableCalendarTask
+                        key={task.id}
+                        task={task}
+                        employee={getEmployee(task.assigned_employee_id)}
+                        project={getProject(task.project_id)}
+                        isRecurring={task.is_recurring_instance}
+                        showEmployeeName={!selectedEmployeeId}
+                      />
+                    ))}
 
                   {isWorkDay && dayTasks.length > 3 && (
                     <div className="text-xs text-gray-500 text-center">
@@ -606,6 +530,51 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
           })}
         </div>
       </div>
+    </div>
+  );
+};
+
+const DraggableCalendarTask = ({
+  task,
+  employee,
+  project,
+  isRecurring,
+  showEmployeeName,
+}: {
+  task: Task;
+  employee?: Employee;
+  project?: Project;
+  isRecurring?: boolean;
+  showEmployeeName?: boolean;
+}) => {
+  const [{ isDragging }, drag] = useDrag(() => ({
+    type: "task",
+    item: { task },
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  }));
+
+  return (
+    <div
+      ref={drag}
+      className={`text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate cursor-move ${
+        isDragging ? "opacity-50" : ""
+      }`}
+      title={`${task.name} - ${employee?.name} (${project?.name})`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="font-medium text-blue-900 truncate">{task.name}</div>
+        {isRecurring && (
+          <Repeat
+            className="h-3 w-3 text-blue-400 flex-shrink-0"
+            aria-label="Recurring task"
+          />
+        )}
+      </div>
+      {showEmployeeName && employee && (
+        <div className="text-blue-600 truncate">{employee.name}</div>
+      )}
     </div>
   );
 };

@@ -30,9 +30,6 @@ import {
   Legend,
 } from "recharts";
 import {
-  taskService,
-  employeeService,
-  projectService,
   type Task,
   type Employee,
   type Project,
@@ -53,13 +50,15 @@ interface ProjectWithWorkload extends Project {
 }
 
 interface WorkloadSummaryProps {
-  employees?: EmployeeWithWorkload[];
-  projects?: ProjectWithWorkload[];
+  tasks: TaskWithRelations[];
+  employees: Employee[];
+  projects: Project[];
   period?: string;
   onPeriodChange?: (period: string) => void;
   showCharts?: boolean;
   selectedEmployeeId?: string | null;
   onEmployeeSelect?: (employeeId: string | null) => void;
+  onTaskDeallocate: (taskId: string) => void;
 }
 
 interface ChartConfig {
@@ -78,110 +77,29 @@ const COLORS = [
   "#82CA9D",
 ];
 
+import { useMemo } from "react";
+import { useDrag, useDrop } from "react-dnd";
+
 const WorkloadSummary = ({
-  employees = [],
-  projects = [],
+  tasks,
+  employees,
+  projects,
   period = "This Week",
   onPeriodChange = () => {},
   showCharts = false,
   selectedEmployeeId,
   onEmployeeSelect,
+  onTaskDeallocate,
 }: WorkloadSummaryProps) => {
   const [activeTab, setActiveTab] = useState(
     showCharts ? "charts" : "employees",
   );
-  const [dbEmployees, setDbEmployees] = useState<EmployeeWithWorkload[]>([]);
-  const [dbProjects, setDbProjects] = useState<ProjectWithWorkload[]>([]);
-  const [tasks, setTasks] = useState<TaskWithRelations[]>([]);
-  const [loading, setLoading] = useState(true);
   const [chartConfig, setChartConfig] = useState<ChartConfig>({
     employeeWorkload: true,
     projectProgress: true,
     taskDistribution: true,
     timelineProgress: false,
   });
-
-  // Load data from database
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [tasksData, employeesData, projectsData] = await Promise.all([
-        taskService.getAll(),
-        employeeService.getAll(),
-        projectService.getAll(),
-      ]);
-
-      // Set tasks state
-      setTasks(tasksData as TaskWithRelations[]);
-
-      // Calculate workload for employees based on filtered period
-      const employeesWithWorkload: EmployeeWithWorkload[] = employeesData.map(
-        (employee) => {
-          const employeeTasks = (tasksData as TaskWithRelations[]).filter(
-            (task) => task.assigned_employee_id === employee.id,
-          );
-
-          // Filter tasks based on the selected period and calculate workload
-          const filteredTasks = filterTasksByPeriod(employeeTasks, period);
-          const totalHours = calculatePeriodHours(filteredTasks, period);
-          const periodCapacity = calculatePeriodCapacity(
-            employee.weekly_hours,
-            period,
-          );
-
-          const workload =
-            periodCapacity > 0
-              ? Math.round((totalHours / periodCapacity) * 100)
-              : 0;
-
-          return {
-            ...employee,
-            workload,
-          };
-        },
-      );
-
-      // Calculate workload for projects
-      const projectsWithWorkload: ProjectWithWorkload[] = projectsData.map(
-        (project) => {
-          const projectTasks = (tasksData as TaskWithRelations[]).filter(
-            (task) => task.project_id === project.id,
-          );
-
-          const totalHours = projectTasks.reduce(
-            (sum, task) => sum + task.estimated_time,
-            0,
-          );
-          const completedTasks = projectTasks.filter(
-            (task) => new Date(task.end_date) < new Date(),
-          ).length;
-
-          const progress =
-            projectTasks.length > 0
-              ? Math.round((completedTasks / projectTasks.length) * 100)
-              : 0;
-          const workload = Math.min(100, Math.round((totalHours / 40) * 100)); // Assuming 40h baseline
-
-          return {
-            ...project,
-            progress,
-            workload,
-          };
-        },
-      );
-
-      setDbEmployees(employeesWithWorkload);
-      setDbProjects(projectsWithWorkload);
-    } catch (error) {
-      console.error("Error loading workload summary data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Helper functions for period-based calculations
   const filterTasksByPeriod = (
@@ -291,9 +209,48 @@ const WorkloadSummary = ({
     }
   };
 
-  // Use database data if available, otherwise use props
-  const displayEmployees = employees.length > 0 ? employees : dbEmployees;
-  const displayProjects = projects.length > 0 ? projects : dbProjects;
+  const employeesWithWorkload = useMemo(() => {
+    return employees.map((employee) => {
+      const employeeTasks = tasks.filter(
+        (task) => task.assigned_employee_id === employee.id,
+      );
+      const filteredTasks = filterTasksByPeriod(employeeTasks, period);
+      const totalHours = calculatePeriodHours(filteredTasks, period);
+      const periodCapacity = calculatePeriodCapacity(
+        employee.weekly_hours,
+        period,
+      );
+      const workload =
+        periodCapacity > 0
+          ? Math.round((totalHours / periodCapacity) * 100)
+          : 0;
+      return { ...employee, workload };
+    });
+  }, [tasks, employees, period]);
+
+  const projectsWithWorkload = useMemo(() => {
+    return projects.map((project) => {
+      const projectTasks = tasks.filter(
+        (task) => task.project_id === project.id,
+      );
+      const totalHours = projectTasks.reduce(
+        (sum, task) => sum + task.estimated_time,
+        0,
+      );
+      const completedTasks = projectTasks.filter(
+        (task) => new Date(task.end_date) < new Date(),
+      ).length;
+      const progress =
+        projectTasks.length > 0
+          ? Math.round((completedTasks / projectTasks.length) * 100)
+          : 0;
+      const workload = Math.min(100, Math.round((totalHours / 40) * 100));
+      return { ...project, progress, workload };
+    });
+  }, [tasks, projects]);
+
+  const displayEmployees = employeesWithWorkload;
+  const displayProjects = projectsWithWorkload;
 
   const getWorkloadColor = (workload: number) => {
     if (workload > 100) return "bg-red-500";
@@ -357,6 +314,47 @@ const WorkloadSummary = ({
     },
   ].filter((item) => item.value > 0);
 
+  const unallocatedTasks = useMemo(
+    () => tasks.filter((task) => !task.assigned_employee_id),
+    [tasks],
+  );
+
+  const [{ isOver }, drop] = useDrop(() => ({
+    accept: "task",
+    drop: (item: { task: Task }) => {
+      onTaskDeallocate(item.task.id);
+    },
+    collect: (monitor) => ({
+      isOver: monitor.isOver(),
+    }),
+  }));
+
+  const DraggableTask = ({ task }: { task: TaskWithRelations }) => {
+    const [{ isDragging }, drag] = useDrag(() => ({
+      type: "task",
+      item: { task },
+      collect: (monitor) => ({
+        isDragging: monitor.isDragging(),
+      }),
+    }));
+
+    return (
+      <div
+        ref={drag}
+        className={`p-2 mb-2 bg-blue-50 border border-blue-200 rounded cursor-move transition-opacity ${
+          isDragging ? "opacity-50" : "opacity-100"
+        }`}
+      >
+        <div className="font-medium text-sm text-blue-900 truncate">
+          {task.name}
+        </div>
+        <div className="text-xs text-blue-600">
+          {task.estimated_time}h - {task.project?.name || "No project"}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Card className="h-full bg-background">
       <CardHeader className="pb-3">
@@ -378,10 +376,11 @@ const WorkloadSummary = ({
         </div>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList
-            className={`grid w-full ${showCharts ? "grid-cols-3" : "grid-cols-2"}`}
+            className={`grid w-full ${showCharts ? "grid-cols-4" : "grid-cols-3"}`}
           >
             <TabsTrigger value="employees">Employees</TabsTrigger>
             <TabsTrigger value="projects">Projects</TabsTrigger>
+            <TabsTrigger value="unallocated">Unallocated</TabsTrigger>
             {showCharts && <TabsTrigger value="charts">Charts</TabsTrigger>}
           </TabsList>
         </Tabs>
@@ -400,9 +399,7 @@ const WorkloadSummary = ({
                     Show All Employees
                   </Button>
                 )}
-                {loading ? (
-                  <div className="text-center py-6">Loading employees...</div>
-                ) : displayEmployees.length === 0 ? (
+                {displayEmployees.length === 0 ? (
                   <div className="text-center py-6">No employees found</div>
                 ) : (
                   displayEmployees.map((employee) => (
@@ -470,11 +467,23 @@ const WorkloadSummary = ({
               </div>
             </TabsContent>
 
+            <TabsContent value="unallocated" className="mt-0">
+              <div ref={drop} className="space-y-2 p-2 min-h-[100px]">
+                {unallocatedTasks.length === 0 ? (
+                  <div className="text-center py-6 text-sm text-muted-foreground">
+                    No unallocated tasks. Drag assigned tasks here to unassign.
+                  </div>
+                ) : (
+                  unallocatedTasks.map((task) => (
+                    <DraggableTask key={task.id} task={task} />
+                  ))
+                )}
+              </div>
+            </TabsContent>
+
             <TabsContent value="projects" className="mt-0">
               <div className="space-y-4">
-                {loading ? (
-                  <div className="text-center py-6">Loading projects...</div>
-                ) : displayProjects.length === 0 ? (
+                {displayProjects.length === 0 ? (
                   <div className="text-center py-6">No projects found</div>
                 ) : (
                   displayProjects.map((project) => (

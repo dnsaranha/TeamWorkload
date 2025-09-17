@@ -17,6 +17,7 @@ import WorkloadCalendar from "./WorkloadCalendar";
 import EmployeeList from "./EmployeeList";
 import TaskManagement from "./TaskManagement";
 import WorkloadSummary from "./WorkloadSummary";
+import WorkloadView from "./WorkloadView";
 import ProjectVisualization from "./ProjectVisualization";
 import ProjectList from "./ProjectList";
 import UserProfile from "./UserProfile";
@@ -327,16 +328,8 @@ const HomePage = () => {
                 </Card>
               </div>
 
-              <div className="flex gap-6 h-[calc(100vh-280px)]">
-                <div className="flex-1">
-                  <WorkloadCalendar selectedEmployeeId={selectedEmployeeId} />
-                </div>
-                <div className="w-80">
-                  <WorkloadSummary
-                    selectedEmployeeId={selectedEmployeeId}
-                    onEmployeeSelect={setSelectedEmployeeId}
-                  />
-                </div>
+              <div className="h-[calc(100vh-280px)]">
+                <WorkloadView />
               </div>
             </div>
           )}
