@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import WorkloadCalendar from "./WorkloadCalendar";
 import WorkloadSummary from "./WorkloadSummary";
-import ExpandedDayView from "./ExpandedDayView";
+import DetailedWeekView from "./DetailedWeekView";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import {
@@ -26,10 +26,8 @@ const WorkloadView = () => {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(
     null,
   );
-  const [expandedDay, setExpandedDay] = useState<{
-    date: Date;
-    employeeId: string;
-  } | null>(null);
+  const [view, setView] = useState<'summary' | 'detailed'>('summary');
+  const [detailedWeekStart, setDetailedWeekStart] = useState<Date | null>(null);
 
   useEffect(() => {
     loadData();
@@ -54,6 +52,24 @@ const WorkloadView = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  const handleWeekClick = (weekStartDate: Date) => {
+    setDetailedWeekStart(weekStartDate);
+    setView('detailed');
+  };
+
+  const handleGoBackToSummary = () => {
+    setView('summary');
+    setDetailedWeekStart(null);
+  };
+
   const handleTaskDrop = async (
     taskId: string,
     employeeId: string,
@@ -76,22 +92,6 @@ const WorkloadView = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  const handleDayExpand = (date: Date, employeeId: string) => {
-    setExpandedDay({ date, employeeId });
-  };
-
-  const handleCloseExpandedDay = () => {
-    setExpandedDay(null);
-  };
-
   const handleTaskUpdate = async (task: Task) => {
     try {
       const updatedTask = await taskService.update(task.id, task);
@@ -105,58 +105,41 @@ const WorkloadView = () => {
     }
   };
 
-  const handleTaskUnassign = async (taskId: string) => {
-    try {
-      const updatedTask = await taskService.update(taskId, {
-        assigned_employee_id: null,
-      });
-      setTasks((prevTasks) =>
-        prevTasks.map((t) =>
-          t.id === taskId ? (updatedTask as TaskWithRelations) : t,
-        ),
-      );
-    } catch (error) {
-      console.error("Error unassigning task:", error);
+  const getWeekDates = (startDate: Date) => {
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + i);
+      dates.push(date);
     }
-  };
-
-  const handleTaskDeallocate = async (taskId: string) => {
-    try {
-      const updatedTask = await taskService.update(taskId, {
-        assigned_employee_id: null,
-      });
-      setTasks((prevTasks) =>
-        prevTasks.map((t) =>
-          t.id === taskId ? (updatedTask as TaskWithRelations) : t,
-        ),
-      );
-    } catch (error) {
-      console.error("Error deallocating task:", error);
-    }
-  };
-
-  const getTasksForDay = (date: Date, employeeId: string) => {
-    const dateStr = date.toISOString().split("T")[0];
-    return tasks.filter(
-      (task) =>
-        task.assigned_employee_id === employeeId &&
-        task.start_date <= dateStr &&
-        task.end_date >= dateStr,
-    );
+    return dates;
   };
 
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="flex gap-6 h-full">
         <div className="flex-1">
-          <WorkloadCalendar
-            tasks={tasks}
-            employees={employees}
-            projects={projects}
-            selectedEmployeeId={selectedEmployeeId}
-            onTaskDrop={handleTaskDrop}
-            onDayClick={handleDayExpand}
-          />
+          {view === 'summary' ? (
+            <WorkloadCalendar
+              tasks={tasks}
+              employees={employees}
+              projects={projects}
+              selectedEmployeeId={selectedEmployeeId}
+              onWeekClick={handleWeekClick}
+            />
+          ) : (
+            detailedWeekStart && (
+              <DetailedWeekView
+                tasks={tasks}
+                employees={employees}
+                projects={projects}
+                weekDates={getWeekDates(detailedWeekStart)}
+                onTaskDrop={handleTaskDrop}
+                onTaskUpdate={handleTaskUpdate}
+                onGoBack={handleGoBackToSummary}
+              />
+            )
+          )}
         </div>
         <div className="w-96">
           <WorkloadSummary
@@ -165,20 +148,8 @@ const WorkloadView = () => {
             projects={projects}
             selectedEmployeeId={selectedEmployeeId}
             onEmployeeSelect={setSelectedEmployeeId}
-            onTaskDeallocate={handleTaskDeallocate}
           />
         </div>
-        {expandedDay && (
-          <ExpandedDayView
-            date={expandedDay.date}
-            employee={employees.find((e) => e.id === expandedDay.employeeId)!}
-            tasks={getTasksForDay(expandedDay.date, expandedDay.employeeId)}
-            projects={projects}
-            onClose={handleCloseExpandedDay}
-            onTaskUpdate={handleTaskUpdate}
-            onTaskUnassign={handleTaskUnassign}
-          />
-        )}
       </div>
     </DndProvider>
   );

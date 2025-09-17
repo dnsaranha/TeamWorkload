@@ -58,7 +58,6 @@ interface WorkloadSummaryProps {
   showCharts?: boolean;
   selectedEmployeeId?: string | null;
   onEmployeeSelect?: (employeeId: string | null) => void;
-  onTaskDeallocate: (taskId: string) => void;
 }
 
 interface ChartConfig {
@@ -78,7 +77,7 @@ const COLORS = [
 ];
 
 import { useMemo } from "react";
-import { useDrag, useDrop } from "react-dnd";
+import { useDrag } from "react-dnd";
 
 const WorkloadSummary = ({
   tasks,
@@ -89,7 +88,6 @@ const WorkloadSummary = ({
   showCharts = false,
   selectedEmployeeId,
   onEmployeeSelect,
-  onTaskDeallocate,
 }: WorkloadSummaryProps) => {
   const [activeTab, setActiveTab] = useState(
     showCharts ? "charts" : "employees",
@@ -319,16 +317,6 @@ const WorkloadSummary = ({
     [tasks],
   );
 
-  const [{ isOver }, drop] = useDrop(() => ({
-    accept: "task",
-    drop: (item: { task: Task }) => {
-      onTaskDeallocate(item.task.id);
-    },
-    collect: (monitor) => ({
-      isOver: monitor.isOver(),
-    }),
-  }));
-
   const DraggableTask = ({ task }: { task: TaskWithRelations }) => {
     const [{ isDragging }, drag] = useDrag(() => ({
       type: "task",
@@ -468,10 +456,10 @@ const WorkloadSummary = ({
             </TabsContent>
 
             <TabsContent value="unallocated" className="mt-0">
-              <div ref={drop} className="space-y-2 p-2 min-h-[100px]">
+              <div className="space-y-2">
                 {unallocatedTasks.length === 0 ? (
                   <div className="text-center py-6 text-sm text-muted-foreground">
-                    No unallocated tasks. Drag assigned tasks here to unassign.
+                    No unallocated tasks.
                   </div>
                 ) : (
                   unallocatedTasks.map((task) => (

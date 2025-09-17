@@ -9,7 +9,6 @@ import {
   Repeat,
   Search,
 } from "lucide-react";
-import { useDrag, useDrop } from "react-dnd";
 import {
   type Task,
   type Employee,
@@ -33,8 +32,7 @@ interface WorkloadCalendarProps {
   projects: Project[];
   selectedEmployeeId?: string;
   viewMode?: "weekly" | "monthly";
-  onTaskDrop: (taskId: string, employeeId: string, date: string) => void;
-  onDayClick: (date: Date, employeeId: string) => void;
+  onWeekClick?: (weekStartDate: Date) => void;
 }
 
 const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
@@ -43,8 +41,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   projects,
   selectedEmployeeId,
   viewMode = "weekly",
-  onTaskDrop,
-  onDayClick,
+  onWeekClick,
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<"weekly" | "monthly">(viewMode);
@@ -419,162 +416,117 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
           ))}
 
           {/* Calendar Days */}
-          {dates.map((date, index) => {
-            const dayOfWeekName = dayNumberToName[date.getUTCDay()];
-            let isWorkDay = true;
-            if (selectedEmployee) {
-              const workDays = selectedEmployee.dias_de_trabalho || [
-                "monday",
-                "tuesday",
-                "wednesday",
-                "thursday",
-                "friday",
-              ];
-              isWorkDay = workDays.includes(dayOfWeekName);
-            }
-
-            const dayTasks = getTasksForDate(date);
-            const workload = calculateDayWorkload(date, selectedEmployeeId);
-            const isCurrentMonth =
-              date.getUTCMonth() === currentDate.getUTCMonth();
-            const isToday =
-              date.toDateString() === new Date().toDateString();
-
-            const [{ isOver }, drop] = useDrop(() => ({
-              accept: "task",
-              drop: (item: { task: Task }) => {
-                if (selectedEmployeeId) {
-                  onTaskDrop(item.task.id, selectedEmployeeId, date.toISOString().split("T")[0]);
+          {Array.from({ length: dates.length / 7 }).map((_, weekIndex) => (
+            <div
+              key={weekIndex}
+              className="contents"
+              onClick={() => onWeekClick && onWeekClick(dates[weekIndex * 7])}
+            >
+              {dates.slice(weekIndex * 7, weekIndex * 7 + 7).map((date, dayIndex) => {
+                const dayOfWeekName = dayNumberToName[date.getUTCDay()];
+                let isWorkDay = true;
+                if (selectedEmployee) {
+                  const workDays = selectedEmployee.dias_de_trabalho || [
+                    "monday", "tuesday", "wednesday", "thursday", "friday",
+                  ];
+                  isWorkDay = workDays.includes(dayOfWeekName);
                 }
-                // Handle drop for all-employees view if needed
-              },
-              collect: (monitor) => ({
-                isOver: monitor.isOver(),
-              }),
-            }), [selectedEmployeeId, date, onTaskDrop]);
 
-            return (
-              <div
-                ref={drop}
-                key={index}
-                className={`min-h-[120px] p-2 border border-gray-200 rounded-lg cursor-pointer ${
-                  isCurrentMonth ? "bg-white" : "bg-gray-50"
-                } ${
-                  !isWorkDay && selectedEmployeeId ? "bg-gray-100" : ""
-                } ${isToday ? "ring-2 ring-blue-500" : ""}
-                  ${isOver && selectedEmployeeId ? "bg-blue-100" : ""}`}
-                onClick={() => {
-                  if (selectedEmployeeId) {
-                    onDayClick(date, selectedEmployeeId);
-                  }
-                }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span
-                    className={`text-sm font-medium ${
-                      isCurrentMonth ? "text-gray-900" : "text-gray-400"
+                const dayTasks = getTasksForDate(date);
+                const workload = calculateDayWorkload(date, selectedEmployeeId);
+                const isCurrentMonth = date.getUTCMonth() === currentDate.getUTCMonth();
+                const isToday = date.toDateString() === new Date().toDateString();
+
+                return (
+                  <div
+                    key={dayIndex}
+                    className={`min-h-[120px] p-2 border rounded-lg cursor-pointer hover:bg-gray-100 transition-colors ${
+                      isCurrentMonth ? "bg-white" : "bg-gray-50"
                     } ${
-                      !isWorkDay && selectedEmployeeId ? "text-gray-400" : ""
-                    }`}
+                      !isWorkDay && selectedEmployeeId ? "bg-gray-100" : ""
+                    } ${isToday ? "ring-2 ring-blue-500" : ""}`}
                   >
-                    {date.getDate()}
-                  </span>
-                  {isWorkDay && workload.percentage > 0 && (
-                    <span
-                      className={`text-xs px-2 py-1 rounded-full font-semibold ${getWorkloadColor(
-                        workload.percentage,
-                      )}`}
-                    >
-                      {Math.round(workload.percentage)}%
-                    </span>
-                  )}
-                </div>
-
-                <div className="space-y-1">
-                  {isWorkDay &&
-                    dayTasks.slice(0, 3).map((task) => (
-                      <DraggableCalendarTask
-                        key={task.id}
-                        task={task}
-                        employee={getEmployee(task.assigned_employee_id)}
-                        project={getProject(task.project_id)}
-                        isRecurring={task.is_recurring_instance}
-                        showEmployeeName={!selectedEmployeeId}
-                      />
-                    ))}
-
-                  {isWorkDay && dayTasks.length > 3 && (
-                    <div className="text-xs text-gray-500 text-center">
-                      +{dayTasks.length - 3} more
+                    <div className="flex items-center justify-between mb-2">
+                      <span
+                        className={`text-sm font-medium ${
+                          isCurrentMonth ? "text-gray-900" : "text-gray-400"
+                        } ${
+                          !isWorkDay && selectedEmployeeId ? "text-gray-400" : ""
+                        }`}
+                      >
+                        {date.getDate()}
+                      </span>
+                      {isWorkDay && workload.percentage > 0 && (
+                        <span
+                          className={`text-xs px-2 py-1 rounded-full font-semibold ${getWorkloadColor(
+                            workload.percentage,
+                          )}`}
+                        >
+                          {Math.round(workload.percentage)}%
+                        </span>
+                      )}
                     </div>
-                  )}
-                </div>
 
-                {isWorkDay && workload.hours > 0 && (
-                  <div className="mt-2 text-xs text-gray-600">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <Clock className="h-3 w-3 mr-1" />
-                        {workload.hours.toFixed(1)}h
-                      </div>
-                      {workload.capacity > 0 && (
-                        <div className="text-xs text-gray-500">
-                          /{workload.capacity.toFixed(1)}h
+                    <div className="space-y-1">
+                      {isWorkDay &&
+                        dayTasks.slice(0, 3).map((task) => {
+                          const employee = getEmployee(task.assigned_employee_id);
+                          const project = getProject(task.project_id);
+                          return (
+                            <div
+                              key={task.id}
+                              className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate"
+                              title={`${task.name} - ${employee?.name} (${project?.name})`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="font-medium text-blue-900 truncate">
+                                  {task.name}
+                                </div>
+                                {task.is_recurring_instance && (
+                                  <Repeat
+                                    className="h-3 w-3 text-blue-400 flex-shrink-0"
+                                    aria-label="Recurring task"
+                                  />
+                                )}
+                              </div>
+                              {!selectedEmployeeId && employee && (
+                                <div className="text-blue-600 truncate">
+                                  {employee.name}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                      {isWorkDay && dayTasks.length > 3 && (
+                        <div className="text-xs text-gray-500 text-center">
+                          +{dayTasks.length - 3} more
                         </div>
                       )}
                     </div>
+
+                    {isWorkDay && workload.hours > 0 && (
+                      <div className="mt-2 text-xs text-gray-600">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <Clock className="h-3 w-3 mr-1" />
+                            {workload.hours.toFixed(1)}h
+                          </div>
+                          {workload.capacity > 0 && (
+                            <div className="text-xs text-gray-500">
+                              /{workload.capacity.toFixed(1)}h
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          ))}
         </div>
       </div>
-    </div>
-  );
-};
-
-const DraggableCalendarTask = ({
-  task,
-  employee,
-  project,
-  isRecurring,
-  showEmployeeName,
-}: {
-  task: Task;
-  employee?: Employee;
-  project?: Project;
-  isRecurring?: boolean;
-  showEmployeeName?: boolean;
-}) => {
-  const [{ isDragging }, drag] = useDrag(() => ({
-    type: "task",
-    item: { task },
-    collect: (monitor) => ({
-      isDragging: monitor.isDragging(),
-    }),
-  }));
-
-  return (
-    <div
-      ref={drag}
-      className={`text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate cursor-move ${
-        isDragging ? "opacity-50" : ""
-      }`}
-      title={`${task.name} - ${employee?.name} (${project?.name})`}
-    >
-      <div className="flex items-center justify-between">
-        <div className="font-medium text-blue-900 truncate">{task.name}</div>
-        {isRecurring && (
-          <Repeat
-            className="h-3 w-3 text-blue-400 flex-shrink-0"
-            aria-label="Recurring task"
-          />
-        )}
-      </div>
-      {showEmployeeName && employee && (
-        <div className="text-blue-600 truncate">{employee.name}</div>
-      )}
     </div>
   );
 };
