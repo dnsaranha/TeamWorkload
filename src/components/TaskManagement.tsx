@@ -460,6 +460,27 @@ const TaskManagement = () => {
     return dateString;
   };
 
+  const parseDate = (dateString: string): Date => {
+    if (!dateString || typeof dateString !== 'string') return new Date();
+    const parts = dateString.split('/');
+    if (parts.length === 3) {
+      // Re-arrange from dd/MM/yyyy to yyyy-MM-dd for reliable parsing
+      const isoFormattedString = `${parts[2]}-${parts[1]}-${parts[0]}`;
+      const date = new Date(isoFormattedString);
+      // Check if the date is valid
+      if (!isNaN(date.getTime())) {
+        return date;
+      }
+    }
+    // Try parsing directly if it's not in dd/MM/yyyy format
+    const directDate = new Date(dateString);
+    if (!isNaN(directDate.getTime())) {
+      return directDate;
+    }
+    // Fallback to today's date
+    return new Date();
+  };
+
   const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -508,8 +529,8 @@ const TaskManagement = () => {
                 name: row["Task Name"],
                 description: row["Description"] || "",
                 estimated_time: Number(row["Estimated Hours"]) || 1,
-                start_date: parseDate(row["Start Date"]),
-                end_date: parseDate(row["End Date"]),
+                start_date: parseDate(row["Start Date"]).toISOString(),
+                end_date: parseDate(row["End Date"]).toISOString(),
                 project_id: projectId || null,
                 assigned_employee_id: employeeId || null,
                 status: "pending",

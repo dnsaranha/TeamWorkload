@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   Repeat,
   Search,
+  ExternalLink,
 } from "lucide-react";
 import { useDrop } from "react-dnd";
 import {
@@ -102,6 +103,13 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
       dates.push(new Date(current.valueOf()));
       current.setUTCDate(current.getUTCDate() + 1);
     }
+
+    // Ensure the total number of days is a multiple of 7
+    while (dates.length % 7 !== 0) {
+      dates.push(new Date(current.valueOf()));
+      current.setUTCDate(current.getUTCDate() + 1);
+    }
+
     return dates;
   };
 
@@ -142,6 +150,11 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
   const dates =
     view === "weekly" ? getWeekDates(currentDate) : getMonthDates(currentDate);
+
+  useEffect(() => {
+    console.log("WorkloadCalendar view changed:", view);
+    console.log("Number of dates to render:", dates.length);
+  }, [view, dates]);
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -234,115 +247,122 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
               {day}
             </div>
           ))}
-          {Array.from({ length: dates.length / 7 }).map((_, weekIndex) => (
-            <div
-              key={weekIndex}
-              className="contents"
-              onClick={() => onWeekClick && onWeekClick(dates[weekIndex * 7])}
-            >
-              {dates.slice(weekIndex * 7, weekIndex * 7 + 7).map((date, dayIndex) => {
-                const dayTasks = getTasksForDate(date, filteredTasks, selectedEmployee);
-                const workload = calculateDayWorkload(date, filteredTasks, employees, selectedEmployeeId);
-                const isCurrentMonth = date.getUTCMonth() === currentDate.getUTCMonth();
-                const isToday = date.toDateString() === new Date().toDateString();
+          {(() => {
+            try {
+              return Array.from({ length: dates.length / 7 }).map((_, weekIndex) => (
+                <div
+                  key={weekIndex}
+                  className="contents"
+                  onClick={() => onWeekClick && onWeekClick(dates[weekIndex * 7])}
+                >
+                  {dates.slice(weekIndex * 7, weekIndex * 7 + 7).map((date, dayIndex) => {
+                    const dayTasks = getTasksForDate(date, filteredTasks, selectedEmployee);
+                    const workload = calculateDayWorkload(date, filteredTasks, employees, selectedEmployeeId);
+                    const isCurrentMonth = date.getUTCMonth() === currentDate.getUTCMonth();
+                    const isToday = date.toDateString() === new Date().toDateString();
 
-                const [{ isOver, canDrop }, drop] = useDrop(() => ({
-                  accept: "task",
-                  drop: (item: { task: Task }) => {
-                    if (selectedEmployeeId) {
-                      onTaskDrop(item.task.id, selectedEmployeeId, date.toISOString().split("T")[0]);
-                    }
-                  },
-                  canDrop: () => !!selectedEmployeeId,
-                  collect: (monitor) => ({
-                    isOver: monitor.isOver(),
-                    canDrop: monitor.canDrop(),
-                  }),
-                }), [selectedEmployeeId, date, onTaskDrop]);
+                    const [{ isOver, canDrop }, drop] = useDrop(() => ({
+                      accept: "task",
+                      drop: (item: { task: Task }) => {
+                        if (selectedEmployeeId) {
+                          onTaskDrop(item.task.id, selectedEmployeeId, date.toISOString().split("T")[0]);
+                        }
+                      },
+                      canDrop: () => !!selectedEmployeeId,
+                      collect: (monitor) => ({
+                        isOver: monitor.isOver(),
+                        canDrop: monitor.canDrop(),
+                      }),
+                    }), [selectedEmployeeId, date, onTaskDrop]);
 
-                return (
-                  <div
-                    ref={drop}
-                    key={dayIndex}
-                    className={`min-h-[120px] p-2 border rounded-lg transition-colors ${
-                      !selectedEmployeeId ? 'cursor-default' : 'cursor-pointer hover:bg-gray-100'
-                    } ${
-                      isCurrentMonth ? "bg-white" : "bg-gray-50"
-                    } ${isToday ? "ring-2 ring-blue-500" : ""} ${isOver && canDrop ? 'bg-blue-100' : ''}`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span
-                        className={`text-sm font-medium ${
-                          isCurrentMonth ? "text-gray-900" : "text-gray-400"
-                        }`}
+                    return (
+                      <div
+                        ref={drop}
+                        key={dayIndex}
+                        className={`min-h-[120px] p-2 border rounded-lg transition-colors ${
+                          !selectedEmployeeId ? 'cursor-default' : 'cursor-pointer hover:bg-gray-100'
+                        } ${
+                          isCurrentMonth ? "bg-white" : "bg-gray-50"
+                        } ${isToday ? "ring-2 ring-blue-500" : ""} ${isOver && canDrop ? 'bg-blue-100' : ''}`}
                       >
-                        {date.getDate()}
-                      </span>
-                      {workload.percentage > 0 && (
-                        <span
-                          className={`text-xs px-2 py-1 rounded-full font-semibold ${getWorkloadColor(
-                            workload.percentage,
-                          )}`}
-                        >
-                          {Math.round(workload.percentage)}%
-                        </span>
-                      )}
-                    </div>
-                    <div className="space-y-1">
-                      {dayTasks.slice(0, 3).map((task) => {
-                        const employee = getEmployee(task.assigned_employee_id);
-                        const project = getProject(task.project_id);
-                        return (
-                          <div
-                            key={task.id}
-                            className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate"
-                            title={`${task.name} - ${employee?.name} (${project?.name})`}
+                        <div className="flex items-center justify-between mb-2">
+                          <span
+                            className={`text-sm font-medium ${
+                              isCurrentMonth ? "text-gray-900" : "text-gray-400"
+                            }`}
                           >
-                            <div className="flex items-center justify-between">
-                              <div className="font-medium text-blue-900 truncate">
-                                {task.name}
-                              </div>
-                              {task.is_recurring_instance && (
-                                <Repeat
-                                  className="h-3 w-3 text-blue-400 flex-shrink-0"
-                                  aria-label="Recurring task"
-                                />
-                              )}
-                            </div>
-                            {!selectedEmployeeId && employee && (
-                              <div className="text-blue-600 truncate">
-                                {employee.name}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                      {dayTasks.length > 3 && (
-                        <div className="text-xs text-gray-500 text-center">
-                          +{dayTasks.length - 3} more
+                            {date.getDate()}
+                          </span>
+                          {workload.percentage > 0 && (
+                            <span
+                              className={`text-xs px-2 py-1 rounded-full font-semibold ${getWorkloadColor(
+                                workload.percentage,
+                              )}`}
+                            >
+                              {Math.round(workload.percentage)}%
+                            </span>
+                          )}
                         </div>
-                      )}
-                    </div>
-                    {workload.hours > 0 && (
-                      <div className="mt-2 text-xs text-gray-600">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            <Clock className="h-3 w-3 mr-1" />
-                            {workload.hours.toFixed(1)}h
-                          </div>
-                          {workload.capacity > 0 && (
-                            <div className="text-xs text-gray-500">
-                              /{workload.capacity.toFixed(1)}h
+                        <div className="space-y-1">
+                          {dayTasks.slice(0, 3).map((task) => {
+                            const employee = getEmployee(task.assigned_employee_id);
+                            const project = getProject(task.project_id);
+                            return (
+                              <div
+                                key={task.id}
+                                className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate"
+                                title={`${task.name} - ${employee?.name} (${project?.name})`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="font-medium text-blue-900 truncate">
+                                    {task.name}
+                                  </div>
+                                  {task.is_recurring_instance && (
+                                    <Repeat
+                                      className="h-3 w-3 text-blue-400 flex-shrink-0"
+                                      aria-label="Recurring task"
+                                    />
+                                  )}
+                                </div>
+                                {!selectedEmployeeId && employee && (
+                                  <div className="text-blue-600 truncate">
+                                    {employee.name}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                          {dayTasks.length > 3 && (
+                            <div className="text-xs text-gray-500 text-center">
+                              +{dayTasks.length - 3} more
                             </div>
                           )}
                         </div>
+                        {workload.hours > 0 && (
+                          <div className="mt-2 text-xs text-gray-600">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center">
+                                <Clock className="h-3 w-3 mr-1" />
+                                {workload.hours.toFixed(1)}h
+                              </div>
+                              {workload.capacity > 0 && (
+                                <div className="text-xs text-gray-500">
+                                  /{workload.capacity.toFixed(1)}h
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+                    );
+                  })}
+                </div>
+              ));
+            } catch (error) {
+              console.error("Error rendering calendar grid:", error);
+              return <div className="col-span-7 text-red-500">Error displaying calendar. Please check the console.</div>;
+            }
+          })()}
         </div>
       </div>
     </div>
