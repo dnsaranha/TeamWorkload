@@ -6,8 +6,6 @@ import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import {
   taskService,
-  employeeService,
-  projectService,
   type Task,
   type Employee,
   type Project,
@@ -18,39 +16,26 @@ type TaskWithRelations = Task & {
   assigned_employee: Employee | null;
 };
 
-const WorkloadView = () => {
-  const [tasks, setTasks] = useState<TaskWithRelations[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
+interface WorkloadViewProps {
+  tasks: TaskWithRelations[];
+  employees: Employee[];
+  projects: Project[];
+  loading: boolean;
+  setTasks: React.Dispatch<React.SetStateAction<TaskWithRelations[]>>;
+}
+
+const WorkloadView: React.FC<WorkloadViewProps> = ({
+  tasks,
+  employees,
+  projects,
+  loading,
+  setTasks,
+}) => {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(
     null,
   );
   const [view, setView] = useState<'summary' | 'detailed'>('summary');
   const [detailedWeekStart, setDetailedWeekStart] = useState<Date | null>(null);
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [tasksData, employeesData, projectsData] = await Promise.all([
-        taskService.getAll(),
-        employeeService.getAll(),
-        projectService.getAll(),
-      ]);
-
-      setTasks(tasksData as TaskWithRelations[]);
-      setEmployees(employeesData);
-      setProjects(projectsData);
-    } catch (error) {
-      console.error("Error loading workload data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return (

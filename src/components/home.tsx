@@ -26,14 +26,21 @@ import {
   employeeService,
   taskService,
   projectService,
+  type Task,
+  type Employee,
+  type Project,
 } from "@/lib/supabaseClient";
+
+type TaskWithRelations = Task & {
+  project: Project | null;
+  assigned_employee: Employee | null;
+};
 
 const HomePage = () => {
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [totalEmployees, setTotalEmployees] = useState(0);
-  const [activeTasks, setActiveTasks] = useState(0);
-  const [avgWorkload, setAvgWorkload] = useState(0);
-  const [totalProjects, setTotalProjects] = useState(0);
+  const [tasks, setTasks] = useState<TaskWithRelations[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(
     null,
@@ -43,7 +50,7 @@ const HomePage = () => {
   const [showUserProfile, setShowUserProfile] = useState(false);
 
   useEffect(() => {
-    loadDashboardData();
+    loadData();
 
     // Check for mobile screen size
     const checkMobile = () => {
@@ -53,8 +60,8 @@ const HomePage = () => {
     checkMobile();
     window.addEventListener("resize", checkMobile);
 
-    // Auto-refresh dashboard data every 30 seconds
-    const interval = setInterval(loadDashboardData, 30000);
+    // Auto-refresh data every 30 seconds
+    const interval = setInterval(loadData, 30000);
 
     return () => {
       window.removeEventListener("resize", checkMobile);
@@ -62,53 +69,53 @@ const HomePage = () => {
     };
   }, []);
 
-  const loadDashboardData = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
-      const [employees, tasks, projects] = await Promise.all([
-        employeeService.getAll(),
+      const [tasksData, employeesData, projectsData] = await Promise.all([
         taskService.getAll(),
+        employeeService.getAll(),
         projectService.getAll(),
       ]);
 
-      setTotalEmployees(employees.length);
-      setTotalProjects(projects.length);
-
-      // Count active tasks (tasks that are assigned and within current date range)
-      const currentDate = new Date();
-      const activeTasksCount = tasks.filter((task) => {
-        const startDate = new Date(task.start_date);
-        const endDate = new Date(task.end_date);
-        return (
-          task.assigned_employee_id &&
-          startDate <= currentDate &&
-          endDate >= currentDate
-        );
-      }).length;
-      setActiveTasks(activeTasksCount);
-
-      // Calculate average workload
-      if (employees.length > 0) {
-        const totalCapacity = employees.reduce(
-          (sum, emp) => sum + emp.weekly_hours,
-          0,
-        );
-        const totalAssignedHours = tasks
-          .filter((task) => task.assigned_employee_id)
-          .reduce((sum, task) => sum + task.estimated_time, 0);
-
-        const avgWorkloadPercent =
-          totalCapacity > 0
-            ? Math.round((totalAssignedHours / totalCapacity) * 100)
-            : 0;
-        setAvgWorkload(avgWorkloadPercent);
-      }
+      setTasks(tasksData as TaskWithRelations[]);
+      setEmployees(employeesData);
+      setProjects(projectsData);
     } catch (error) {
-      console.error("Error loading dashboard data:", error);
+      console.error("Error loading data:", error);
     } finally {
       setLoading(false);
     }
   };
+
+  // Derived state for dashboard cards
+  const totalEmployees = employees.length;
+  const totalProjects = projects.length;
+  const activeTasks = tasks.filter((task) => {
+    const currentDate = new Date();
+    const startDate = new Date(task.start_date);
+    const endDate = new Date(task.end_date);
+    return (
+      task.assigned_employee_id &&
+      startDate <= currentDate &&
+      endDate >= currentDate
+    );
+  }).length;
+  const avgWorkload = (() => {
+    if (employees.length > 0) {
+      const totalCapacity = employees.reduce(
+        (sum, emp) => sum + emp.weekly_hours,
+        0,
+      );
+      const totalAssignedHours = tasks
+        .filter((task) => task.assigned_employee_id)
+        .reduce((sum, task) => sum + task.estimated_time, 0);
+      return totalCapacity > 0
+        ? Math.round((totalAssignedHours / totalCapacity) * 100)
+        : 0;
+    }
+    return 0;
+  })();
 
   return (
     <div className="flex h-screen bg-background">
@@ -329,7 +336,13 @@ const HomePage = () => {
               </div>
 
               <div className="h-[calc(100vh-280px)]">
-                <WorkloadView />
+                <WorkloadView
+                  tasks={tasks}
+                  employees={employees}
+                  projects={projects}
+                  loading={loading}
+                  setTasks={setTasks}
+                />
               </div>
             </div>
           )}
@@ -384,7 +397,12 @@ const HomePage = () => {
           {activeTab === "reports" && (
             <div>
               <h2 className="text-3xl font-bold mb-6">Reports</h2>
-              <WorkloadSummary showCharts={true} />
+              <WorkloadSummary
+                tasks={tasks}
+                employees={employees}
+                projects={projects}
+                showCharts={true}
+              />
             </div>
           )}
 
