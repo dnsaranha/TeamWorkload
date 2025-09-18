@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -9,103 +9,42 @@ import {
   Repeat,
   Search,
 } from "lucide-react";
-import { supabase } from "../lib/supabaseClient";
+import { useDrop } from "react-dnd";
 import {
   type Task,
   type Employee,
   type Project,
 } from "@/lib/supabaseClient";
 import { Input } from "./ui/input";
+import { calculateDayWorkload, getTasksForDate } from "@/lib/workloadUtils";
 
 interface WorkloadCalendarProps {
+  tasks: (Task & { is_recurring_instance?: boolean })[];
+  employees: Employee[];
+  projects: Project[];
   selectedEmployeeId?: string;
   viewMode?: "weekly" | "monthly";
+  onWeekClick?: (weekStartDate: Date) => void;
+  onTaskDrop: (taskId: string, employeeId: string, date: string) => void;
 }
 
 const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
+  tasks,
+  employees,
+  projects,
   selectedEmployeeId,
   viewMode = "weekly",
+  onWeekClick,
+  onTaskDrop,
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [tasks, setTasks] = useState<
-    (Task & { is_recurring_instance?: boolean })[]
-  >([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"weekly" | "monthly">(viewMode);
   const [searchTerm, setSearchTerm] = useState("");
 
-  useEffect(() => {
-    loadData();
-  }, [currentDate, selectedEmployeeId]);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      await Promise.all([loadTasks(), loadEmployees(), loadProjects()]);
-    } catch (error) {
-      console.error("Error loading calendar data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadTasks = async () => {
-    try {
-      let query = supabase
-        .from("workload_tasks")
-        .select("*")
-        .order("start_date", { ascending: true });
-
-      if (selectedEmployeeId) {
-        query = query.eq("assigned_employee_id", selectedEmployeeId);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-
-      const validStatusValues = ["pending", "in_progress", "completed"];
-      const cleanedData = (data || []).map((task) => {
-        if (!validStatusValues.includes(task.status)) {
-          return { ...task, status: "pending" };
-        }
-        return task;
-      });
-
-      setTasks(cleanedData);
-    } catch (error) {
-      console.error("Error loading tasks:", error);
-    }
-  };
-
-  const loadEmployees = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("employees")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (error) throw error;
-      setEmployees(data || []);
-    } catch (error) {
-      console.error("Error loading employees:", error);
-    }
-  };
-
-  const loadProjects = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("workload_projects")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (error) throw error;
-      setProjects(data || []);
-    } catch (error) {
-      console.error("Error loading projects:", error);
-    }
-  };
+  const selectedEmployee = useMemo(() => {
+    if (!selectedEmployeeId) return null;
+    return employees.find((e) => e.id === selectedEmployeeId);
+  }, [selectedEmployeeId, employees]);
 
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
@@ -133,198 +72,37 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
   const getWeekDates = (date: Date) => {
     const week = [];
-    const startOfWeek = new Date(date);
-    const day = startOfWeek.getDay();
-    const diff = startOfWeek.getDate() - day;
-    startOfWeek.setDate(diff);
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+    const dayOfMonth = date.getUTCDate();
+    const dayOfWeek = date.getUTCDay();
+
+    const sundayDate = new Date(Date.UTC(year, month, dayOfMonth - dayOfWeek));
 
     for (let i = 0; i < 7; i++) {
-      const day = new Date(startOfWeek);
-      day.setDate(startOfWeek.getDate() + i);
-      week.push(day);
+      const weekDay = new Date(sundayDate.valueOf());
+      weekDay.setUTCDate(sundayDate.getUTCDate() + i);
+      week.push(weekDay);
     }
     return week;
   };
 
   const getMonthDates = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const startDate = new Date(firstDay);
-    const endDate = new Date(lastDay);
-
-    // Adjust to start from Sunday
-    startDate.setDate(startDate.getDate() - startDate.getDay());
-    // Adjust to end on Saturday
-    endDate.setDate(endDate.getDate() + (6 - endDate.getDay()));
-
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+    const firstDay = new Date(Date.UTC(year, month, 1));
+    const lastDay = new Date(Date.UTC(year, month + 1, 0));
+    const startDate = new Date(firstDay.valueOf());
+    startDate.setUTCDate(startDate.getUTCDate() - firstDay.getUTCDay());
+    const endDate = new Date(lastDay.valueOf());
+    endDate.setUTCDate(endDate.getUTCDate() + (6 - lastDay.getUTCDay()));
     const dates = [];
-    const current = new Date(startDate);
-
+    let current = new Date(startDate.valueOf());
     while (current <= endDate) {
-      dates.push(new Date(current));
-      current.setDate(current.getDate() + 1);
+      dates.push(new Date(current.valueOf()));
+      current.setUTCDate(current.getUTCDate() + 1);
     }
-
     return dates;
-  };
-
-  const getTasksForDate = (
-    date: Date,
-  ): (Task & { is_recurring_instance?: boolean })[] => {
-    const dayTasks: (Task & { is_recurring_instance?: boolean })[] = [];
-    const dateStr = date.toISOString().split("T")[0];
-    const dayOfWeek = date.getDay();
-    const dayNameToNumber: { [key: string]: number } = {
-      sunday: 0,
-      monday: 1,
-      tuesday: 2,
-      wednesday: 3,
-      thursday: 4,
-      friday: 5,
-      saturday: 6,
-    };
-    const dayNumberToName = Object.keys(dayNameToNumber).find(
-      (key) => dayNameToNumber[key] === dayOfWeek,
-    );
-
-    filteredTasks.forEach((task) => {
-      const taskStart = new Date(task.start_date);
-      const taskEnd = new Date(task.end_date);
-
-      if (task.repeats_weekly && task.repeat_days && dayNumberToName) {
-        if (
-          date >= taskStart &&
-          date <= taskEnd &&
-          task.repeat_days.includes(dayNumberToName)
-        ) {
-          dayTasks.push({
-            ...task,
-            id: `${task.id}-${dateStr}`,
-            start_date: dateStr,
-            end_date: dateStr,
-            estimated_time: task.hours_per_day || 0,
-            is_recurring_instance: true,
-          });
-        }
-      } else {
-        if (dateStr >= task.start_date && dateStr <= task.end_date) {
-          dayTasks.push(task);
-        }
-      }
-    });
-
-    return dayTasks;
-  };
-
-  const calculateDayWorkload = (date: Date, employeeId?: string) => {
-    const dayTasks = getTasksForDate(date);
-    const filteredTasksByEmployee = employeeId
-      ? dayTasks.filter((task) => task.assigned_employee_id === employeeId)
-      : dayTasks;
-
-    // Check if it's weekend
-    const isWeekend = date.getDay() === 0 || date.getDay() === 6; // Sunday = 0, Saturday = 6
-
-    const totalHours = filteredTasksByEmployee.reduce((sum, task) => {
-      // For recurring instances, estimated_time is already hours_per_day
-      if (task.is_recurring_instance) {
-        return sum + task.estimated_time;
-      }
-
-      // For multi-day tasks, distribute hours evenly across days
-      const startDate = new Date(task.start_date);
-      const endDate = new Date(task.end_date);
-
-      // Calculate working days between start and end date, considering employee's weekend work preference
-      let workingDays = 0;
-      const tempDate = new Date(startDate);
-      const employee = employees.find(
-        (emp) => emp.id === task.assigned_employee_id,
-      );
-      const worksWeekends = employee?.trabalha_fim_de_semana || false;
-
-      while (tempDate <= endDate) {
-        const dayOfWeek = tempDate.getDay();
-        const isCurrentWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-
-        if (!isCurrentWeekend || worksWeekends) {
-          workingDays++;
-        }
-
-        tempDate.setDate(tempDate.getDate() + 1);
-      }
-
-      const daysDiff = Math.max(1, workingDays);
-
-      // If current date is weekend and employee doesn't work weekends, don't count hours
-      if (employeeId && isWeekend) {
-        const employee = employees.find((emp) => emp.id === employeeId);
-        const worksWeekends = employee?.trabalha_fim_de_semana || false;
-        if (!worksWeekends) {
-          return sum; // Don't add hours for weekend days
-        }
-      }
-
-      return sum + task.estimated_time / daysDiff;
-    }, 0);
-
-    if (employeeId) {
-      const employee = employees.find((emp) => emp.id === employeeId);
-      const worksWeekends = employee?.trabalha_fim_de_semana || false;
-
-      // If it's weekend and employee doesn't work weekends, return zero capacity
-      if (isWeekend && !worksWeekends) {
-        return {
-          hours: 0,
-          percentage: 0,
-          capacity: 0,
-        };
-      }
-
-      // Calculate daily capacity based on whether employee works weekends
-      const workingDaysPerWeek = worksWeekends ? 7 : 5;
-      const dailyCapacity = employee
-        ? employee.weekly_hours / workingDaysPerWeek
-        : 8;
-
-      return {
-        hours: totalHours,
-        percentage: (totalHours / dailyCapacity) * 100,
-        capacity: dailyCapacity,
-      };
-    }
-
-    // For all employees view, calculate average workload
-    const totalEmployees = employees.length;
-    if (totalEmployees === 0) {
-      return {
-        hours: totalHours,
-        percentage: 0,
-        capacity: 0,
-      };
-    }
-
-    // Calculate average capacity considering each employee's weekend work preference
-    const totalCapacity = employees.reduce((sum, emp) => {
-      const worksWeekends = emp.trabalha_fim_de_semana || false;
-      const workingDaysPerWeek = worksWeekends ? 7 : 5;
-      const dailyCapacity = emp.weekly_hours / workingDaysPerWeek;
-
-      // If it's weekend, only count employees who work weekends
-      if (isWeekend && !worksWeekends) {
-        return sum;
-      }
-
-      return sum + dailyCapacity;
-    }, 0);
-
-    return {
-      hours: totalHours,
-      percentage: totalCapacity > 0 ? (totalHours / totalCapacity) * 100 : 0,
-      capacity: totalCapacity,
-    };
   };
 
   const getWorkloadColor = (percentage: number) => {
@@ -365,19 +143,8 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   const dates =
     view === "weekly" ? getWeekDates(currentDate) : getMonthDates(currentDate);
 
-  if (loading) {
-    return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-      {/* Header */}
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-4">
@@ -408,7 +175,6 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
               </button>
             </div>
           </div>
-
           <div className="flex items-center space-x-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -443,8 +209,6 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
             </button>
           </div>
         </div>
-
-        {/* Legend */}
         <div className="flex items-center space-x-6 text-sm">
           <div className="flex items-center space-x-2">
             <div className="w-3 h-3 bg-green-100 border border-green-300 rounded"></div>
@@ -460,15 +224,8 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
           </div>
         </div>
       </div>
-
-      {/* Calendar Grid */}
       <div className="p-6">
-        <div
-          className={`grid gap-2 ${
-            view === "weekly" ? "grid-cols-7" : "grid-cols-7"
-          }`}
-        >
-          {/* Day Headers */}
+        <div className="grid grid-cols-7 gap-2">
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
             <div
               key={day}
@@ -477,99 +234,115 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
               {day}
             </div>
           ))}
+          {Array.from({ length: dates.length / 7 }).map((_, weekIndex) => (
+            <div
+              key={weekIndex}
+              className="contents"
+              onClick={() => onWeekClick && onWeekClick(dates[weekIndex * 7])}
+            >
+              {dates.slice(weekIndex * 7, weekIndex * 7 + 7).map((date, dayIndex) => {
+                const dayTasks = getTasksForDate(date, filteredTasks, selectedEmployee);
+                const workload = calculateDayWorkload(date, filteredTasks, employees, selectedEmployeeId);
+                const isCurrentMonth = date.getUTCMonth() === currentDate.getUTCMonth();
+                const isToday = date.toDateString() === new Date().toDateString();
 
-          {/* Calendar Days */}
-          {dates.map((date, index) => {
-            const dayTasks = getTasksForDate(date);
-            const workload = calculateDayWorkload(date, selectedEmployeeId);
-            const isCurrentMonth =
-              view === "monthly"
-                ? date.getMonth() === currentDate.getMonth()
-                : true;
-            const isToday = date.toDateString() === new Date().toDateString();
+                const [{ isOver, canDrop }, drop] = useDrop(() => ({
+                  accept: "task",
+                  drop: (item: { task: Task }) => {
+                    if (selectedEmployeeId) {
+                      onTaskDrop(item.task.id, selectedEmployeeId, date.toISOString().split("T")[0]);
+                    }
+                  },
+                  canDrop: () => !!selectedEmployeeId,
+                  collect: (monitor) => ({
+                    isOver: monitor.isOver(),
+                    canDrop: monitor.canDrop(),
+                  }),
+                }), [selectedEmployeeId, date, onTaskDrop]);
 
-            return (
-              <div
-                key={index}
-                className={`min-h-[120px] p-2 border border-gray-200 rounded-lg ${
-                  isCurrentMonth ? "bg-white" : "bg-gray-50"
-                } ${isToday ? "ring-2 ring-blue-500" : ""}`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span
-                    className={`text-sm font-medium ${
-                      isCurrentMonth ? "text-gray-900" : "text-gray-400"
-                    }`}
+                return (
+                  <div
+                    ref={drop}
+                    key={dayIndex}
+                    className={`min-h-[120px] p-2 border rounded-lg cursor-pointer hover:bg-gray-100 transition-colors ${
+                      isCurrentMonth ? "bg-white" : "bg-gray-50"
+                    } ${
+                      !selectedEmployee ? "cursor-default hover:bg-transparent" : ""
+                    } ${isToday ? "ring-2 ring-blue-500" : ""} ${isOver && canDrop ? 'bg-blue-100' : ''}`}
                   >
-                    {date.getDate()}
-                  </span>
-                  {workload.percentage > 0 && (
-                    <span
-                      className={`text-xs px-2 py-1 rounded-full font-semibold ${getWorkloadColor(
-                        workload.percentage,
-                      )}`}
-                    >
-                      {Math.round(workload.percentage)}%
-                    </span>
-                  )}
-                </div>
-
-                <div className="space-y-1">
-                  {dayTasks.slice(0, 3).map((task) => {
-                    const employee = getEmployee(task.assigned_employee_id);
-                    const project = getProject(task.project_id);
-
-                    return (
-                      <div
-                        key={task.id}
-                        className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate"
-                        title={`${task.name} - ${employee?.name} (${project?.name})`}
+                    <div className="flex items-center justify-between mb-2">
+                      <span
+                        className={`text-sm font-medium ${
+                          isCurrentMonth ? "text-gray-900" : "text-gray-400"
+                        }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="font-medium text-blue-900 truncate">
-                            {task.name}
-                          </div>
-                          {task.is_recurring_instance && (
-                            <Repeat
-                              className="h-3 w-3 text-blue-400 flex-shrink-0"
-                              aria-label="Recurring task"
-                            />
-                          )}
-                        </div>
-                        {!selectedEmployeeId && employee && (
-                          <div className="text-blue-600 truncate">
-                            {employee.name}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-
-                  {dayTasks.length > 3 && (
-                    <div className="text-xs text-gray-500 text-center">
-                      +{dayTasks.length - 3} more
+                        {date.getDate()}
+                      </span>
+                      {workload.percentage > 0 && (
+                        <span
+                          className={`text-xs px-2 py-1 rounded-full font-semibold ${getWorkloadColor(
+                            workload.percentage,
+                          )}`}
+                        >
+                          {Math.round(workload.percentage)}%
+                        </span>
+                      )}
                     </div>
-                  )}
-                </div>
-
-                {workload.hours > 0 && (
-                  <div className="mt-2 text-xs text-gray-600">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <Clock className="h-3 w-3 mr-1" />
-                        {workload.hours.toFixed(1)}h
-                      </div>
-                      {workload.capacity > 0 && (
-                        <div className="text-xs text-gray-500">
-                          /{workload.capacity.toFixed(1)}h
+                    <div className="space-y-1">
+                      {dayTasks.slice(0, 3).map((task) => {
+                        const employee = getEmployee(task.assigned_employee_id);
+                        const project = getProject(task.project_id);
+                        return (
+                          <div
+                            key={task.id}
+                            className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate"
+                            title={`${task.name} - ${employee?.name} (${project?.name})`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="font-medium text-blue-900 truncate">
+                                {task.name}
+                              </div>
+                              {task.is_recurring_instance && (
+                                <Repeat
+                                  className="h-3 w-3 text-blue-400 flex-shrink-0"
+                                  aria-label="Recurring task"
+                                />
+                              )}
+                            </div>
+                            {!selectedEmployeeId && employee && (
+                              <div className="text-blue-600 truncate">
+                                {employee.name}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {dayTasks.length > 3 && (
+                        <div className="text-xs text-gray-500 text-center">
+                          +{dayTasks.length - 3} more
                         </div>
                       )}
                     </div>
+                    {workload.hours > 0 && (
+                      <div className="mt-2 text-xs text-gray-600">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <Clock className="h-3 w-3 mr-1" />
+                            {workload.hours.toFixed(1)}h
+                          </div>
+                          {workload.capacity > 0 && (
+                            <div className="text-xs text-gray-500">
+                              /{workload.capacity.toFixed(1)}h
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          ))}
         </div>
       </div>
     </div>

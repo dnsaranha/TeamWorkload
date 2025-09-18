@@ -43,6 +43,16 @@ import {
 import * as XLSX from "xlsx";
 import { employeeService, type Employee } from "@/lib/supabaseClient";
 
+const daysOfWeek = [
+  { id: "sunday", label: "Sun" },
+  { id: "monday", label: "Mon" },
+  { id: "tuesday", label: "Tue" },
+  { id: "wednesday", label: "Wed" },
+  { id: "thursday", label: "Thu" },
+  { id: "friday", label: "Fri" },
+  { id: "saturday", label: "Sat" },
+];
+
 const EmployeeList = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,7 +67,7 @@ const EmployeeList = () => {
     role: "",
     weekly_hours: 40,
     skills: "",
-    trabalha_fim_de_semana: false,
+    dias_de_trabalho: ["monday", "tuesday", "wednesday", "thursday", "friday"],
   });
 
   // Load employees from database
@@ -78,16 +88,22 @@ const EmployeeList = () => {
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value } = e.target;
     setFormData({
       ...formData,
-      [name]:
-        type === "checkbox"
-          ? checked
-          : name === "weekly_hours"
-            ? parseInt(value) || 0
-            : value,
+      [name]: name === "weekly_hours" ? parseInt(value) || 0 : value,
     });
+  };
+
+  const handleDayChange = (day: string, checked: boolean) => {
+    const currentDays = formData.dias_de_trabalho;
+    let newDays;
+    if (checked) {
+      newDays = [...currentDays, day];
+    } else {
+      newDays = currentDays.filter((d) => d !== day);
+    }
+    setFormData({ ...formData, dias_de_trabalho: newDays });
   };
 
   const handleAddEmployee = async () => {
@@ -116,10 +132,16 @@ const EmployeeList = () => {
         role: formData.role.trim(),
         weekly_hours: formData.weekly_hours,
         skills: skillsArray,
-        trabalha_fim_de_semana: formData.trabalha_fim_de_semana,
+        dias_de_trabalho: formData.dias_de_trabalho,
       });
 
-      setEmployees([...employees, newEmployee]);
+      // After Supabase returns the new employee, it might not have the default value if it was null
+      const employeeWithDefaults = {
+        ...newEmployee,
+        dias_de_trabalho: newEmployee.dias_de_trabalho || [],
+      };
+
+      setEmployees([...employees, employeeWithDefaults]);
       resetForm();
       setIsAddDialogOpen(false);
     } catch (error) {
@@ -151,16 +173,19 @@ const EmployeeList = () => {
         .map((skill) => skill.trim())
         .filter((skill) => skill !== "");
 
-      const updatedEmployee = await employeeService.update(currentEmployee.id, {
-        name: formData.name.trim(),
-        role: formData.role.trim(),
-        weekly_hours: formData.weekly_hours,
-        skills: skillsArray,
-        trabalha_fim_de_semana: formData.trabalha_fim_de_semana,
-      });
+      const updatedEmployeeData = await employeeService.update(
+        currentEmployee.id,
+        {
+          name: formData.name.trim(),
+          role: formData.role.trim(),
+          weekly_hours: formData.weekly_hours,
+          skills: skillsArray,
+          dias_de_trabalho: formData.dias_de_trabalho,
+        },
+      );
 
       const updatedEmployees = employees.map((emp) =>
-        emp.id === currentEmployee.id ? updatedEmployee : emp,
+        emp.id === currentEmployee.id ? updatedEmployeeData : emp,
       );
 
       setEmployees(updatedEmployees);
@@ -187,12 +212,8 @@ const EmployeeList = () => {
       name: employee.name,
       role: employee.role,
       weekly_hours: employee.weekly_hours,
-      skills: Array.isArray(employee.skills)
-        ? employee.skills.join(", ")
-        : typeof employee.skills === "string"
-          ? employee.skills
-          : "",
-      trabalha_fim_de_semana: employee.trabalha_fim_de_semana || false,
+      skills: Array.isArray(employee.skills) ? employee.skills.join(", ") : "",
+      dias_de_trabalho: employee.dias_de_trabalho || [],
     });
     setIsEditDialogOpen(true);
   };
@@ -203,7 +224,7 @@ const EmployeeList = () => {
       role: "",
       weekly_hours: 40,
       skills: "",
-      trabalha_fim_de_semana: false,
+      dias_de_trabalho: ["monday", "tuesday", "wednesday", "thursday", "friday"],
     });
     setCurrentEmployee(null);
   };
@@ -216,11 +237,11 @@ const EmployeeList = () => {
 
   const exportToExcel = () => {
     const exportData = filteredEmployees.map((employee) => ({
-      ID: employee.id,
+      "Employee ID": employee.id,
       Name: employee.name,
       Role: employee.role,
       "Weekly Hours": employee.weekly_hours,
-      "Weekend Work": employee.trabalha_fim_de_semana ? "Yes" : "No",
+      "Working Days": (employee.dias_de_trabalho || []).join(", "),
       Skills: Array.isArray(employee.skills)
         ? employee.skills.join(", ")
         : "",
@@ -235,12 +256,12 @@ const EmployeeList = () => {
     );
   };
 
-  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = async (e) => {
+    reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
@@ -248,51 +269,55 @@ const EmployeeList = () => {
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        let createdCount = 0;
-        let updatedCount = 0;
-        let errorCount = 0;
+        jsonData.forEach(async (row: any) => {
+          if (row["Name"]) {
+            try {
+              const skillsArray = row["Skills"]
+                ? row["Skills"]
+                    .toString()
+                    .split(",")
+                    .map((skill: string) => skill.trim())
+                : [];
 
-        for (const row of jsonData as any[]) {
-          try {
-            if (!row["Name"]) {
-              continue; // Skip rows without a name
+              const workingDays = row["Working Days"]
+                ? row["Working Days"]
+                    .toString()
+                    .split(",")
+                    .map((day: string) => day.trim().toLowerCase())
+                : [];
+
+              const employeeData: any = {
+                name: row["Name"],
+                role: row["Role"] || "",
+                weekly_hours: Number(row["Weekly Hours"]) || 40,
+                dias_de_trabalho: workingDays,
+                skills: skillsArray,
+              };
+
+              if (row["Employee ID"]) {
+                employeeData.id = row["Employee ID"];
+              }
+
+              const upsertedEmployee = await employeeService.upsert(employeeData);
+
+              setEmployees((prev) => {
+                const existingEmployeeIndex = prev.findIndex(e => e.id === upsertedEmployee.id);
+                if (existingEmployeeIndex > -1) {
+                  const newEmployees = [...prev];
+                  newEmployees[existingEmployeeIndex] = upsertedEmployee;
+                  return newEmployees;
+                } else {
+                  return [...prev, upsertedEmployee];
+                }
+              });
+
+            } catch (error) {
+              console.error("Error importing employee:", error);
             }
-
-            const skillsArray = row["Skills"]
-              ? row["Skills"].toString().split(",").map((skill: string) => skill.trim())
-              : [];
-
-            const employeeData = {
-              name: row["Name"],
-              role: row["Role"] || "",
-              weekly_hours: Number(row["Weekly Hours"]) || 40,
-              trabalha_fim_de_semana: (row["Weekend Work"]?.toString().toLowerCase() === "yes"),
-              skills: skillsArray,
-            };
-
-            if (row["ID"]) {
-              await employeeService.update(row["ID"], employeeData);
-              updatedCount++;
-            } else {
-              await employeeService.create(employeeData);
-              createdCount++;
-            }
-          } catch (error) {
-            console.error("Error importing row:", row, error);
-            errorCount++;
           }
-        }
+        });
 
-        alert(
-          `Import completed.\nCreated: ${createdCount}\nUpdated: ${updatedCount}\nErrors: ${errorCount}`
-        );
-
-        loadEmployees(); // Reload all data to reflect changes
-
-        if (event.target) {
-          event.target.value = ''; // Reset file input
-        }
-
+        alert("Import completed!");
       } catch (error) {
         console.error("Error reading file:", error);
         alert("Error reading file. Please make sure it's a valid Excel file.");
@@ -411,27 +436,27 @@ const EmployeeList = () => {
                     />
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
-                    <Label
-                      htmlFor="trabalha_fim_de_semana"
-                      className="text-right"
-                    >
-                      Trabalha Fim de Semana
+                    <Label htmlFor="dias_de_trabalho" className="text-right">
+                      Working Days
                     </Label>
-                    <div className="col-span-3 flex items-center space-x-2">
-                      <input
-                        id="trabalha_fim_de_semana"
-                        name="trabalha_fim_de_semana"
-                        type="checkbox"
-                        checked={formData.trabalha_fim_de_semana}
-                        onChange={handleInputChange}
-                        className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                      />
-                      <Label
-                        htmlFor="trabalha_fim_de_semana"
-                        className="text-sm"
-                      >
-                        Sim, trabalha aos sábados e domingos
-                      </Label>
+                    <div className="col-span-3 flex flex-wrap gap-x-4 gap-y-2">
+                      {daysOfWeek.map((day) => (
+                        <div key={day.id} className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id={`add-${day.id}`}
+                            value={day.id}
+                            checked={formData.dias_de_trabalho.includes(
+                              day.id,
+                            )}
+                            onChange={(e) =>
+                              handleDayChange(day.id, e.target.checked)
+                            }
+                            className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                          />
+                          <Label htmlFor={`add-${day.id}`}>{day.label}</Label>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -455,7 +480,7 @@ const EmployeeList = () => {
                 <TableHead>Name</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Weekly Hours</TableHead>
-                <TableHead>Weekend Work</TableHead>
+                <TableHead>Working Days</TableHead>
                 <TableHead>Skills</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -479,15 +504,15 @@ const EmployeeList = () => {
                     <TableCell>{employee.role}</TableCell>
                     <TableCell>{employee.weekly_hours}h</TableCell>
                     <TableCell>
-                      <Badge
-                        variant={
-                          employee.trabalha_fim_de_semana
-                            ? "default"
-                            : "secondary"
-                        }
-                      >
-                        {employee.trabalha_fim_de_semana ? "Sim" : "Não"}
-                      </Badge>
+                      <div className="flex flex-wrap gap-1">
+                        {(employee.dias_de_trabalho || []).map((day) => (
+                          <Badge key={day} variant="outline">
+                            {
+                              daysOfWeek.find((d) => d.id === day)?.label || day
+                            }
+                          </Badge>
+                        ))}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
@@ -623,27 +648,25 @@ const EmployeeList = () => {
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label
-                htmlFor="edit-trabalha_fim_de_semana"
-                className="text-right"
-              >
-                Trabalha Fim de Semana
+              <Label htmlFor="dias_de_trabalho" className="text-right">
+                Working Days
               </Label>
-              <div className="col-span-3 flex items-center space-x-2">
-                <input
-                  id="edit-trabalha_fim_de_semana"
-                  name="trabalha_fim_de_semana"
-                  type="checkbox"
-                  checked={formData.trabalha_fim_de_semana}
-                  onChange={handleInputChange}
-                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                />
-                <Label
-                  htmlFor="edit-trabalha_fim_de_semana"
-                  className="text-sm"
-                >
-                  Sim, trabalha aos sábados e domingos
-                </Label>
+              <div className="col-span-3 flex flex-wrap gap-x-4 gap-y-2">
+                {daysOfWeek.map((day) => (
+                  <div key={day.id} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id={`edit-${day.id}`}
+                      value={day.id}
+                      checked={formData.dias_de_trabalho.includes(day.id)}
+                      onChange={(e) =>
+                        handleDayChange(day.id, e.target.checked)
+                      }
+                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                    />
+                    <Label htmlFor={`edit-${day.id}`}>{day.label}</Label>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

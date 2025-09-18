@@ -17,6 +17,7 @@ import WorkloadCalendar from "./WorkloadCalendar";
 import EmployeeList from "./EmployeeList";
 import TaskManagement from "./TaskManagement";
 import WorkloadSummary from "./WorkloadSummary";
+import WorkloadView from "./WorkloadView";
 import ProjectVisualization from "./ProjectVisualization";
 import ProjectList from "./ProjectList";
 import UserProfile from "./UserProfile";
@@ -36,6 +37,9 @@ const HomePage = () => {
   const [avgWorkload, setAvgWorkload] = useState(0);
   const [totalProjects, setTotalProjects] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(
+    null,
+  );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState(false);
@@ -339,13 +343,8 @@ const HomePage = () => {
                 </Card>
               </div>
 
-              <div className="flex gap-6 h-[calc(100vh-280px)]">
-                <div className="flex-1">
-                  <WorkloadCalendar />
-                </div>
-                <div className="w-80">
-                  <WorkloadSummary />
-                </div>
+              <div className="h-[calc(100vh-280px)]">
+                <WorkloadView />
               </div>
             </div>
           )}

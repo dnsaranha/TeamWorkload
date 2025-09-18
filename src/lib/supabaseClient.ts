@@ -17,7 +17,7 @@ export type Employee = {
   role: string;
   weekly_hours: number;
   skills: any; // Using any to match Supabase Json type
-  trabalha_fim_de_semana?: boolean;
+  dias_de_trabalho: string[] | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -27,7 +27,7 @@ export type EmployeeInsert = {
   role: string;
   weekly_hours: number;
   skills: any; // Using any to match Supabase Json type
-  trabalha_fim_de_semana?: boolean;
+  dias_de_trabalho?: string[] | null;
 };
 
 export type EmployeeUpdate = Partial<EmployeeInsert>;
@@ -132,6 +132,17 @@ export const employeeService = {
 
     if (error) throw error;
   },
+
+  async upsert(employee: EmployeeInsert & { id?: string }) {
+    const { data, error } = await supabase
+      .from("employees")
+      .upsert(employee)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
 };
 
 export const projectService = {
@@ -175,6 +186,17 @@ export const projectService = {
       .eq("id", id);
 
     if (error) throw error;
+  },
+
+  async upsert(project: ProjectInsert & { id?: string }) {
+    const { data, error } = await supabase
+      .from("workload_projects")
+      .upsert(project)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
   },
 };
 
@@ -237,5 +259,22 @@ export const taskService = {
       .eq("id", id);
 
     if (error) throw error;
+  },
+
+  async upsert(task: TaskInsert & { id?: string }) {
+    const { data, error } = await supabase
+      .from("workload_tasks")
+      .upsert(task)
+      .select(
+        `
+        *,
+        project:workload_projects(*),
+        assigned_employee:employees(*)
+      `,
+      )
+      .single();
+
+    if (error) throw error;
+    return data;
   },
 };
