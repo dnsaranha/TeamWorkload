@@ -372,6 +372,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
       weekday: "short",
       month: "short",
       day: "numeric",
+      timeZone: "UTC",
     });
   };
 
@@ -453,6 +454,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                 : currentDate.toLocaleDateString("en-US", {
                     month: "long",
                     year: "numeric",
+                    timeZone: "UTC",
                   })}
             </span>
             <button
@@ -514,8 +516,11 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
             const workload = calculateDayWorkload(date, selectedEmployeeId);
             const isCurrentMonth =
               date.getUTCMonth() === currentDate.getUTCMonth();
+            const today = new Date();
             const isToday =
-              date.toDateString() === new Date().toDateString();
+              date.getUTCFullYear() === today.getUTCFullYear() &&
+              date.getUTCMonth() === today.getUTCMonth() &&
+              date.getUTCDate() === today.getUTCDate();
 
             return (
               <div
@@ -534,7 +539,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                       !isWorkDay && selectedEmployeeId ? "text-gray-400" : ""
                     }`}
                   >
-                    {date.getDate()}
+                    {date.getUTCDate()}
                   </span>
                   {isWorkDay && workload.percentage > 0 && (
                     <span
