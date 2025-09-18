@@ -16,7 +16,7 @@ import {
   type Project,
 } from "@/lib/supabaseClient";
 import { Input } from "./ui/input";
-import { calculateDayWorkload, getTasksForDate } from "@/lib/workloadUtils";
+import { calculateDayWorkload, getTasksForDate, dayNumberToName } from "@/lib/workloadUtils";
 
 interface WorkloadCalendarProps {
   tasks: (Task & { is_recurring_instance?: boolean })[];
@@ -264,10 +264,10 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                   <div
                     ref={drop}
                     key={dayIndex}
-                    className={`min-h-[120px] p-2 border rounded-lg cursor-pointer hover:bg-gray-100 transition-colors ${
-                      isCurrentMonth ? "bg-white" : "bg-gray-50"
+                    className={`min-h-[120px] p-2 border rounded-lg transition-colors ${
+                      !selectedEmployeeId ? 'cursor-default' : 'cursor-pointer hover:bg-gray-100'
                     } ${
-                      !selectedEmployee ? "cursor-default hover:bg-transparent" : ""
+                      isCurrentMonth ? "bg-white" : "bg-gray-50"
                     } ${isToday ? "ring-2 ring-blue-500" : ""} ${isOver && canDrop ? 'bg-blue-100' : ''}`}
                   >
                     <div className="flex items-center justify-between mb-2">

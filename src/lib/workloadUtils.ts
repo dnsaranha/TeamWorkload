@@ -1,6 +1,6 @@
 import { type Task, type Employee } from './supabaseClient';
 
-const dayNumberToName: { [key: number]: string } = {
+export const dayNumberToName: { [key: number]: string } = {
   0: "sunday",
   1: "monday",
   2: "tuesday",
