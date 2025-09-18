@@ -135,6 +135,7 @@ const WorkloadView = () => {
                 employees={employees}
                 projects={projects}
                 weekDates={getWeekDates(detailedWeekStart)}
+                selectedEmployeeId={selectedEmployeeId}
                 onTaskDrop={handleTaskDrop}
                 onTaskUpdate={handleTaskUpdate}
                 onGoBack={handleGoBackToSummary}

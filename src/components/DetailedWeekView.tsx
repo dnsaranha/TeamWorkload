@@ -8,13 +8,14 @@ import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Edit, Save } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
-import { calculateDayWorkload } from '@/lib/workloadUtils';
+import { calculateDayWorkload, getTasksForDate } from '@/lib/workloadUtils';
 
 interface DetailedWeekViewProps {
   tasks: Task[];
   employees: Employee[];
   projects: Project[];
   weekDates: Date[];
+  selectedEmployeeId?: string | null;
   onTaskDrop: (taskId: string, employeeId: string, date: string) => void;
   onTaskUpdate: (task: Task) => void;
   onGoBack: () => void;
@@ -25,10 +26,14 @@ const DetailedWeekView: React.FC<DetailedWeekViewProps> = ({
   employees,
   projects,
   weekDates,
+  selectedEmployeeId,
   onTaskDrop,
   onTaskUpdate,
   onGoBack,
 }) => {
+  const displayedEmployees = selectedEmployeeId
+    ? employees.filter(e => e.id === selectedEmployeeId)
+    : employees;
   return (
     <div className="p-4 bg-white rounded-lg shadow-sm border border-gray-200 h-full flex flex-col">
       <div className="flex justify-between items-center mb-4 flex-shrink-0">
@@ -49,7 +54,7 @@ const DetailedWeekView: React.FC<DetailedWeekViewProps> = ({
           ))}
 
           {/* Body */}
-          {employees.map(employee => (
+          {displayedEmployees.map(employee => (
             <React.Fragment key={employee.id}>
               <div className="p-2 border-r flex items-center bg-gray-50 sticky left-0">
                 <div className="font-medium">{employee.name}</div>
@@ -84,20 +89,16 @@ const getWorkloadColor = (percentage: number) => {
 const DroppableCell = ({ date, employee, tasks, onTaskDrop, onTaskUpdate, projects, allEmployees }: { date: Date; employee: Employee; tasks: Task[]; onTaskDrop: DetailedWeekViewProps['onTaskDrop'], onTaskUpdate: DetailedWeekViewProps['onTaskUpdate'], projects: Project[], allEmployees: Employee[] }) => {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
-  const dateString = date.toISOString().split('T')[0];
-  const cellTasks = tasks.filter(task =>
-    task.assigned_employee_id === employee.id &&
-    task.start_date <= dateString &&
-    task.end_date >= dateString
-  );
-
+  const cellTasks = getTasksForDate(date, tasks, employee);
   const workload = calculateDayWorkload(date, tasks, allEmployees, employee.id);
+  const isWorkDay = (employee.dias_de_trabalho || ["monday", "tuesday", "wednesday", "thursday", "friday"]).includes(format(date, 'eeee').toLowerCase());
 
-  const [{ isOver }, drop] = useDrop(() => ({
+  const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: 'task',
     drop: (item: { task: Task }) => {
-      onTaskDrop(item.task.id, employee.id, dateString);
+      onTaskDrop(item.task.id, employee.id, date.toISOString().split('T')[0]);
     },
+    canDrop: () => isWorkDay,
     collect: monitor => ({
       isOver: monitor.isOver(),
     }),
@@ -127,9 +128,9 @@ const DroppableCell = ({ date, employee, tasks, onTaskDrop, onTaskUpdate, projec
   return (
     <div
       ref={drop}
-      className={`p-1 border-b min-h-[100px] transition-colors ${isOver ? 'bg-blue-50' : getWorkloadColor(workload.percentage)}`}
+      className={`p-1 border-b min-h-[100px] transition-colors ${!isWorkDay ? 'bg-gray-50' : isOver && canDrop ? 'bg-blue-50' : getWorkloadColor(workload.percentage)}`}
     >
-      <div className="text-xs text-gray-500 text-right">{workload.hours.toFixed(1)}h ({Math.round(workload.percentage)}%)</div>
+      {isWorkDay && <div className="text-xs text-gray-500 text-right">{workload.hours.toFixed(1)}h ({Math.round(workload.percentage)}%)</div>}
       {cellTasks.map(task => (
         editingTask?.id === task.id ? (
           <div key={task.id} className="p-2 bg-white rounded border border-blue-500">
