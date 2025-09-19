@@ -37,6 +37,9 @@ import {
   type Employee,
   type Project,
 } from "@/lib/supabaseClient";
+import { Clock, Briefcase } from "lucide-react";
+import { useDrag } from "react-dnd";
+import { ItemTypes } from "../lib/dnd";
 
 type TaskWithRelations = Task & {
   project: Project | null;
@@ -60,6 +63,7 @@ interface WorkloadSummaryProps {
   showCharts?: boolean;
   selectedEmployeeId?: string | null;
   onEmployeeSelect?: (employeeId: string | null) => void;
+  dataVersion?: number;
 }
 
 interface ChartConfig {
@@ -86,6 +90,7 @@ const WorkloadSummary = ({
   showCharts = false,
   selectedEmployeeId,
   onEmployeeSelect,
+  dataVersion = 0,
 }: WorkloadSummaryProps) => {
   const [activeTab, setActiveTab] = useState(
     showCharts ? "charts" : "employees",
@@ -93,6 +98,9 @@ const WorkloadSummary = ({
   const [dbEmployees, setDbEmployees] = useState<EmployeeWithWorkload[]>([]);
   const [dbProjects, setDbProjects] = useState<ProjectWithWorkload[]>([]);
   const [tasks, setTasks] = useState<TaskWithRelations[]>([]);
+  const [unallocatedTasks, setUnallocatedTasks] = useState<
+    TaskWithRelations[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [chartConfig, setChartConfig] = useState<ChartConfig>({
     employeeWorkload: true,
@@ -104,7 +112,7 @@ const WorkloadSummary = ({
   // Load data from database
   useEffect(() => {
     loadData();
-  }, []);
+  }, [dataVersion]);
 
   const loadData = async () => {
     try {
@@ -115,17 +123,31 @@ const WorkloadSummary = ({
         projectService.getAll(),
       ]);
 
-      // Set tasks state
-      setTasks(tasksData as TaskWithRelations[]);
+      const projectsMap = new Map(projectsData.map((p) => [p.id, p]));
+      const employeesMap = new Map(employeesData.map((e) => [e.id, e]));
 
-      // Calculate workload for employees based on filtered period
+      const allTasksWithRelations: TaskWithRelations[] = (
+        tasksData as Task[]
+      ).map((task) => ({
+        ...task,
+        project: projectsMap.get(task.project_id) || null,
+        assigned_employee:
+          employeesMap.get(task.assigned_employee_id) || null,
+      }));
+
+      setTasks(allTasksWithRelations);
+
+      const unallocated = allTasksWithRelations.filter(
+        (task) => !task.assigned_employee_id,
+      );
+      setUnallocatedTasks(unallocated);
+
       const employeesWithWorkload: EmployeeWithWorkload[] = employeesData.map(
         (employee) => {
-          const employeeTasks = (tasksData as TaskWithRelations[]).filter(
+          const employeeTasks = allTasksWithRelations.filter(
             (task) => task.assigned_employee_id === employee.id,
           );
 
-          // Filter tasks based on the selected period and calculate workload
           const filteredTasks = filterTasksByPeriod(employeeTasks, period);
           const totalHours = calculatePeriodHours(filteredTasks, period);
           const periodCapacity = calculatePeriodCapacity(
@@ -145,10 +167,9 @@ const WorkloadSummary = ({
         },
       );
 
-      // Calculate workload for projects
       const projectsWithWorkload: ProjectWithWorkload[] = projectsData.map(
         (project) => {
-          const projectTasks = (tasksData as TaskWithRelations[]).filter(
+          const projectTasks = allTasksWithRelations.filter(
             (task) => task.project_id === project.id,
           );
 
@@ -164,7 +185,7 @@ const WorkloadSummary = ({
             projectTasks.length > 0
               ? Math.round((completedTasks / projectTasks.length) * 100)
               : 0;
-          const workload = Math.min(100, Math.round((totalHours / 40) * 100)); // Assuming 40h baseline
+          const workload = Math.min(100, Math.round((totalHours / 40) * 100));
 
           return {
             ...project,
@@ -378,10 +399,11 @@ const WorkloadSummary = ({
         </div>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList
-            className={`grid w-full ${showCharts ? "grid-cols-3" : "grid-cols-2"}`}
+            className={`grid w-full ${showCharts ? "grid-cols-4" : "grid-cols-3"}`}
           >
             <TabsTrigger value="employees">Employees</TabsTrigger>
             <TabsTrigger value="projects">Projects</TabsTrigger>
+            <TabsTrigger value="unallocated">Unallocated</TabsTrigger>
             {showCharts && <TabsTrigger value="charts">Charts</TabsTrigger>}
           </TabsList>
         </Tabs>
@@ -516,6 +538,24 @@ const WorkloadSummary = ({
                         </div>
                       </div>
                     </div>
+                  ))
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="unallocated" className="mt-0">
+              <div className="space-y-3">
+                {loading ? (
+                  <div className="text-center py-6 text-muted-foreground">
+                    Loading tasks...
+                  </div>
+                ) : unallocatedTasks.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground">
+                    No unallocated tasks
+                  </div>
+                ) : (
+                  unallocatedTasks.map((task) => (
+                    <DraggableTask key={task.id} task={task} />
                   ))
                 )}
               </div>
@@ -660,6 +700,43 @@ const WorkloadSummary = ({
         </Tabs>
       </CardContent>
     </Card>
+  );
+interface DraggableTaskProps {
+  task: TaskWithRelations;
+}
+
+const DraggableTask: React.FC<DraggableTaskProps> = ({ task }) => {
+  const [{ isDragging }, drag] = useDrag(() => ({
+    type: ItemTypes.TASK,
+    item: { id: task.id },
+    collect: (monitor) => ({
+      isDragging: !!monitor.isDragging(),
+    }),
+  }));
+
+  return (
+    <div
+      ref={drag}
+      className={`p-3 rounded-lg border bg-card cursor-grab ${
+        isDragging ? "opacity-50" : "opacity-100"
+      }`}
+    >
+      <div className="flex items-start justify-between">
+        <h4 className="font-medium text-sm mb-2">{task.name}</h4>
+      </div>
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <div className="flex items-center gap-1">
+          <Clock className="h-3 w-3" />
+          <span>{task.estimated_time}h estimate</span>
+        </div>
+        {task.project && (
+          <div className="flex items-center gap-1">
+            <Briefcase className="h-3 w-3" />
+            <span>{task.project.name}</span>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 
