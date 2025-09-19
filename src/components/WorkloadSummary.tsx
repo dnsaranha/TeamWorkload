@@ -701,6 +701,7 @@ const WorkloadSummary = ({
       </CardContent>
     </Card>
   );
+};
 interface DraggableTaskProps {
   task: TaskWithRelations;
 }
