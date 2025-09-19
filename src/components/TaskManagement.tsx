@@ -763,8 +763,8 @@ const TaskManagement = () => {
                   <div className="font-medium truncate">{task.name}</div>
                   <div className="text-gray-500">{task.estimated_time}h</div>
                   <div className="text-xs text-gray-400">
-                    {format(new Date(task.start_date), "dd/MM")} -{" "}
-                    {format(new Date(task.end_date), "dd/MM")}
+                    {format(new Date(task.start_date + "T00:00:00"), "dd/MM")}{" "}
+                    - {format(new Date(task.end_date + "T00:00:00"), "dd/MM")}
                   </div>
                 </div>
               )}
@@ -1503,8 +1503,8 @@ const TaskManagement = () => {
                     <TableCell>{task.project?.name || "No project"}</TableCell>
                     <TableCell>{task.estimated_time}h</TableCell>
                     <TableCell>
-                      {format(new Date(task.start_date), "MMM d")} -{" "}
-                      {format(new Date(task.end_date), "MMM d, yyyy")}
+                      {format(new Date(task.start_date + "T00:00:00"), "MMM d")}{" "}
+                      - {format(new Date(task.end_date + "T00:00:00"), "MMM d, yyyy")}
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -1645,13 +1645,16 @@ const TaskManagement = () => {
                         className="w-full justify-start text-left font-normal"
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {format(new Date(currentTask.start_date), "PPP")}
+                        {format(
+                          new Date(currentTask.start_date + "T00:00:00"),
+                          "PPP",
+                        )}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0">
                       <Calendar
                         mode="single"
-                        selected={new Date(currentTask.start_date + "T00:00:00Z")}
+                        selected={new Date(currentTask.start_date + "T00:00:00")}
                         onSelect={(date) =>
                           date &&
                           setCurrentTask({
@@ -1677,13 +1680,16 @@ const TaskManagement = () => {
                         className="w-full justify-start text-left font-normal"
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {format(new Date(currentTask.end_date), "PPP")}
+                        {format(
+                          new Date(currentTask.end_date + "T00:00:00"),
+                          "PPP",
+                        )}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0">
                       <Calendar
                         mode="single"
-                        selected={new Date(currentTask.end_date + "T00:00:00Z")}
+                        selected={new Date(currentTask.end_date + "T00:00:00")}
                         onSelect={(date) =>
                           date &&
                           setCurrentTask({
