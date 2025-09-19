@@ -680,10 +680,11 @@ const Roadmap = () => {
           </Card>
         )}
 
-        <Collapsible open={isLegendOpen} onOpenChange={setIsLegendOpen}>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-sm flex items-center gap-2">
+        <div className="md:w-1/2 mx-auto">
+          <Collapsible open={isLegendOpen} onOpenChange={setIsLegendOpen}>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-sm flex items-center gap-2">
                 <Layers className="h-4 w-4" />
                 Legenda
               </CardTitle>
@@ -740,6 +741,7 @@ const Roadmap = () => {
             </CollapsibleContent>
           </Card>
         </Collapsible>
+        </div>
 
         <Card>
           <CardContent className="p-0">
