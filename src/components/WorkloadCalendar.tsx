@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -9,13 +9,13 @@ import {
   Repeat,
   Search,
 } from "lucide-react";
-import { supabase } from "../lib/supabaseClient";
 import {
   type Task,
   type Employee,
   type Project,
 } from "@/lib/supabaseClient";
 import { Input } from "./ui/input";
+import { type TaskWithRelations } from "./WorkloadView";
 
 const dayNumberToName: { [key: number]: string } = {
   0: "sunday",
@@ -28,21 +28,23 @@ const dayNumberToName: { [key: number]: string } = {
 };
 
 interface WorkloadCalendarProps {
+  tasks: TaskWithRelations[];
+  employees: Employee[];
+  projects: Project[];
   selectedEmployeeId?: string;
   viewMode?: "weekly" | "monthly";
+  onTaskUpdate: (task: TaskWithRelations) => void;
 }
 
 const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
+  tasks,
+  employees,
+  projects,
   selectedEmployeeId,
   viewMode = "weekly",
+  onTaskUpdate,
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [tasks, setTasks] = useState<
-    (Task & { is_recurring_instance?: boolean })[]
-  >([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"weekly" | "monthly">(viewMode);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -50,77 +52,6 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     if (!selectedEmployeeId) return null;
     return employees.find((e) => e.id === selectedEmployeeId);
   }, [selectedEmployeeId, employees]);
-
-  useEffect(() => {
-    loadData();
-  }, [currentDate, selectedEmployeeId]);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      await Promise.all([loadTasks(), loadEmployees(), loadProjects()]);
-    } catch (error) {
-      console.error("Error loading calendar data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadTasks = async () => {
-    try {
-      let query = supabase
-        .from("workload_tasks")
-        .select("*")
-        .order("start_date", { ascending: true });
-
-      if (selectedEmployeeId) {
-        query = query.eq("assigned_employee_id", selectedEmployeeId);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-
-      const validStatusValues = ["pending", "in_progress", "completed"];
-      const cleanedData = (data || []).map((task) => {
-        if (!validStatusValues.includes(task.status)) {
-          return { ...task, status: "pending" };
-        }
-        return task;
-      });
-
-      setTasks(cleanedData);
-    } catch (error) {
-      console.error("Error loading tasks:", error);
-    }
-  };
-
-  const loadEmployees = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("employees")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (error) throw error;
-      setEmployees(data || []);
-    } catch (error) {
-      console.error("Error loading employees:", error);
-    }
-  };
-
-  const loadProjects = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("workload_projects")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (error) throw error;
-      setProjects(data || []);
-    } catch (error) {
-      console.error("Error loading projects:", error);
-    }
-  };
 
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
