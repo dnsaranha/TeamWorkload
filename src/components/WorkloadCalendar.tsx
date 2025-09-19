@@ -45,6 +45,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"weekly" | "monthly">(viewMode);
   const [searchTerm, setSearchTerm] = useState("");
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
 
   const selectedEmployee = useMemo(() => {
     if (!selectedEmployeeId) return null;
@@ -384,6 +385,18 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     return projects.find((proj) => proj.id === projectId);
   };
 
+  const toggleDayExpansion = (dateStr: string) => {
+    setExpandedDays((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(dateStr)) {
+        newSet.delete(dateStr);
+      } else {
+        newSet.add(dateStr);
+      }
+      return newSet;
+    });
+  };
+
   const dates =
     view === "weekly" ? getWeekDates(currentDate) : getMonthDates(currentDate);
 
@@ -522,12 +535,16 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
               date.getUTCMonth() === today.getUTCMonth() &&
               date.getUTCDate() === today.getUTCDate();
 
+            const dateStr = date.toISOString().split("T")[0];
+            const isExpanded = expandedDays.has(dateStr);
+
             return (
               <div
                 key={index}
-                className={`min-h-[120px] p-2 border border-gray-200 rounded-lg ${
-                  isCurrentMonth ? "bg-white" : "bg-gray-50"
-                } ${
+                onClick={() => toggleDayExpansion(dateStr)}
+                className={`p-2 border border-gray-200 rounded-lg cursor-pointer transition-all duration-300 ${
+                  isExpanded ? "row-span-2" : "min-h-[120px]"
+                } ${isCurrentMonth ? "bg-white" : "bg-gray-50"} ${
                   !isWorkDay && selectedEmployeeId ? "bg-gray-100" : ""
                 } ${isToday ? "ring-2 ring-blue-500" : ""}`}
               >
@@ -552,11 +569,16 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                   )}
                 </div>
 
-                <div className="space-y-1">
+                <div
+                  className={`space-y-1 overflow-y-auto transition-all duration-300 ${
+                    isExpanded ? "max-h-96" : "max-h-[60px]"
+                  }`}
+                >
                   {isWorkDay &&
-                    dayTasks.slice(0, 3).map((task) => {
-                      const employee = getEmployee(task.assigned_employee_id);
-                      const project = getProject(task.project_id);
+                    (isExpanded ? dayTasks : dayTasks.slice(0, 3)).map(
+                      (task) => {
+                        const employee = getEmployee(task.assigned_employee_id);
+                        const project = getProject(task.project_id);
 
                       return (
                         <div
@@ -584,8 +606,14 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                       );
                     })}
 
-                  {isWorkDay && dayTasks.length > 3 && (
-                    <div className="text-xs text-gray-500 text-center">
+                  {isWorkDay && !isExpanded && dayTasks.length > 3 && (
+                    <div
+                      className="text-xs text-gray-500 text-center cursor-pointer hover:underline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleDayExpansion(dateStr);
+                      }}
+                    >
                       +{dayTasks.length - 3} more
                     </div>
                   )}
