@@ -9,13 +9,16 @@ import {
   Repeat,
   Search,
 } from "lucide-react";
-import { supabase } from "../lib/supabaseClient";
 import {
+  supabase,
   type Task,
   type Employee,
   type Project,
+  taskService,
 } from "@/lib/supabaseClient";
 import { Input } from "./ui/input";
+import { useDrop } from "react-dnd";
+import { ItemTypes } from "./DraggableTask";
 
 const dayNumberToName: { [key: number]: string } = {
   0: "sunday",
@@ -385,6 +388,23 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     return projects.find((proj) => proj.id === projectId);
   };
 
+  const handleTaskDrop = async (
+    taskId: string,
+    employeeId: string,
+    date: Date,
+  ) => {
+    try {
+      await taskService.update(taskId, {
+        assigned_employee_id: employeeId,
+        start_date: date.toISOString().split("T")[0],
+        end_date: date.toISOString().split("T")[0],
+      });
+      loadData();
+    } catch (error) {
+      console.error("Error updating task:", error);
+    }
+  };
+
   const toggleWeekExpansion = (date: Date) => {
     const year = date.getUTCFullYear();
     const month = date.getUTCMonth();
@@ -554,15 +574,30 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
             const weekStartDateStr = weekStartDate.toISOString().split("T")[0];
             const isExpanded = expandedWeeks.has(weekStartDateStr);
 
+            const [{ isOver }, drop] = useDrop(() => ({
+              accept: ItemTypes.TASK,
+              drop: (item: { id: string }) => {
+                if (selectedEmployeeId) {
+                  handleTaskDrop(item.id, selectedEmployeeId, date);
+                }
+              },
+              collect: (monitor) => ({
+                isOver: !!monitor.isOver(),
+              }),
+            }));
+
             return (
               <div
+                ref={drop}
                 key={index}
                 onClick={() => toggleWeekExpansion(date)}
                 className={`p-2 border border-gray-200 rounded-lg cursor-pointer transition-all duration-300 ${
                   isExpanded ? "h-auto" : "h-32"
                 } ${isCurrentMonth ? "bg-white" : "bg-gray-50"} ${
                   !isWorkDay && selectedEmployeeId ? "bg-gray-100" : ""
-                } ${isToday ? "ring-2 ring-blue-500" : ""}`}
+                } ${isToday ? "ring-2 ring-blue-500" : ""} ${
+                  isOver ? "bg-blue-100" : ""
+                }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span

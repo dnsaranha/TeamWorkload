@@ -234,6 +234,23 @@ export const taskService = {
     return data;
   },
 
+  async getUnallocated() {
+    const { data, error } = await supabase
+      .from("workload_tasks")
+      .select(
+        `
+        *,
+        project:workload_projects(*),
+        assigned_employee:employees(*)
+      `,
+      )
+      .is("assigned_employee_id", null)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    return data;
+  },
+
   async update(id: string, task: TaskUpdate) {
     const { data, error } = await supabase
       .from("workload_tasks")

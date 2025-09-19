@@ -37,6 +37,7 @@ import {
   type Employee,
   type Project,
 } from "@/lib/supabaseClient";
+import DraggableTask from "./DraggableTask";
 
 type TaskWithRelations = Task & {
   project: Project | null;
@@ -93,6 +94,9 @@ const WorkloadSummary = ({
   const [dbEmployees, setDbEmployees] = useState<EmployeeWithWorkload[]>([]);
   const [dbProjects, setDbProjects] = useState<ProjectWithWorkload[]>([]);
   const [tasks, setTasks] = useState<TaskWithRelations[]>([]);
+  const [unallocatedTasks, setUnallocatedTasks] = useState<
+    TaskWithRelations[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [chartConfig, setChartConfig] = useState<ChartConfig>({
     employeeWorkload: true,
@@ -109,14 +113,17 @@ const WorkloadSummary = ({
   const loadData = async () => {
     try {
       setLoading(true);
-      const [tasksData, employeesData, projectsData] = await Promise.all([
-        taskService.getAll(),
-        employeeService.getAll(),
-        projectService.getAll(),
-      ]);
+      const [tasksData, employeesData, projectsData, unallocatedTasksData] =
+        await Promise.all([
+          taskService.getAll(),
+          employeeService.getAll(),
+          projectService.getAll(),
+          taskService.getUnallocated(),
+        ]);
 
       // Set tasks state
       setTasks(tasksData as TaskWithRelations[]);
+      setUnallocatedTasks(unallocatedTasksData as TaskWithRelations[]);
 
       // Calculate workload for employees based on filtered period
       const employeesWithWorkload: EmployeeWithWorkload[] = employeesData.map(
@@ -378,10 +385,11 @@ const WorkloadSummary = ({
         </div>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList
-            className={`grid w-full ${showCharts ? "grid-cols-3" : "grid-cols-2"}`}
+            className={`grid w-full ${showCharts ? "grid-cols-4" : "grid-cols-3"}`}
           >
             <TabsTrigger value="employees">Employees</TabsTrigger>
             <TabsTrigger value="projects">Projects</TabsTrigger>
+            <TabsTrigger value="unallocated">Unallocated</TabsTrigger>
             {showCharts && <TabsTrigger value="charts">Charts</TabsTrigger>}
           </TabsList>
         </Tabs>
@@ -516,6 +524,24 @@ const WorkloadSummary = ({
                         </div>
                       </div>
                     </div>
+                  ))
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="unallocated" className="mt-0">
+              <div className="space-y-2">
+                {loading ? (
+                  <div className="text-center py-6">
+                    Loading unallocated tasks...
+                  </div>
+                ) : unallocatedTasks.length === 0 ? (
+                  <div className="text-center py-6">
+                    No unallocated tasks found
+                  </div>
+                ) : (
+                  unallocatedTasks.map((task) => (
+                    <DraggableTask key={task.id} task={task} />
                   ))
                 )}
               </div>
