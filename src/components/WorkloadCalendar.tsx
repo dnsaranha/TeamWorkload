@@ -45,6 +45,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"weekly" | "monthly">(viewMode);
   const [searchTerm, setSearchTerm] = useState("");
+  const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
 
   const selectedEmployee = useMemo(() => {
     if (!selectedEmployeeId) return null;
@@ -384,6 +385,27 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     return projects.find((proj) => proj.id === projectId);
   };
 
+  const toggleWeekExpansion = (date: Date) => {
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+    const dayOfMonth = date.getUTCDate();
+    const dayOfWeek = date.getUTCDay();
+    const weekStartDate = new Date(
+      Date.UTC(year, month, dayOfMonth - dayOfWeek),
+    );
+    const weekStartDateStr = weekStartDate.toISOString().split("T")[0];
+
+    setExpandedWeeks((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(weekStartDateStr)) {
+        newSet.delete(weekStartDateStr);
+      } else {
+        newSet.add(weekStartDateStr);
+      }
+      return newSet;
+    });
+  };
+
   const dates =
     view === "weekly" ? getWeekDates(currentDate) : getMonthDates(currentDate);
 
@@ -522,12 +544,23 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
               date.getUTCMonth() === today.getUTCMonth() &&
               date.getUTCDate() === today.getUTCDate();
 
+            const weekStartDate = new Date(
+              Date.UTC(
+                date.getUTCFullYear(),
+                date.getUTCMonth(),
+                date.getUTCDate() - date.getUTCDay(),
+              ),
+            );
+            const weekStartDateStr = weekStartDate.toISOString().split("T")[0];
+            const isExpanded = expandedWeeks.has(weekStartDateStr);
+
             return (
               <div
                 key={index}
-                className={`min-h-[120px] p-2 border border-gray-200 rounded-lg ${
-                  isCurrentMonth ? "bg-white" : "bg-gray-50"
-                } ${
+                onClick={() => toggleWeekExpansion(date)}
+                className={`p-2 border border-gray-200 rounded-lg cursor-pointer transition-all duration-300 ${
+                  isExpanded ? "h-auto" : "h-32"
+                } ${isCurrentMonth ? "bg-white" : "bg-gray-50"} ${
                   !isWorkDay && selectedEmployeeId ? "bg-gray-100" : ""
                 } ${isToday ? "ring-2 ring-blue-500" : ""}`}
               >
@@ -552,9 +585,13 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                   )}
                 </div>
 
-                <div className="space-y-1">
+                <div
+                  className={`space-y-1 overflow-y-auto transition-all duration-300 ${
+                    isExpanded ? "max-h-96" : "max-h-16"
+                  }`}
+                >
                   {isWorkDay &&
-                    dayTasks.slice(0, 3).map((task) => {
+                    dayTasks.map((task) => {
                       const employee = getEmployee(task.assigned_employee_id);
                       const project = getProject(task.project_id);
 
@@ -583,12 +620,6 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                         </div>
                       );
                     })}
-
-                  {isWorkDay && dayTasks.length > 3 && (
-                    <div className="text-xs text-gray-500 text-center">
-                      +{dayTasks.length - 3} more
-                    </div>
-                  )}
                 </div>
 
                 {isWorkDay && workload.hours > 0 && (
