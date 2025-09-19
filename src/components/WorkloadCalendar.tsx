@@ -45,6 +45,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"weekly" | "monthly">(viewMode);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isWeekExpanded, setIsWeekExpanded] = useState(false);
 
   const selectedEmployee = useMemo(() => {
     if (!selectedEmployeeId) return null;
@@ -54,6 +55,12 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   useEffect(() => {
     loadData();
   }, [currentDate, selectedEmployeeId]);
+
+  useEffect(() => {
+    if (view === "monthly") {
+      setIsWeekExpanded(false);
+    }
+  }, [view]);
 
   const loadData = async () => {
     try {
@@ -485,7 +492,16 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
       </div>
 
       {/* Calendar Grid */}
-      <div className="p-6">
+      <div
+        className={`p-6 ${
+          view === "weekly" ? "cursor-pointer group" : ""
+        }`}
+        onClick={() => {
+          if (view === "weekly") {
+            setIsWeekExpanded(!isWeekExpanded);
+          }
+        }}
+      >
         <div className="grid grid-cols-7 gap-2">
           {/* Day Headers */}
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
@@ -525,7 +541,9 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
             return (
               <div
                 key={index}
-                className={`min-h-[120px] p-2 border border-gray-200 rounded-lg ${
+                className={`${
+                  isWeekExpanded && view === "weekly" ? "" : "min-h-[120px]"
+                } p-2 border border-gray-200 rounded-lg ${
                   isCurrentMonth ? "bg-white" : "bg-gray-50"
                 } ${
                   !isWorkDay && selectedEmployeeId ? "bg-gray-100" : ""
@@ -554,7 +572,10 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
                 <div className="space-y-1">
                   {isWorkDay &&
-                    dayTasks.slice(0, 3).map((task) => {
+                    (isWeekExpanded && view === "weekly"
+                      ? dayTasks
+                      : dayTasks.slice(0, 3)
+                    ).map((task) => {
                       const employee = getEmployee(task.assigned_employee_id);
                       const project = getProject(task.project_id);
 
@@ -584,11 +605,14 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                       );
                     })}
 
-                  {isWorkDay && dayTasks.length > 3 && (
-                    <div className="text-xs text-gray-500 text-center">
-                      +{dayTasks.length - 3} more
-                    </div>
-                  )}
+                  {!isWeekExpanded &&
+                    view === "weekly" &&
+                    isWorkDay &&
+                    dayTasks.length > 3 && (
+                      <div className="text-xs text-gray-500 text-center">
+                        +{dayTasks.length - 3} more
+                      </div>
+                    )}
                 </div>
 
                 {isWorkDay && workload.hours > 0 && (
