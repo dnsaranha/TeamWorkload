@@ -410,7 +410,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
       return;
     }
 
-    const formattedDate = format(date, "yyyy-MM-dd");
+    const formattedDate = date.toISOString().split("T")[0];
 
     try {
       await taskService.update(taskId, {
