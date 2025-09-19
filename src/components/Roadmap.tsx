@@ -21,7 +21,14 @@ import {
   Rocket,
   Layers,
   Search,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   taskService,
   projectService,
@@ -101,6 +108,7 @@ const Roadmap = () => {
     itemType: "all",
   });
   const [showFilters, setShowFilters] = useState(false);
+  const [isLegendOpen, setIsLegendOpen] = useState(false);
 
   const getCategoryFor = (
     item: TaskWithRelations | Project,
@@ -672,52 +680,66 @@ const Roadmap = () => {
           </Card>
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Layers className="h-4 w-4" />
-              Legenda
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <h4 className="font-medium mb-2">Marcadores Especiais</h4>
-                <div className="space-y-1 text-sm">
-                  <div className="flex items-center gap-2">
-                    <Rocket className="h-4 w-4 text-blue-600" />
-                    <span>Major Release</span>
+        <Collapsible open={isLegendOpen} onOpenChange={setIsLegendOpen}>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Layers className="h-4 w-4" />
+                Legenda
+              </CardTitle>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  {isLegendOpen ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                  <span className="sr-only">Toggle</span>
+                </Button>
+              </CollapsibleTrigger>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="font-medium mb-2">Marcadores Especiais</h4>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex items-center gap-2">
+                        <Rocket className="h-4 w-4 text-blue-600" />
+                        <span>Major Release</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-green-600" />
+                        <span>Major Deployment</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Target className="h-4 w-4 text-purple-600" />
+                        <span>Major Theme</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-green-600" />
-                    <span>Major Deployment</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Target className="h-4 w-4 text-purple-600" />
-                    <span>Major Theme</span>
+                  <div>
+                    <h4 className="font-medium mb-2">Status das Atividades</h4>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                        <span>Pendente</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                        <span>Em Andamento</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                        <span>Concluído</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div>
-                <h4 className="font-medium mb-2">Status das Atividades</h4>
-                <div className="space-y-1 text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                    <span>Pendente</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                    <span>Em Andamento</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                    <span>Concluído</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
 
         <Card>
           <CardContent className="p-0">
