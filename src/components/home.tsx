@@ -37,6 +37,7 @@ const HomePage = () => {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(
     null,
   );
+  const [dataVersion, setDataVersion] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState(false);
@@ -329,12 +330,17 @@ const HomePage = () => {
 
               <div className="flex gap-6 h-[calc(100vh-280px)]">
                 <div className="flex-1">
-                  <WorkloadCalendar selectedEmployeeId={selectedEmployeeId} />
+                  <WorkloadCalendar
+                    selectedEmployeeId={selectedEmployeeId}
+                    dataVersion={dataVersion}
+                    onTaskAssigned={() => setDataVersion((v) => v + 1)}
+                  />
                 </div>
                 <div className="w-80">
                   <WorkloadSummary
                     selectedEmployeeId={selectedEmployeeId}
                     onEmployeeSelect={setSelectedEmployeeId}
+                    dataVersion={dataVersion}
                   />
                 </div>
               </div>

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useDrop } from "react-dnd";
+import { ItemTypes } from "../lib/dnd";
 import {
   ChevronLeft,
   ChevronRight,
@@ -14,7 +16,9 @@ import {
   type Task,
   type Employee,
   type Project,
+  taskService,
 } from "@/lib/supabaseClient";
+import { format } from "date-fns";
 import { Input } from "./ui/input";
 
 const dayNumberToName: { [key: number]: string } = {
@@ -30,11 +34,15 @@ const dayNumberToName: { [key: number]: string } = {
 interface WorkloadCalendarProps {
   selectedEmployeeId?: string;
   viewMode?: "weekly" | "monthly";
+  dataVersion?: number;
+  onTaskAssigned?: () => void;
 }
 
 const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   selectedEmployeeId,
   viewMode = "weekly",
+  dataVersion = 0,
+  onTaskAssigned = () => {},
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [tasks, setTasks] = useState<
@@ -54,7 +62,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
   useEffect(() => {
     loadData();
-  }, [currentDate, selectedEmployeeId]);
+  }, [currentDate, selectedEmployeeId, dataVersion]);
 
   useEffect(() => {
     if (view === "monthly") {
@@ -391,6 +399,33 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     return projects.find((proj) => proj.id === projectId);
   };
 
+  const handleDropTask = async (
+    taskId: string,
+    date: Date,
+    employeeId?: string,
+  ) => {
+    if (!employeeId) {
+      // Maybe show a toast notification to select an employee first
+      console.warn("No employee selected to assign the task to.");
+      return;
+    }
+
+    const formattedDate = format(date, "yyyy-MM-dd");
+
+    try {
+      await taskService.update(taskId, {
+        assigned_employee_id: employeeId,
+        start_date: formattedDate,
+        end_date: formattedDate, // Assuming the task is for a single day
+      });
+      // Show a success toast notification here
+      onTaskAssigned(); // This will trigger a re-render in the parent and refresh both components
+    } catch (error) {
+      console.error("Failed to update task", error);
+      // Show an error toast notification here
+    }
+  };
+
   const dates =
     view === "weekly" ? getWeekDates(currentDate) : getMonthDates(currentDate);
 
@@ -539,102 +574,133 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
               date.getUTCDate() === today.getUTCDate();
 
             return (
-              <div
+              <DayCell
                 key={index}
-                className={`${
-                  isWeekExpanded && view === "weekly" ? "" : "min-h-[120px]"
-                } p-2 border border-gray-200 rounded-lg ${
-                  isCurrentMonth ? "bg-white" : "bg-gray-50"
-                } ${
-                  !isWorkDay && selectedEmployeeId ? "bg-gray-100" : ""
-                } ${isToday ? "ring-2 ring-blue-500" : ""}`}
+                date={date}
+                employeeId={selectedEmployeeId}
+                onDropTask={handleDropTask}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <span
-                    className={`text-sm font-medium ${
-                      isCurrentMonth ? "text-gray-900" : "text-gray-400"
-                    } ${
-                      !isWorkDay && selectedEmployeeId ? "text-gray-400" : ""
-                    }`}
-                  >
-                    {date.getUTCDate()}
-                  </span>
-                  {isWorkDay && workload.percentage > 0 && (
+                <div
+                  className={`${
+                    isWeekExpanded && view === "weekly" ? "" : "min-h-[120px]"
+                  } p-2 border border-gray-200 rounded-lg ${
+                    isCurrentMonth ? "bg-white" : "bg-gray-50"
+                  } ${
+                    !isWorkDay && selectedEmployeeId ? "bg-gray-100" : ""
+                  } ${isToday ? "ring-2 ring-blue-500" : ""}`}
+                >
+                  <div className="flex items-center justify-between mb-2">
                     <span
-                      className={`text-xs px-2 py-1 rounded-full font-semibold ${getWorkloadColor(
-                        workload.percentage,
-                      )}`}
+                      className={`text-sm font-medium ${
+                        isCurrentMonth ? "text-gray-900" : "text-gray-400"
+                      } ${
+                        !isWorkDay && selectedEmployeeId ? "text-gray-400" : ""
+                      }`}
                     >
-                      {Math.round(workload.percentage)}%
+                      {date.getUTCDate()}
                     </span>
-                  )}
-                </div>
+                    {isWorkDay && workload.percentage > 0 && (
+                      <span
+                        className={`text-xs px-2 py-1 rounded-full font-semibold ${getWorkloadColor(
+                          workload.percentage,
+                        )}`}
+                      >
+                        {Math.round(workload.percentage)}%
+                      </span>
+                    )}
+                  </div>
 
-                <div className="space-y-1">
-                  {isWorkDay &&
-                    (isWeekExpanded && view === "weekly"
-                      ? dayTasks
-                      : dayTasks.slice(0, 3)
-                    ).map((task) => {
-                      const employee = getEmployee(task.assigned_employee_id);
-                      const project = getProject(task.project_id);
+                  <div className="space-y-1">
+                    {isWorkDay &&
+                      (isWeekExpanded && view === "weekly"
+                        ? dayTasks
+                        : dayTasks.slice(0, 3)
+                      ).map((task) => {
+                        const employee = getEmployee(task.assigned_employee_id);
+                        const project = getProject(task.project_id);
 
-                      return (
-                        <div
-                          key={task.id}
-                          className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate"
-                          title={`${task.name} - ${employee?.name} (${project?.name})`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="font-medium text-blue-900 truncate">
-                              {task.name}
+                        return (
+                          <div
+                            key={task.id}
+                            className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate"
+                            title={`${task.name} - ${employee?.name} (${project?.name})`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="font-medium text-blue-900 truncate">
+                                {task.name}
+                              </div>
+                              {task.is_recurring_instance && (
+                                <Repeat
+                                  className="h-3 w-3 text-blue-400 flex-shrink-0"
+                                  aria-label="Recurring task"
+                                />
+                              )}
                             </div>
-                            {task.is_recurring_instance && (
-                              <Repeat
-                                className="h-3 w-3 text-blue-400 flex-shrink-0"
-                                aria-label="Recurring task"
-                              />
+                            {!selectedEmployeeId && employee && (
+                              <div className="text-blue-600 truncate">
+                                {employee.name}
+                              </div>
                             )}
                           </div>
-                          {!selectedEmployeeId && employee && (
-                            <div className="text-blue-600 truncate">
-                              {employee.name}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
 
-                  {!isWeekExpanded &&
-                    view === "weekly" &&
-                    isWorkDay &&
-                    dayTasks.length > 3 && (
-                      <div className="text-xs text-gray-500 text-center">
-                        +{dayTasks.length - 3} more
-                      </div>
-                    )}
-                </div>
-
-                {isWorkDay && workload.hours > 0 && (
-                  <div className="mt-2 text-xs text-gray-600">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <Clock className="h-3 w-3 mr-1" />
-                        {workload.hours.toFixed(1)}h
-                      </div>
-                      {workload.capacity > 0 && (
-                        <div className="text-xs text-gray-500">
-                          /{workload.capacity.toFixed(1)}h
+                    {!isWeekExpanded &&
+                      view === "weekly" &&
+                      isWorkDay &&
+                      dayTasks.length > 3 && (
+                        <div className="text-xs text-gray-500 text-center">
+                          +{dayTasks.length - 3} more
                         </div>
                       )}
-                    </div>
                   </div>
-                )}
-              </div>
+
+                  {isWorkDay && workload.hours > 0 && (
+                    <div className="mt-2 text-xs text-gray-600">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center">
+                          <Clock className="h-3 w-3 mr-1" />
+                          {workload.hours.toFixed(1)}h
+                        </div>
+                        {workload.capacity > 0 && (
+                          <div className="text-xs text-gray-500">
+                            /{workload.capacity.toFixed(1)}h
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </DayCell>
             );
           })}
         </div>
       </div>
+    </div>
+  );
+};
+interface DayCellProps {
+  date: Date;
+  employeeId?: string;
+  onDropTask: (taskId: string, date: Date, employeeId?: string) => void;
+  children: React.ReactNode;
+}
+
+const DayCell: React.FC<DayCellProps> = ({ date, employeeId, onDropTask, children }) => {
+  const [{ isOver }, drop] = useDrop(() => ({
+    accept: ItemTypes.TASK,
+    drop: (item: { id: string }) => onDropTask(item.id, date, employeeId),
+    collect: (monitor) => ({
+      isOver: !!monitor.isOver(),
+    }),
+  }), [date, employeeId, onDropTask]);
+
+  return (
+    <div
+      ref={drop}
+      className={`relative ${isOver ? "bg-blue-100" : ""}`}
+    >
+      {children}
     </div>
   );
 };
