@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Repeat,
   Search,
+  Trash2,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import {
@@ -46,7 +47,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [tasks, setTasks] = useState<
-    (Task & { is_recurring_instance?: boolean })[]
+    (Task & { is_recurring_instance?: boolean; db_id?: string })[]
   >([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -54,6 +55,19 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   const [view, setView] = useState<"weekly" | "monthly">(viewMode);
   const [searchTerm, setSearchTerm] = useState("");
   const [isWeekExpanded, setIsWeekExpanded] = useState(false);
+  const [isDraggingTask, setIsDraggingTask] = useState(false);
+
+  const [{ isOverRemove, canDropRemove }, dropRemove] = useDrop(() => ({
+    accept: ItemTypes.TASK,
+    drop: (item: { id: string; originalTask?: Task }) =>
+      handleRemoveTaskAllocation(item),
+    canDrop: (item) =>
+      item.originalTask && item.originalTask.assigned_employee_id !== null,
+    collect: (monitor) => ({
+      isOverRemove: !!monitor.isOver(),
+      canDropRemove: !!monitor.canDrop(),
+    }),
+  }));
 
   const selectedEmployee = useMemo(() => {
     if (!selectedEmployeeId) return null;
@@ -209,11 +223,9 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
   const getTasksForDate = (
     date: Date,
-  ): (Task & { is_recurring_instance?: boolean })[] => {
+  ): (Task & { is_recurring_instance?: boolean; db_id?: string })[] => {
     const dayOfWeekName = dayNumberToName[date.getUTCDay()];
 
-    // If a specific employee is selected, check if it's a working day for them.
-    // If not, no tasks should be shown for this day.
     if (selectedEmployee) {
       const workDays = selectedEmployee.dias_de_trabalho || [
         "monday",
@@ -223,15 +235,17 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
         "friday",
       ];
       if (!workDays.includes(dayOfWeekName)) {
-        return []; // Return empty array for non-working days
+        return [];
       }
     }
 
-    const dayTasks: (Task & { is_recurring_instance?: boolean })[] = [];
+    const dayTasks: (Task & {
+      is_recurring_instance?: boolean;
+      db_id?: string;
+    })[] = [];
     const dateStr = date.toISOString().split("T")[0];
 
     filteredTasks.forEach((task) => {
-      // FIX: Parse all dates as UTC to ensure correct comparison
       const taskStart = new Date(task.start_date + "T00:00:00Z");
       const taskEnd = new Date(task.end_date + "T00:00:00Z");
 
@@ -244,6 +258,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
           dayTasks.push({
             ...task,
             id: `${task.id}-${dateStr}`,
+            db_id: task.id, // Preserve original DB id
             start_date: dateStr,
             end_date: dateStr,
             estimated_time: task.hours_per_day || 0,
@@ -400,29 +415,64 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   };
 
   const handleDropTask = async (
-    taskId: string,
+    item: { id: string; originalTask?: Task },
     date: Date,
     employeeId?: string,
   ) => {
-    if (!employeeId) {
-      // Maybe show a toast notification to select an employee first
-      console.warn("No employee selected to assign the task to.");
-      return;
-    }
-
+    const { id: taskId, originalTask } = item;
     const formattedDate = date.toISOString().split("T")[0];
 
+    // If there's an originalTask, it's a task being moved *within* the calendar.
+    if (originalTask) {
+      try {
+        const taskDuration =
+          new Date(originalTask.end_date).getTime() -
+          new Date(originalTask.start_date).getTime();
+        const newEndDate = new Date(date.getTime() + taskDuration);
+        const formattedEndDate = newEndDate.toISOString().split("T")[0];
+
+        await taskService.update(taskId, {
+          start_date: formattedDate,
+          end_date: formattedEndDate,
+          assigned_employee_id:
+            employeeId || originalTask.assigned_employee_id,
+        });
+        onTaskAssigned();
+      } catch (error) {
+        console.error("Failed to move task", error);
+      }
+    } else {
+      // This is an unassigned task being dropped from outside.
+      if (!employeeId) {
+        console.warn("No employee selected to assign the task to.");
+        return;
+      }
+      try {
+        await taskService.update(taskId, {
+          assigned_employee_id: employeeId,
+          start_date: formattedDate,
+          end_date: formattedDate, // Assumes single-day task for now
+        });
+        onTaskAssigned();
+      } catch (error) {
+        console.error("Failed to assign task", error);
+      }
+    }
+  };
+
+  const handleRemoveTaskAllocation = async (item: {
+    id: string;
+    originalTask?: Task;
+  }) => {
     try {
-      await taskService.update(taskId, {
-        assigned_employee_id: employeeId,
-        start_date: formattedDate,
-        end_date: formattedDate, // Assuming the task is for a single day
+      await taskService.update(item.id, {
+        assigned_employee_id: null,
+        start_date: null,
+        end_date: null,
       });
-      // Show a success toast notification here
-      onTaskAssigned(); // This will trigger a re-render in the parent and refresh both components
+      onTaskAssigned();
     } catch (error) {
-      console.error("Failed to update task", error);
-      // Show an error toast notification here
+      console.error("Failed to un-assign task", error);
     }
   };
 
@@ -619,29 +669,18 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                         const employee = getEmployee(task.assigned_employee_id);
                         const project = getProject(task.project_id);
 
+                        const employee = getEmployee(task.assigned_employee_id);
+                        const project = getProject(task.project_id);
+
                         return (
-                          <div
+                          <DraggableTask
                             key={task.id}
-                            className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate"
-                            title={`${task.name} - ${employee?.name} (${project?.name})`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="font-medium text-blue-900 truncate">
-                                {task.name}
-                              </div>
-                              {task.is_recurring_instance && (
-                                <Repeat
-                                  className="h-3 w-3 text-blue-400 flex-shrink-0"
-                                  aria-label="Recurring task"
-                                />
-                              )}
-                            </div>
-                            {!selectedEmployeeId && employee && (
-                              <div className="text-blue-600 truncate">
-                                {employee.name}
-                              </div>
-                            )}
-                          </div>
+                            task={task}
+                            employee={employee}
+                            project={project}
+                            selectedEmployeeId={selectedEmployeeId}
+                            onDragChange={setIsDraggingTask}
+                          />
                         );
                       })}
 
@@ -676,20 +715,91 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
           })}
         </div>
       </div>
+      {isDraggingTask && (
+        <div
+          ref={dropRemove}
+          className={`fixed bottom-4 right-4 flex items-center gap-4 p-4 rounded-lg transition-all duration-300 ${
+            canDropRemove
+              ? "bg-red-100 text-red-700 shadow-lg"
+              : "bg-gray-100 text-gray-500"
+          } ${isOverRemove && canDropRemove ? "scale-110 bg-red-200" : ""}`}
+        >
+          <Trash2 className="h-8 w-8" />
+          <div>
+            <h3 className="font-bold">Un-assign Task</h3>
+            <p className="text-sm">
+              Drop here to remove the task from the calendar.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+interface DraggableTaskProps {
+  task: Task & { is_recurring_instance?: boolean; db_id?: string };
+  employee?: Employee;
+  project?: Project;
+  selectedEmployeeId?: string;
+  onDragChange: (isDragging: boolean) => void;
+}
+
+const DraggableTask: React.FC<DraggableTaskProps> = ({
+  task,
+  employee,
+  project,
+  selectedEmployeeId,
+  onDragChange,
+}) => {
+  const [{ isDragging }, drag] = useDrag(() => ({
+    type: ItemTypes.TASK,
+    item: { id: task.db_id || task.id, originalTask: task },
+    collect: (monitor) => ({
+      isDragging: !!monitor.isDragging(),
+    }),
+    begin: () => onDragChange(true),
+    end: () => onDragChange(false),
+  }));
+
+  return (
+    <div
+      ref={drag}
+      style={{ opacity: isDragging ? 0.5 : 1 }}
+      className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate cursor-move"
+      title={`${task.name} - ${employee?.name} (${project?.name})`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="font-medium text-blue-900 truncate">
+          {task.name}
+        </div>
+        {task.is_recurring_instance && (
+          <Repeat
+            className="h-3 w-3 text-blue-400 flex-shrink-0"
+            aria-label="Recurring task"
+          />
+        )}
+      </div>
+      {!selectedEmployeeId && employee && (
+        <div className="text-blue-600 truncate">
+          {employee.name}
+        </div>
+      )}
+    </div>
+  );
+};
+
 interface DayCellProps {
   date: Date;
   employeeId?: string;
-  onDropTask: (taskId: string, date: Date, employeeId?: string) => void;
+  onDropTask: (item: { id: string; originalTask?: Task }, date: Date, employeeId?: string) => void;
   children: React.ReactNode;
 }
 
 const DayCell: React.FC<DayCellProps> = ({ date, employeeId, onDropTask, children }) => {
   const [{ isOver }, drop] = useDrop(() => ({
     accept: ItemTypes.TASK,
-    drop: (item: { id: string }) => onDropTask(item.id, date, employeeId),
+    drop: (item: { id: string; originalTask?: Task }) => onDropTask(item, date, employeeId),
     collect: (monitor) => ({
       isOver: !!monitor.isOver(),
     }),
