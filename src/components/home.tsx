@@ -25,6 +25,9 @@ import {
   employeeService,
   taskService,
   projectService,
+  type Task,
+  type Project,
+  type Employee,
 } from "@/lib/supabaseClient";
 
 const HomePage = () => {
@@ -41,6 +44,13 @@ const HomePage = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+    setIsEditModalOpen(true);
+  };
 
   useEffect(() => {
     loadDashboardData();
@@ -65,14 +75,16 @@ const HomePage = () => {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      const [employees, tasks, projects] = await Promise.all([
+      const [employeesData, tasks, projectsData] = await Promise.all([
         employeeService.getAll(),
         taskService.getAll(),
         projectService.getAll(),
       ]);
 
-      setTotalEmployees(employees.length);
-      setTotalProjects(projects.length);
+      setEmployees(employeesData);
+      setProjects(projectsData);
+      setTotalEmployees(employeesData.length);
+      setTotalProjects(projectsData.length);
 
       // Count active tasks (tasks that are assigned and within current date range)
       const currentDate = new Date();
@@ -88,8 +100,8 @@ const HomePage = () => {
       setActiveTasks(activeTasksCount);
 
       // Calculate average workload
-      if (employees.length > 0) {
-        const totalCapacity = employees.reduce(
+      if (employeesData.length > 0) {
+        const totalCapacity = employeesData.reduce(
           (sum, emp) => sum + emp.weekly_hours,
           0,
         );
@@ -334,6 +346,7 @@ const HomePage = () => {
                     selectedEmployeeId={selectedEmployeeId}
                     dataVersion={dataVersion}
                     onTaskAssigned={() => setDataVersion((v) => v + 1)}
+                    onTaskClick={handleEditTask}
                   />
                 </div>
                 <div className="w-80">
@@ -341,6 +354,7 @@ const HomePage = () => {
                     selectedEmployeeId={selectedEmployeeId}
                     onEmployeeSelect={setSelectedEmployeeId}
                     dataVersion={dataVersion}
+                    onTaskClick={handleEditTask}
                   />
                 </div>
               </div>
@@ -357,7 +371,7 @@ const HomePage = () => {
           {activeTab === "tasks" && (
             <div>
               <h2 className="text-3xl font-bold mb-6">Task Management</h2>
-              <TaskManagement />
+              <TaskManagement initialTaskToEdit={null} />
             </div>
           )}
 

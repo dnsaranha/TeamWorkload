@@ -38,8 +38,7 @@ import {
   type Project,
 } from "@/lib/supabaseClient";
 import { Clock, Briefcase } from "lucide-react";
-import { useDrag } from "react-dnd";
-import { ItemTypes } from "../lib/dnd";
+import DraggableTask from "./DraggableTask";
 
 type TaskWithRelations = Task & {
   project: Project | null;
@@ -64,6 +63,7 @@ interface WorkloadSummaryProps {
   selectedEmployeeId?: string | null;
   onEmployeeSelect?: (employeeId: string | null) => void;
   dataVersion?: number;
+  onTaskClick?: (task: Task) => void;
 }
 
 interface ChartConfig {
@@ -91,6 +91,7 @@ const WorkloadSummary = ({
   selectedEmployeeId,
   onEmployeeSelect,
   dataVersion = 0,
+  onTaskClick = () => {},
 }: WorkloadSummaryProps) => {
   const [activeTab, setActiveTab] = useState(
     showCharts ? "charts" : "employees",
@@ -555,7 +556,29 @@ const WorkloadSummary = ({
                   </div>
                 ) : (
                   unallocatedTasks.map((task) => (
-                    <DraggableTask key={task.id} task={task} />
+                    <div key={task.id} onClick={() => onTaskClick(task)}>
+                      <DraggableTask task={task}>
+                        <div
+                          className={`p-3 rounded-lg border bg-card cursor-grab`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <h4 className="font-medium text-sm mb-2">{task.name}</h4>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              <span>{task.estimated_time}h estimate</span>
+                            </div>
+                            {task.project && (
+                              <div className="flex items-center gap-1">
+                                <Briefcase className="h-3 w-3" />
+                                <span>{task.project.name}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </DraggableTask>
+                    </div>
                   ))
                 )}
               </div>
@@ -700,44 +723,6 @@ const WorkloadSummary = ({
         </Tabs>
       </CardContent>
     </Card>
-  );
-};
-interface DraggableTaskProps {
-  task: TaskWithRelations;
-}
-
-const DraggableTask: React.FC<DraggableTaskProps> = ({ task }) => {
-  const [{ isDragging }, drag] = useDrag(() => ({
-    type: ItemTypes.TASK,
-    item: { id: task.id },
-    collect: (monitor) => ({
-      isDragging: !!monitor.isDragging(),
-    }),
-  }));
-
-  return (
-    <div
-      ref={drag}
-      className={`p-3 rounded-lg border bg-card cursor-grab ${
-        isDragging ? "opacity-50" : "opacity-100"
-      }`}
-    >
-      <div className="flex items-start justify-between">
-        <h4 className="font-medium text-sm mb-2">{task.name}</h4>
-      </div>
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <div className="flex items-center gap-1">
-          <Clock className="h-3 w-3" />
-          <span>{task.estimated_time}h estimate</span>
-        </div>
-        {task.project && (
-          <div className="flex items-center gap-1">
-            <Briefcase className="h-3 w-3" />
-            <span>{task.project.name}</span>
-          </div>
-        )}
-      </div>
-    </div>
   );
 };
 
