@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useDrop } from "react-dnd";
+import { useDrag, useDrop } from "react-dnd";
 import { ItemTypes } from "../lib/dnd";
 import {
   ChevronLeft,
@@ -666,9 +666,6 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                         ? dayTasks
                         : dayTasks.slice(0, 3)
                       ).map((task) => {
-                        const employee = getEmployee(task.assigned_employee_id);
-                        const project = getProject(task.project_id);
-
                         const employee = getEmployee(task.assigned_employee_id);
                         const project = getProject(task.project_id);
 
