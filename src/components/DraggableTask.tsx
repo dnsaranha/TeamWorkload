@@ -5,23 +5,24 @@ import { type Task } from '@/lib/supabaseClient';
 
 interface DraggableTaskProps {
   task: Task & { is_recurring_instance?: boolean };
-  onDropOutside: (taskId: string) => void;
+  onDropOutside?: (taskId: string) => void;
   children: React.ReactNode;
+  canUnassign?: boolean;
 }
 
-const DraggableTask: React.FC<DraggableTaskProps> = ({ task, onDropOutside, children }) => {
+const DraggableTask: React.FC<DraggableTaskProps> = ({ task, onDropOutside, children, canUnassign = false }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: ItemTypes.TASK,
     item: { id: task.id },
     end: (item, monitor) => {
-      if (!monitor.didDrop()) {
+      if (canUnassign && !monitor.didDrop() && onDropOutside) {
         onDropOutside(item.id);
       }
     },
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging(),
     }),
-  }), [task.id, onDropOutside]);
+  }), [task.id, onDropOutside, canUnassign]);
 
   return (
     <div

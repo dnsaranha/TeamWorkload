@@ -38,6 +38,7 @@ interface WorkloadCalendarProps {
   viewMode?: "weekly" | "monthly";
   dataVersion?: number;
   onTaskAssigned?: () => void;
+  onTaskClick?: (task: Task) => void;
 }
 
 const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
@@ -45,6 +46,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   viewMode = "weekly",
   dataVersion = 0,
   onTaskAssigned = () => {},
+  onTaskClick = () => {},
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [tasks, setTasks] = useState<
@@ -636,33 +638,36 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                         const project = getProject(task.project_id);
 
                         return (
-                          <DraggableTask
-                            key={task.id}
-                            task={task}
-                            onDropOutside={handleTaskUnassign}
-                          >
-                            <div
-                              className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate"
-                              title={`${task.name} - ${employee?.name} (${project?.name})`}
+                          <div onClick={() => onTaskClick(task)}>
+                            <DraggableTask
+                              key={task.id}
+                              task={task}
+                              onDropOutside={handleTaskUnassign}
+                              canUnassign={true}
                             >
-                              <div className="flex items-center justify-between">
-                                <div className="font-medium text-blue-900 truncate">
-                                  {task.name}
+                              <div
+                                className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate"
+                                title={`${task.name} - ${employee?.name} (${project?.name})`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="font-medium text-blue-900 truncate">
+                                    {task.name}
+                                  </div>
+                                  {task.is_recurring_instance && (
+                                    <Repeat
+                                      className="h-3 w-3 text-blue-400 flex-shrink-0"
+                                      aria-label="Recurring task"
+                                    />
+                                  )}
                                 </div>
-                                {task.is_recurring_instance && (
-                                  <Repeat
-                                    className="h-3 w-3 text-blue-400 flex-shrink-0"
-                                    aria-label="Recurring task"
-                                  />
+                                {!selectedEmployeeId && employee && (
+                                  <div className="text-blue-600 truncate">
+                                    {employee.name}
+                                  </div>
                                 )}
                               </div>
-                              {!selectedEmployeeId && employee && (
-                                <div className="text-blue-600 truncate">
-                                  {employee.name}
-                                </div>
-                              )}
-                            </div>
-                          </DraggableTask>
+                            </DraggableTask>
+                          </div>
                         );
                       })}
 
