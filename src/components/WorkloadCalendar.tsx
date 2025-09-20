@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Repeat,
   Search,
+  ChevronsUpDown,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import {
@@ -20,6 +21,7 @@ import {
 } from "@/lib/supabaseClient";
 import { format } from "date-fns";
 import { Input } from "./ui/input";
+import DraggableTask from "./DraggableTask";
 
 const dayNumberToName: { [key: number]: string } = {
   0: "sunday",
@@ -404,24 +406,40 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     date: Date,
     employeeId?: string,
   ) => {
-    if (!employeeId) {
-      // Maybe show a toast notification to select an employee first
-      console.warn("No employee selected to assign the task to.");
-      return;
+    const formattedDate = date.toISOString().split("T")[0];
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const updateData: Partial<Task> = {
+      start_date: formattedDate,
+      end_date: formattedDate, // Assuming the task is for a single day
+    };
+
+    // If an employee is selected in the calendar view, assign the task to them.
+    // This is useful when dragging from an unassigned list.
+    if (employeeId) {
+      updateData.assigned_employee_id = employeeId;
     }
 
-    const formattedDate = date.toISOString().split("T")[0];
-
     try {
-      await taskService.update(taskId, {
-        assigned_employee_id: employeeId,
-        start_date: formattedDate,
-        end_date: formattedDate, // Assuming the task is for a single day
-      });
+      await taskService.update(taskId, updateData);
       // Show a success toast notification here
       onTaskAssigned(); // This will trigger a re-render in the parent and refresh both components
     } catch (error) {
       console.error("Failed to update task", error);
+      // Show an error toast notification here
+    }
+  };
+
+  const handleTaskUnassign = async (taskId: string) => {
+    try {
+      await taskService.update(taskId, {
+        assigned_employee_id: null,
+      });
+      // Show a success toast notification here
+      onTaskAssigned(); // Refresh the data
+    } catch (error) {
+      console.error("Failed to unassign task", error);
       // Show an error toast notification here
     }
   };
@@ -506,6 +524,15 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
             >
               <ChevronRight className="h-5 w-5" />
             </button>
+            {view === "weekly" && (
+              <button
+                onClick={() => setIsWeekExpanded(!isWeekExpanded)}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                title={isWeekExpanded ? "Collapse week" : "Expand week"}
+              >
+                <ChevronsUpDown className="h-5 w-5" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -527,16 +554,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
       </div>
 
       {/* Calendar Grid */}
-      <div
-        className={`p-6 ${
-          view === "weekly" ? "cursor-pointer group" : ""
-        }`}
-        onClick={() => {
-          if (view === "weekly") {
-            setIsWeekExpanded(!isWeekExpanded);
-          }
-        }}
-      >
+      <div className="p-6">
         <div className="grid grid-cols-7 gap-2">
           {/* Day Headers */}
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
@@ -620,28 +638,33 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                         const project = getProject(task.project_id);
 
                         return (
-                          <div
+                          <DraggableTask
                             key={task.id}
-                            className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate"
-                            title={`${task.name} - ${employee?.name} (${project?.name})`}
+                            task={task}
+                            onDropOutside={handleTaskUnassign}
                           >
-                            <div className="flex items-center justify-between">
-                              <div className="font-medium text-blue-900 truncate">
-                                {task.name}
+                            <div
+                              className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate"
+                              title={`${task.name} - ${employee?.name} (${project?.name})`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="font-medium text-blue-900 truncate">
+                                  {task.name}
+                                </div>
+                                {task.is_recurring_instance && (
+                                  <Repeat
+                                    className="h-3 w-3 text-blue-400 flex-shrink-0"
+                                    aria-label="Recurring task"
+                                  />
+                                )}
                               </div>
-                              {task.is_recurring_instance && (
-                                <Repeat
-                                  className="h-3 w-3 text-blue-400 flex-shrink-0"
-                                  aria-label="Recurring task"
-                                />
+                              {!selectedEmployeeId && employee && (
+                                <div className="text-blue-600 truncate">
+                                  {employee.name}
+                                </div>
                               )}
                             </div>
-                            {!selectedEmployeeId && employee && (
-                              <div className="text-blue-600 truncate">
-                                {employee.name}
-                              </div>
-                            )}
-                          </div>
+                          </DraggableTask>
                         );
                       })}
 
