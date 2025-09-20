@@ -12,29 +12,7 @@ import {
   X,
   FolderOpen,
   Target,
-  CalendarIcon,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { ScrollArea } from "./ui/scroll-area";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Textarea } from "./ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { format } from "date-fns";
 import WorkloadCalendar from "./WorkloadCalendar";
 import EmployeeList from "./EmployeeList";
 import TaskManagement from "./TaskManagement";
@@ -66,48 +44,11 @@ const HomePage = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState(false);
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
 
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-
-  const handleEditTask = (task: Task) => {
-    setEditingTask(task);
-    setIsEditModalOpen(true);
-  };
-
-  const handleCloseEditModal = () => {
-    setIsEditModalOpen(false);
-    setEditingTask(null);
-  };
-
-  const handleUpdateTask = async () => {
-    if (!editingTask) return;
-
-    try {
-      await taskService.update(editingTask.id, editingTask);
-      setDataVersion((v) => v + 1); // Trigger data refresh
-      handleCloseEditModal();
-    } catch (error) {
-      console.error("Error updating task:", error);
-    }
-  };
-
-  const handleCurrentTaskRepeatDayChange = (day: string, checked: boolean) => {
-    if (!editingTask) return;
-    const currentDays = editingTask.repeat_days || [];
-    if (checked) {
-      setEditingTask({
-        ...editingTask,
-        repeat_days: [...currentDays, day],
-      });
-    } else {
-      setEditingTask({
-        ...editingTask,
-        repeat_days: currentDays.filter((d) => d !== day),
-      });
-    }
+  const handleTaskClick = (task: Task) => {
+    setTaskToEdit(task);
+    setActiveTab("tasks");
   };
 
   useEffect(() => {
@@ -404,7 +345,7 @@ const HomePage = () => {
                     selectedEmployeeId={selectedEmployeeId}
                     dataVersion={dataVersion}
                     onTaskAssigned={() => setDataVersion((v) => v + 1)}
-                    onTaskClick={handleEditTask}
+                    onTaskClick={handleTaskClick}
                   />
                 </div>
                 <div className="w-80">
@@ -412,7 +353,7 @@ const HomePage = () => {
                     selectedEmployeeId={selectedEmployeeId}
                     onEmployeeSelect={setSelectedEmployeeId}
                     dataVersion={dataVersion}
-                    onTaskClick={handleEditTask}
+                    onTaskClick={handleTaskClick}
                   />
                 </div>
               </div>
@@ -429,7 +370,7 @@ const HomePage = () => {
           {activeTab === "tasks" && (
             <div>
               <h2 className="text-3xl font-bold mb-6">Task Management</h2>
-              <TaskManagement />
+              <TaskManagement initialTaskToEdit={taskToEdit} />
             </div>
           )}
 
@@ -484,357 +425,6 @@ const HomePage = () => {
           )}
         </div>
       </div>
-
-      {/* Edit Task Dialog */}
-      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="sm:max-w-[550px]">
-          <DialogHeader>
-            <DialogTitle>Edit Task</DialogTitle>
-            <DialogDescription>
-              Update task details and time estimates.
-            </DialogDescription>
-          </DialogHeader>
-          {editingTask && (
-            <ScrollArea className="h-96">
-              <div className="grid gap-4 p-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-name" className="text-right">
-                    Task Name
-                  </Label>
-                  <Input
-                    id="edit-name"
-                    value={editingTask.name}
-                    onChange={(e) =>
-                      setEditingTask({ ...editingTask, name: e.target.value })
-                    }
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-description" className="text-right">
-                    Description
-                  </Label>
-                  <Textarea
-                    id="edit-description"
-                    value={editingTask.description || ""}
-                    onChange={(e) =>
-                      setEditingTask({
-                        ...editingTask,
-                        description: e.target.value,
-                      })
-                    }
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-estimatedTime" className="text-right">
-                    Est. Hours
-                  </Label>
-                  <Input
-                    id="edit-estimated_time"
-                    type="number"
-                    value={editingTask.estimated_time}
-                    readOnly={editingTask.repeats_weekly}
-                    onChange={(e) =>
-                      !editingTask.repeats_weekly &&
-                      setEditingTask({
-                        ...editingTask,
-                        estimated_time: Number(e.target.value),
-                      })
-                    }
-                    className={`col-span-3 ${
-                      editingTask.repeats_weekly
-                        ? "bg-gray-100 cursor-not-allowed"
-                        : ""
-                    }`}
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-startDate" className="text-right">
-                    Start Date
-                  </Label>
-                  <div className="col-span-3">
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant={"outline"}
-                          className="w-full justify-start text-left font-normal"
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {format(
-                            new Date(editingTask.start_date + "T00:00:00"),
-                            "PPP",
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={new Date(editingTask.start_date + "T00:00:00")}
-                          onSelect={(date) =>
-                            date &&
-                            setEditingTask({
-                              ...editingTask,
-                              start_date: date.toISOString().split("T")[0],
-                            })
-                          }
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-endDate" className="text-right">
-                    End Date
-                  </Label>
-                  <div className="col-span-3">
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant={"outline"}
-                          className="w-full justify-start text-left font-normal"
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {format(
-                            new Date(editingTask.end_date + "T00:00:00"),
-                            "PPP",
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={new Date(editingTask.end_date + "T00:00:00")}
-                          onSelect={(date) =>
-                            date &&
-                            setEditingTask({
-                              ...editingTask,
-                              end_date: date.toISOString().split("T")[0],
-                            })
-                          }
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-project" className="text-right">
-                    Project
-                  </Label>
-                  <Select
-                    onValueChange={(value) =>
-                      setEditingTask({ ...editingTask, project_id: value })
-                    }
-                    value={editingTask.project_id || "none"}
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Select a project" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No project</SelectItem>
-                      {projects.map((project) => (
-                        <SelectItem key={project.id} value={project.id}>
-                          {project.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-status" className="text-right">
-                    Status
-                  </Label>
-                  <Select
-                    onValueChange={(
-                      value: "pending" | "in_progress" | "completed",
-                    ) => setEditingTask({ ...editingTask, status: value })}
-                    value={editingTask.status}
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">Pendente</SelectItem>
-                      <SelectItem value="in_progress">Em Andamento</SelectItem>
-                      <SelectItem value="completed">Concluída</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {editingTask.status === "completed" && (
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="edit-completion_date" className="text-right">
-                      Data de Conclusão
-                    </Label>
-                    <Input
-                      id="edit-completion_date"
-                      type="date"
-                      value={editingTask.completion_date || ""}
-                      onChange={(e) =>
-                        setEditingTask({
-                          ...editingTask,
-                          completion_date: e.target.value,
-                        })
-                      }
-                      className="col-span-3"
-                    />
-                  </div>
-                )}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-special_marker" className="text-right">
-                    Marcador Especial
-                  </Label>
-                  <Select
-                    onValueChange={(value) =>
-                      setEditingTask({
-                        ...editingTask,
-                        special_marker: value,
-                      })
-                    }
-                    value={editingTask.special_marker || "none"}
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Selecione um marcador" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Nenhum</SelectItem>
-                      <SelectItem value="major_release">Major Release</SelectItem>
-                      <SelectItem value="major_deployment">
-                        Major Deployment
-                      </SelectItem>
-                      <SelectItem value="major_theme">Major Theme</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-repeats_weekly" className="text-right">
-                    Repetição Semanal
-                  </Label>
-                  <div className="col-span-3 flex items-center space-x-2">
-                    <input
-                      id="edit-repeats_weekly"
-                      type="checkbox"
-                      checked={editingTask.repeats_weekly || false}
-                      onChange={(e) =>
-                        setEditingTask({
-                          ...editingTask,
-                          repeats_weekly: e.target.checked,
-                          repeat_days: e.target.checked
-                            ? editingTask.repeat_days || []
-                            : null,
-                          hours_per_day: e.target.checked
-                            ? editingTask.hours_per_day || 0
-                            : null,
-                        })
-                      }
-                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                    />
-                    <Label htmlFor="edit-repeats_weekly" className="text-sm">
-                      Esta tarefa se repete semanalmente
-                    </Label>
-                  </div>
-                </div>
-                {editingTask.repeats_weekly && (
-                  <>
-                    <div className="grid grid-cols-4 items-start gap-4">
-                      <Label className="text-right pt-2">Dias da Semana</Label>
-                      <div className="col-span-3 grid grid-cols-2 gap-2">
-                        {[
-                          { value: "monday", label: "Segunda" },
-                          { value: "tuesday", label: "Terça" },
-                          { value: "wednesday", label: "Quarta" },
-                          { value: "thursday", label: "Quinta" },
-                          { value: "friday", label: "Sexta" },
-                          { value: "saturday", label: "Sábado" },
-                          { value: "sunday", label: "Domingo" },
-                        ].map((day) => (
-                          <div
-                            key={day.value}
-                            className="flex items-center space-x-2"
-                          >
-                            <input
-                              id={`edit-day-${day.value}`}
-                              type="checkbox"
-                              checked={(editingTask.repeat_days || []).includes(
-                                day.value,
-                              )}
-                              onChange={(e) =>
-                                handleCurrentTaskRepeatDayChange(
-                                  day.value,
-                                  e.target.checked,
-                                )
-                              }
-                              className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                            />
-                            <Label
-                              htmlFor={`edit-day-${day.value}`}
-                              className="text-sm"
-                            >
-                              {day.label}
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="edit-hours_per_day" className="text-right">
-                        Horas por Dia
-                      </Label>
-                      <Input
-                        id="edit-hours_per_day"
-                        type="number"
-                        min="0"
-                        step="0.5"
-                        value={editingTask.hours_per_day || 0}
-                        onChange={(e) =>
-                          setEditingTask({
-                            ...editingTask,
-                            hours_per_day: parseFloat(e.target.value) || 0,
-                          })
-                        }
-                        className="col-span-3"
-                        placeholder="Ex: 2.5"
-                      />
-                    </div>
-                  </>
-                )}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-assigned-employee" className="text-right">
-                    Responsável
-                  </Label>
-                  <Select
-                    onValueChange={(value) =>
-                      setEditingTask({
-                        ...editingTask,
-                        assigned_employee_id: value,
-                      })
-                    }
-                    value={editingTask.assigned_employee_id || "none"}
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Select an employee" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Não atribuído</SelectItem>
-                      {employees.map((employee) => (
-                        <SelectItem key={employee.id} value={employee.id}>
-                          {employee.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </ScrollArea>
-          )}
-          <DialogFooter>
-            <Button type="submit" onClick={handleUpdateTask}>
-              Update Task
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
