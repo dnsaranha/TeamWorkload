@@ -441,21 +441,23 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     }
 
     const originalTask = tasks.find((task) => task.id === taskId);
-    if (!originalTask) {
-      console.error("Could not find the original task to calculate duration.");
-      return;
-    }
-
-    // Ensure dates are parsed correctly as UTC to avoid timezone issues.
-    const originalStartDate = new Date(originalTask.start_date + "T00:00:00Z");
-    const originalEndDate = new Date(originalTask.end_date + "T00:00:00Z");
-    const durationInMillis =
-      originalEndDate.getTime() - originalStartDate.getTime();
-
-    const newEndDate = new Date(newStartDate.getTime() + durationInMillis);
 
     const formattedStartDate = newStartDate.toISOString().split("T")[0];
-    const formattedEndDate = newEndDate.toISOString().split("T")[0];
+    let formattedEndDate = formattedStartDate; // Default for new tasks
+
+    // If the task already exists in the calendar, it's a reschedule. Preserve duration.
+    if (originalTask) {
+      // Ensure dates are parsed correctly as UTC to avoid timezone issues.
+      const originalStartDate = new Date(originalTask.start_date + "T00:00:00Z");
+      const originalEndDate = new Date(originalTask.end_date + "T00:00:00Z");
+      const durationInMillis =
+        originalEndDate.getTime() - originalStartDate.getTime();
+
+      const newEndDate = new Date(newStartDate.getTime() + durationInMillis);
+      formattedEndDate = newEndDate.toISOString().split("T")[0];
+    }
+    // If originalTask is not found, it's a new allocation.
+    // The default formattedEndDate (same as start date) will be used.
 
     try {
       await taskService.update(taskId, {
