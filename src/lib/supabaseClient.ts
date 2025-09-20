@@ -60,8 +60,8 @@ export type Task = {
   name: string;
   description: string | null;
   estimated_time: number;
-  start_date: string;
-  end_date: string;
+  start_date: string | null;
+  end_date: string | null;
   project_id: string | null;
   assigned_employee_id: string | null;
   status: string | null;
@@ -78,8 +78,8 @@ export type TaskInsert = {
   name: string;
   description?: string | null;
   estimated_time: number;
-  start_date: string;
-  end_date: string;
+  start_date: string | null;
+  end_date: string | null;
   project_id?: string | null;
   assigned_employee_id?: string | null;
   status?: string | null;

@@ -246,6 +246,9 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     const dateStr = date.toISOString().split("T")[0];
 
     filteredTasks.forEach((task) => {
+      if (!task.start_date || !task.end_date) {
+        return; // Don't show tasks that haven't been assigned a date
+      }
       const taskStart = new Date(task.start_date + "T00:00:00Z");
       const taskEnd = new Date(task.end_date + "T00:00:00Z");
 
