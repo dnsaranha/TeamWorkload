@@ -565,7 +565,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-4">
             <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-              <Calendar className="h-5 w-5 mr-2" />
+              <CalendarIcon className="h-5 w-5 mr-2" />
               Workload Calendar
             </h2>
             <div className="flex items-center space-x-2">
