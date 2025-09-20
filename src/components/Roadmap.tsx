@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Timeline } from "vis-timeline/standalone";
 import { DataSet } from "vis-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -98,6 +98,9 @@ const Roadmap = () => {
   const [dynamicCategories, setDynamicCategories] = useState<
     { id: string; name: string; color: string }[]
   >([]);
+  const [filterableCategories, setFilterableCategories] = useState<
+    { id: string; name: string; color: string }[]
+  >([]);
   const [filters, setFilters] = useState<FilterState & { employee: string }>({
     categories: STRATEGIC_CATEGORIES.map((cat) => cat.id),
     status: ["pending", "in_progress", "completed"],
@@ -107,38 +110,41 @@ const Roadmap = () => {
   });
   const [showFilters, setShowFilters] = useState(false);
 
-  const getCategoryFor = (
-    item: TaskWithRelations | Project,
-    type: "task" | "project",
-  ): string => {
-    const strategicCategory =
-      type === "task"
-        ? (item as TaskWithRelations).project?.categoria_estrategica
-        : (item as Project).categoria_estrategica;
+  const getCategoryFor = useCallback(
+    (
+      item: TaskWithRelations | Project,
+      type: "task" | "project",
+      allDynamicCategories: { id: string; name: string; color: string }[],
+    ): string => {
+      const strategicCategory =
+        type === "task"
+          ? (item as TaskWithRelations).project?.categoria_estrategica
+          : (item as Project).categoria_estrategica;
 
-    if (strategicCategory) {
-      const normalizedCategory = strategicCategory
-        .toLowerCase()
-        .replace(/\s+/g, "_");
-      const allCategories = [...STRATEGIC_CATEGORIES, ...dynamicCategories];
-      const matchingCategory = allCategories.find(
-        (cat) => cat.id === normalizedCategory,
-      );
-      if (matchingCategory) return matchingCategory.id;
-      return normalizedCategory;
-    }
+      if (strategicCategory) {
+        const normalizedCategory = strategicCategory
+          .toLowerCase()
+          .replace(/\s+/g, "_");
+        const allCategories = [...STRATEGIC_CATEGORIES, ...allDynamicCategories];
+        const matchingCategory = allCategories.find(
+          (cat) => cat.id === normalizedCategory,
+        );
+        if (matchingCategory) return matchingCategory.id;
+        return normalizedCategory;
+      }
 
-    if (type === "project") return "product_dev"; // Default for projects without category
+      if (type === "project") return "product_dev"; // Default for projects without category
 
-    const text =
-      `${item.name} ${item.description || ""}`.toLowerCase();
-    if (text.includes("usuário")) return "user_growth";
-    if (text.includes("escala")) return "scalability";
-    if (text.includes("churn")) return "reduce_churn";
-    if (text.includes("infraestrutura")) return "infrastructure";
-    if (text.includes("marketing")) return "marketing";
-    return "product_dev";
-  };
+      const text = `${item.name} ${item.description || ""}`.toLowerCase();
+      if (text.includes("usuário")) return "user_growth";
+      if (text.includes("escala")) return "scalability";
+      if (text.includes("churn")) return "reduce_churn";
+      if (text.includes("infraestrutura")) return "infrastructure";
+      if (text.includes("marketing")) return "marketing";
+      return "product_dev";
+    },
+    [],
+  );
 
   useEffect(() => {
     loadData();
@@ -146,7 +152,7 @@ const Roadmap = () => {
 
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
-      const category = getCategoryFor(task, "task");
+      const category = getCategoryFor(task, "task", dynamicCategories);
       const statusMatch = filters.status.includes(task.status);
       const categoryMatch = filters.categories.includes(category);
       const employeeMatch =
@@ -170,11 +176,11 @@ const Roadmap = () => {
 
       return statusMatch && categoryMatch && employeeMatch && searchMatch;
     });
-  }, [tasks, filters, searchTerm]);
+  }, [tasks, filters, searchTerm, dynamicCategories, getCategoryFor]);
 
   const filteredProjects = useMemo(() => {
     return projects.filter((project) => {
-      const category = getCategoryFor(project, "project");
+      const category = getCategoryFor(project, "project", dynamicCategories);
       const categoryMatch = filters.categories.includes(category);
 
       const searchMatch =
@@ -192,7 +198,7 @@ const Roadmap = () => {
 
       return categoryMatch && searchMatch;
     });
-  }, [projects, filters, searchTerm]);
+  }, [projects, filters, searchTerm, dynamicCategories, getCategoryFor]);
 
   useEffect(() => {
     if ((tasks.length > 0 || projects.length > 0) && timelineRef.current) {
@@ -224,28 +230,49 @@ const Roadmap = () => {
       setProjects(projectsData);
       setEmployees(employeesData);
 
-      const categoriesFromProjects = projectsData.map(p => p.categoria_estrategica);
-      const categoriesFromTasks = (tasksData as TaskWithRelations[]).map(t => t.project?.categoria_estrategica);
+      const categoriesFromProjects = projectsData.map(
+        (p) => p.categoria_estrategica,
+      );
+      const categoriesFromTasks = (tasksData as TaskWithRelations[]).map(
+        (t) => t.project?.categoria_estrategica,
+      );
 
       const allCategoriesInUse = [...categoriesFromProjects, ...categoriesFromTasks]
-        .filter((cat): cat is string => cat !== null && cat !== undefined && cat !== "")
+        .filter(
+          (cat): cat is string => cat !== null && cat !== undefined && cat !== "",
+        )
         .filter((cat, index, arr) => arr.indexOf(cat) === index);
 
-      const uniqueCategories = allCategoriesInUse.map((cat, index) => ({
+      const newDynamicCategories = allCategoriesInUse.map((cat, index) => ({
         id: cat.replace(/\s+/g, "_").toLowerCase(),
         name: cat,
         color: COLORS[index % COLORS.length] || "#8884D8",
       }));
 
-      setDynamicCategories(uniqueCategories);
+      setDynamicCategories(newDynamicCategories);
 
-      const allCategoryIds = [
-        ...STRATEGIC_CATEGORIES.map((cat) => cat.id),
-        ...uniqueCategories.map((cat) => cat.id),
+      const allItems = [
+        ...tasksData.map((t) => ({ item: t, type: "task" as const })),
+        ...projectsData.map((p) => ({ item: p, type: "project" as const })),
       ];
+
+      const activeCategoryIds = new Set<string>();
+      allItems.forEach(({ item, type }) => {
+        activeCategoryIds.add(getCategoryFor(item, type, newDynamicCategories));
+      });
+
+      const allPossibleCategories = [
+        ...STRATEGIC_CATEGORIES,
+        ...newDynamicCategories,
+      ];
+      const activeCategoriesForFilter = allPossibleCategories.filter((cat) =>
+        activeCategoryIds.has(cat.id),
+      );
+      setFilterableCategories(activeCategoriesForFilter);
+
       setFilters((prev) => ({
         ...prev,
-        categories: allCategoryIds,
+        categories: Array.from(activeCategoryIds),
       }));
     } catch (error) {
       console.error("Error loading roadmap data:", error);
@@ -273,7 +300,7 @@ const Roadmap = () => {
     );
 
     const taskItems = filters.itemType !== 'projects' ? filteredTasks.map((task) => {
-      const category = getCategoryFor(task, "task");
+      const category = getCategoryFor(task, "task", dynamicCategories);
       const specialMarker = task.special_marker;
       let className = `roadmap-item status-${task.status}`;
       if (specialMarker) className += ` special-${specialMarker}`;
@@ -297,7 +324,7 @@ const Roadmap = () => {
     const projectMarkerItems = filters.itemType !== 'tasks' ? filteredProjects
       .filter((p) => p.special_marker && p.end_date)
       .map((project) => {
-        const category = getCategoryFor(project, "project");
+        const category = getCategoryFor(project, "project", dynamicCategories);
         const specialMarker = project.special_marker;
         let className = `roadmap-item special-marker-project special-${specialMarker}`;
 
@@ -315,7 +342,7 @@ const Roadmap = () => {
       }) : [];
 
     const projectRangeItems = filters.itemType !== 'tasks' ? filteredProjects.map((project) => {
-      const category = getCategoryFor(project, "project");
+      const category = getCategoryFor(project, "project", dynamicCategories);
       let className = `roadmap-item project-range`;
 
       return {
@@ -639,10 +666,9 @@ const Roadmap = () => {
                     Categorias Estratégicas
                   </label>
                   <div className="space-y-2 max-h-32 overflow-y-auto">
-                    {[...STRATEGIC_CATEGORIES, ...dynamicCategories].map(
-                      (category) => (
-                        <div
-                          key={category.id}
+                    {filterableCategories.map((category) => (
+                      <div
+                        key={category.id}
                           className="flex items-center space-x-2"
                         >
                           <Checkbox
