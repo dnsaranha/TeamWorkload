@@ -407,8 +407,6 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     employeeId?: string,
   ) => {
     const formattedDate = date.toISOString().split("T")[0];
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
 
     const updateData: Partial<Task> = {
       start_date: formattedDate,
