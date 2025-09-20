@@ -44,11 +44,12 @@ const HomePage = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState(false);
-  const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  const handleTaskClick = (task: Task) => {
-    setTaskToEdit(task);
-    setActiveTab("tasks");
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+    setIsEditModalOpen(true);
   };
 
   useEffect(() => {
@@ -345,7 +346,7 @@ const HomePage = () => {
                     selectedEmployeeId={selectedEmployeeId}
                     dataVersion={dataVersion}
                     onTaskAssigned={() => setDataVersion((v) => v + 1)}
-                    onTaskClick={handleTaskClick}
+                    onTaskClick={handleEditTask}
                   />
                 </div>
                 <div className="w-80">
@@ -353,7 +354,7 @@ const HomePage = () => {
                     selectedEmployeeId={selectedEmployeeId}
                     onEmployeeSelect={setSelectedEmployeeId}
                     dataVersion={dataVersion}
-                    onTaskClick={handleTaskClick}
+                    onTaskClick={handleEditTask}
                   />
                 </div>
               </div>
@@ -370,7 +371,7 @@ const HomePage = () => {
           {activeTab === "tasks" && (
             <div>
               <h2 className="text-3xl font-bold mb-6">Task Management</h2>
-              <TaskManagement initialTaskToEdit={taskToEdit} />
+              <TaskManagement initialTaskToEdit={null} />
             </div>
           )}
 

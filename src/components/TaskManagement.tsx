@@ -62,11 +62,7 @@ type TaskWithRelations = Task & {
   assigned_employee: Employee | null;
 };
 
-interface TaskManagementProps {
-  initialTaskToEdit: Task | null;
-}
-
-const TaskManagement: React.FC<TaskManagementProps> = ({ initialTaskToEdit }) => {
+const TaskManagement = () => {
   const [tasks, setTasks] = useState<TaskWithRelations[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -143,12 +139,6 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ initialTaskToEdit }) =>
   useEffect(() => {
     loadData();
   }, []);
-
-  useEffect(() => {
-    if (initialTaskToEdit) {
-      openEditDialog(initialTaskToEdit as TaskWithRelations);
-    }
-  }, [initialTaskToEdit]);
 
   // Effect to automatically calculate estimated_time for new task
   useEffect(() => {
