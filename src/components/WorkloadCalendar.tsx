@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useDrop } from "react-dnd";
+import { useDrag, useDrop } from "react-dnd";
 import { ItemTypes } from "../lib/dnd";
 import {
   ChevronLeft,
   ChevronRight,
-  Calendar,
+  Calendar as CalendarIcon,
   Users,
   Clock,
   AlertTriangle,
   Repeat,
   Search,
+  PlusCircle,
+  MinusCircle,
+  Trash2,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import {
@@ -20,6 +23,27 @@ import {
 } from "@/lib/supabaseClient";
 import { format } from "date-fns";
 import { Input } from "./ui/input";
+import { Button } from "./ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
+import { Label } from "./ui/label";
+import { Textarea } from "./ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Calendar } from "./ui/calendar";
+import { ScrollArea } from "./ui/scroll-area";
 
 const dayNumberToName: { [key: number]: string } = {
   0: "sunday",
@@ -54,6 +78,13 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   const [view, setView] = useState<"weekly" | "monthly">(viewMode);
   const [searchTerm, setSearchTerm] = useState("");
   const [isWeekExpanded, setIsWeekExpanded] = useState(false);
+  const [isEditTaskDialogOpen, setIsEditTaskDialogOpen] = useState(false);
+  const [currentTask, setCurrentTask] = useState<Task | null>(null);
+
+  const openEditDialog = (task: Task) => {
+    setCurrentTask(task);
+    setIsEditTaskDialogOpen(true);
+  };
 
   const selectedEmployee = useMemo(() => {
     if (!selectedEmployeeId) return null;
@@ -401,28 +432,118 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
   const handleDropTask = async (
     taskId: string,
-    date: Date,
+    newStartDate: Date,
     employeeId?: string,
   ) => {
     if (!employeeId) {
-      // Maybe show a toast notification to select an employee first
       console.warn("No employee selected to assign the task to.");
       return;
     }
 
-    const formattedDate = date.toISOString().split("T")[0];
+    const originalTask = tasks.find((task) => task.id === taskId);
+
+    const formattedStartDate = newStartDate.toISOString().split("T")[0];
+    let formattedEndDate = formattedStartDate; // Default for new tasks
+
+    // If the task already exists in the calendar, it's a reschedule. Preserve duration.
+    if (originalTask) {
+      // Ensure dates are parsed correctly as UTC to avoid timezone issues.
+      const originalStartDate = new Date(originalTask.start_date + "T00:00:00Z");
+      const originalEndDate = new Date(originalTask.end_date + "T00:00:00Z");
+      const durationInMillis =
+        originalEndDate.getTime() - originalStartDate.getTime();
+
+      const newEndDate = new Date(newStartDate.getTime() + durationInMillis);
+      formattedEndDate = newEndDate.toISOString().split("T")[0];
+    }
+    // If originalTask is not found, it's a new allocation.
+    // The default formattedEndDate (same as start date) will be used.
 
     try {
       await taskService.update(taskId, {
         assigned_employee_id: employeeId,
-        start_date: formattedDate,
-        end_date: formattedDate, // Assuming the task is for a single day
+        start_date: formattedStartDate,
+        end_date: formattedEndDate,
       });
-      // Show a success toast notification here
-      onTaskAssigned(); // This will trigger a re-render in the parent and refresh both components
+      onTaskAssigned();
     } catch (error) {
       console.error("Failed to update task", error);
-      // Show an error toast notification here
+    }
+  };
+
+  const handleDeallocateTask = async (taskId: string) => {
+    try {
+      await taskService.update(taskId, {
+        assigned_employee_id: null,
+      });
+      onTaskAssigned();
+    } catch (error) {
+      console.error("Failed to de-allocate task", error);
+    }
+  };
+
+  const handleUpdateTask = async () => {
+    if (!currentTask) return;
+
+    try {
+      const updateData: any = {
+        name: currentTask.name,
+        description: currentTask.description || null,
+        estimated_time: currentTask.estimated_time,
+        start_date: currentTask.start_date,
+        end_date: currentTask.end_date,
+        project_id:
+          currentTask.project_id === "none" ? null : currentTask.project_id,
+        assigned_employee_id:
+          currentTask.assigned_employee_id === "none"
+            ? null
+            : currentTask.assigned_employee_id,
+        status: currentTask.status,
+        completion_date:
+          currentTask.status === "completed" && currentTask.completion_date
+            ? currentTask.completion_date
+            : null,
+        repeats_weekly: currentTask.repeats_weekly || false,
+        repeat_days: currentTask.repeats_weekly
+          ? currentTask.repeat_days
+          : null,
+        hours_per_day: currentTask.repeats_weekly
+          ? currentTask.hours_per_day
+          : null,
+        special_marker:
+          currentTask.special_marker === "none"
+            ? null
+            : currentTask.special_marker,
+      };
+
+      const updatedTask = await taskService.update(currentTask.id, updateData);
+
+      const updatedTasks = tasks.map((task) =>
+        task.id === currentTask.id ? (updatedTask as Task) : task,
+      );
+
+      setTasks(updatedTasks);
+      setCurrentTask(null);
+      setIsEditTaskDialogOpen(false);
+    } catch (error) {
+      console.error("Error updating task:", error);
+      alert("Erro ao atualizar tarefa. Verifique os dados e tente novamente.");
+    }
+  };
+
+  const handleCurrentTaskRepeatDayChange = (day: string, checked: boolean) => {
+    if (!currentTask) return;
+    const currentDays = currentTask.repeat_days || [];
+    if (checked) {
+      setCurrentTask({
+        ...currentTask,
+        repeat_days: [...currentDays, day],
+      });
+    } else {
+      setCurrentTask({
+        ...currentTask,
+        repeat_days: currentDays.filter((d) => d !== day),
+      });
     }
   };
 
@@ -446,7 +567,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-4">
             <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-              <Calendar className="h-5 w-5 mr-2" />
+              <CalendarIcon className="h-5 w-5 mr-2" />
               Workload Calendar
             </h2>
             <div className="flex items-center space-x-2">
@@ -527,24 +648,28 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
       </div>
 
       {/* Calendar Grid */}
-      <div
-        className={`p-6 ${
-          view === "weekly" ? "cursor-pointer group" : ""
-        }`}
-        onClick={() => {
-          if (view === "weekly") {
-            setIsWeekExpanded(!isWeekExpanded);
-          }
-        }}
-      >
+      <div className="p-6">
         <div className="grid grid-cols-7 gap-2">
           {/* Day Headers */}
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
             <div
               key={day}
-              className="p-2 text-center text-sm font-medium text-gray-500 border-b border-gray-200"
+              className="p-2 text-center text-sm font-medium text-gray-500 border-b border-gray-200 flex items-center justify-center"
             >
-              {day}
+              <span>{day}</span>
+              {view === "weekly" && day === "Sat" && (
+                <button
+                  onClick={() => setIsWeekExpanded(!isWeekExpanded)}
+                  className="ml-2 p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                  title={isWeekExpanded ? "Collapse week" : "Expand week"}
+                >
+                  {isWeekExpanded ? (
+                    <MinusCircle className="h-4 w-4" />
+                  ) : (
+                    <PlusCircle className="h-4 w-4" />
+                  )}
+                </button>
+              )}
             </div>
           ))}
 
@@ -616,32 +741,20 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                         ? dayTasks
                         : dayTasks.slice(0, 3)
                       ).map((task) => {
-                        const employee = getEmployee(task.assigned_employee_id);
+                        const employee = getEmployee(
+                          task.assigned_employee_id,
+                        );
                         const project = getProject(task.project_id);
 
                         return (
-                          <div
+                          <DraggableTask
                             key={task.id}
-                            className="text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate"
-                            title={`${task.name} - ${employee?.name} (${project?.name})`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="font-medium text-blue-900 truncate">
-                                {task.name}
-                              </div>
-                              {task.is_recurring_instance && (
-                                <Repeat
-                                  className="h-3 w-3 text-blue-400 flex-shrink-0"
-                                  aria-label="Recurring task"
-                                />
-                              )}
-                            </div>
-                            {!selectedEmployeeId && employee && (
-                              <div className="text-blue-600 truncate">
-                                {employee.name}
-                              </div>
-                            )}
-                          </div>
+                            task={task}
+                            employee={employee}
+                            project={project}
+                            selectedEmployeeId={selectedEmployeeId}
+                            onTaskClick={openEditDialog}
+                          />
                         );
                       })}
 
@@ -676,9 +789,453 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
           })}
         </div>
       </div>
+      <DeallocationZone onDropTask={handleDeallocateTask} />
+
+      {/* Edit Task Dialog */}
+      <Dialog
+        open={isEditTaskDialogOpen}
+        onOpenChange={setIsEditTaskDialogOpen}
+      >
+        <DialogContent className="sm:max-w-[550px]">
+          <DialogHeader>
+            <DialogTitle>Edit Task</DialogTitle>
+            <DialogDescription>
+              Update task details and time estimates.
+            </DialogDescription>
+          </DialogHeader>
+          {currentTask && (
+            <ScrollArea className="h-96">
+              <div className="grid gap-4 p-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-name" className="text-right">
+                    Task Name
+                  </Label>
+                  <Input
+                    id="edit-name"
+                    value={currentTask.name}
+                    onChange={(e) =>
+                      setCurrentTask({ ...currentTask, name: e.target.value })
+                    }
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-description" className="text-right">
+                    Description
+                  </Label>
+                  <Textarea
+                    id="edit-description"
+                    value={currentTask.description || ""}
+                    onChange={(e) =>
+                      setCurrentTask({
+                        ...currentTask,
+                        description: e.target.value,
+                      })
+                    }
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-estimatedTime" className="text-right">
+                    Est. Hours
+                  </Label>
+                  <Input
+                    id="edit-estimated_time"
+                    type="number"
+                    value={currentTask.estimated_time}
+                    readOnly={currentTask.repeats_weekly}
+                    onChange={(e) =>
+                      !currentTask.repeats_weekly &&
+                      setCurrentTask({
+                        ...currentTask,
+                        estimated_time: Number(e.target.value),
+                      })
+                    }
+                    className={`col-span-3 ${
+                      currentTask.repeats_weekly
+                        ? "bg-gray-100 cursor-not-allowed"
+                        : ""
+                    }`}
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-startDate" className="text-right">
+                    Start Date
+                  </Label>
+                  <div className="col-span-3">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant={"outline"}
+                          className="w-full justify-start text-left font-normal"
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {format(
+                            new Date(currentTask.start_date + "T00:00:00"),
+                            "PPP",
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={
+                            new Date(currentTask.start_date + "T00:00:00")
+                          }
+                          onSelect={(date) =>
+                            date &&
+                            setCurrentTask({
+                              ...currentTask,
+                              start_date: date.toISOString().split("T")[0],
+                            })
+                          }
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-endDate" className="text-right">
+                    End Date
+                  </Label>
+                  <div className="col-span-3">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant={"outline"}
+                          className="w-full justify-start text-left font-normal"
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {format(
+                            new Date(currentTask.end_date + "T00:00:00"),
+                            "PPP",
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={new Date(currentTask.end_date + "T00:00:00")}
+                          onSelect={(date) =>
+                            date &&
+                            setCurrentTask({
+                              ...currentTask,
+                              end_date: date.toISOString().split("T")[0],
+                            })
+                          }
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-project" className="text-right">
+                    Project
+                  </Label>
+                  <Select
+                    onValueChange={(value) =>
+                      setCurrentTask({ ...currentTask, project_id: value })
+                    }
+                    value={currentTask.project_id || "none"}
+                  >
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Select a project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No project</SelectItem>
+                      {projects.map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-status" className="text-right">
+                    Status
+                  </Label>
+                  <Select
+                    onValueChange={(
+                      value: "pending" | "in_progress" | "completed",
+                    ) => setCurrentTask({ ...currentTask, status: value })}
+                    value={currentTask.status}
+                  >
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pendente</SelectItem>
+                      <SelectItem value="in_progress">Em Andamento</SelectItem>
+                      <SelectItem value="completed">Concluída</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {currentTask.status === "completed" && (
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label
+                      htmlFor="edit-completion_date"
+                      className="text-right"
+                    >
+                      Data de Conclusão
+                    </Label>
+                    <Input
+                      id="edit-completion_date"
+                      type="date"
+                      value={currentTask.completion_date || ""}
+                      onChange={(e) =>
+                        setCurrentTask({
+                          ...currentTask,
+                          completion_date: e.target.value,
+                        })
+                      }
+                      className="col-span-3"
+                    />
+                  </div>
+                )}
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-special_marker" className="text-right">
+                    Marcador Especial
+                  </Label>
+                  <Select
+                    onValueChange={(value) =>
+                      setCurrentTask({
+                        ...currentTask,
+                        special_marker: value,
+                      })
+                    }
+                    value={currentTask.special_marker || "none"}
+                  >
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Selecione um marcador" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhum</SelectItem>
+                      <SelectItem value="major_release">
+                        Major Release
+                      </SelectItem>
+                      <SelectItem value="major_deployment">
+                        Major Deployment
+                      </SelectItem>
+                      <SelectItem value="major_theme">Major Theme</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-repeats_weekly" className="text-right">
+                    Repetição Semanal
+                  </Label>
+                  <div className="col-span-3 flex items-center space-x-2">
+                    <input
+                      id="edit-repeats_weekly"
+                      type="checkbox"
+                      checked={currentTask.repeats_weekly || false}
+                      onChange={(e) =>
+                        setCurrentTask({
+                          ...currentTask,
+                          repeats_weekly: e.target.checked,
+                          repeat_days: e.target.checked
+                            ? currentTask.repeat_days || []
+                            : null,
+                          hours_per_day: e.target.checked
+                            ? currentTask.hours_per_day || 0
+                            : null,
+                        })
+                      }
+                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                    />
+                    <Label htmlFor="edit-repeats_weekly" className="text-sm">
+                      Esta tarefa se repete semanalmente
+                    </Label>
+                  </div>
+                </div>
+                {currentTask.repeats_weekly && (
+                  <>
+                    <div className="grid grid-cols-4 items-start gap-4">
+                      <Label className="text-right pt-2">Dias da Semana</Label>
+                      <div className="col-span-3 grid grid-cols-2 gap-2">
+                        {[
+                          { value: "monday", label: "Segunda" },
+                          { value: "tuesday", label: "Terça" },
+                          { value: "wednesday", label: "Quarta" },
+                          { value: "thursday", label: "Quinta" },
+                          { value: "friday", label: "Sexta" },
+                          { value: "saturday", label: "Sábado" },
+                          { value: "sunday", label: "Domingo" },
+                        ].map((day) => (
+                          <div
+                            key={day.value}
+                            className="flex items-center space-x-2"
+                          >
+                            <input
+                              id={`edit-day-${day.value}`}
+                              type="checkbox"
+                              checked={(
+                                currentTask.repeat_days || []
+                              ).includes(day.value)}
+                              onChange={(e) =>
+                                handleCurrentTaskRepeatDayChange(
+                                  day.value,
+                                  e.target.checked,
+                                )
+                              }
+                              className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                            />
+                            <Label
+                              htmlFor={`edit-day-${day.value}`}
+                              className="text-sm"
+                            >
+                              {day.label}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label
+                        htmlFor="edit-hours_per_day"
+                        className="text-right"
+                      >
+                        Horas por Dia
+                      </Label>
+                      <Input
+                        id="edit-hours_per_day"
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        value={currentTask.hours_per_day || 0}
+                        onChange={(e) =>
+                          setCurrentTask({
+                            ...currentTask,
+                            hours_per_day: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        className="col-span-3"
+                        placeholder="Ex: 2.5"
+                      />
+                    </div>
+                  </>
+                )}
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label
+                    htmlFor="edit-assigned-employee"
+                    className="text-right"
+                  >
+                    Responsável
+                  </Label>
+                  <Select
+                    onValueChange={(value) =>
+                      setCurrentTask({
+                        ...currentTask,
+                        assigned_employee_id: value,
+                      })
+                    }
+                    value={currentTask.assigned_employee_id || "none"}
+                  >
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Select an employee" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Não atribuído</SelectItem>
+                      {employees.map((employee) => (
+                        <SelectItem key={employee.id} value={employee.id}>
+                          {employee.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </ScrollArea>
+          )}
+          <DialogFooter>
+            <Button type="submit" onClick={handleUpdateTask}>
+              Update Task
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
+
+interface DraggableTaskProps {
+  task: Task & { is_recurring_instance?: boolean };
+  project?: Project;
+  employee?: Employee;
+  selectedEmployeeId?: string;
+  onTaskClick: (task: Task) => void;
+}
+
+const DraggableTask: React.FC<DraggableTaskProps> = ({
+  task,
+  project,
+  employee,
+  selectedEmployeeId,
+  onTaskClick,
+}) => {
+  const [{ isDragging }, drag] = useDrag(() => ({
+    type: ItemTypes.TASK,
+    item: { id: task.id },
+    collect: (monitor) => ({
+      isDragging: !!monitor.isDragging(),
+    }),
+  }));
+
+  return (
+    <div
+      ref={drag}
+      onClick={() => onTaskClick(task)}
+      className={`text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate cursor-pointer hover:bg-blue-100 ${
+        isDragging ? "opacity-50 cursor-grabbing" : "cursor-grab"
+      }`}
+      title={`${task.name} - ${employee?.name} (${project?.name})`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="font-medium text-blue-900 truncate">{task.name}</div>
+        {task.is_recurring_instance && (
+          <Repeat
+            className="h-3 w-3 text-blue-400 flex-shrink-0"
+            aria-label="Recurring task"
+          />
+        )}
+      </div>
+      {!selectedEmployeeId && employee && (
+        <div className="text-blue-600 truncate">{employee.name}</div>
+      )}
+    </div>
+  );
+};
+
+const DeallocationZone: React.FC<{ onDropTask: (taskId: string) => void }> = ({
+  onDropTask,
+}) => {
+  const [{ isOver, canDrop }, drop] = useDrop(() => ({
+    accept: ItemTypes.TASK,
+    drop: (item: { id: string }) => onDropTask(item.id),
+    collect: (monitor) => ({
+      isOver: !!monitor.isOver(),
+      canDrop: !!monitor.canDrop(),
+    }),
+  }));
+
+  return (
+    <div
+      ref={drop}
+      className={`p-4 m-6 mt-0 border-2 border-dashed rounded-lg text-center transition-colors ${
+        isOver && canDrop ? "border-red-500 bg-red-100" : "border-gray-300"
+      }`}
+    >
+      <div className="flex flex-col items-center justify-center text-gray-500 pointer-events-none">
+        <Trash2 className="h-8 w-8 mb-2" />
+        <p>Arraste uma tarefa aqui para desalocar.</p>
+      </div>
+    </div>
+  );
+};
+
 interface DayCellProps {
   date: Date;
   employeeId?: string;
@@ -686,20 +1243,25 @@ interface DayCellProps {
   children: React.ReactNode;
 }
 
-const DayCell: React.FC<DayCellProps> = ({ date, employeeId, onDropTask, children }) => {
-  const [{ isOver }, drop] = useDrop(() => ({
-    accept: ItemTypes.TASK,
-    drop: (item: { id: string }) => onDropTask(item.id, date, employeeId),
-    collect: (monitor) => ({
-      isOver: !!monitor.isOver(),
+const DayCell: React.FC<DayCellProps> = ({
+  date,
+  employeeId,
+  onDropTask,
+  children,
+}) => {
+  const [{ isOver }, drop] = useDrop(
+    () => ({
+      accept: ItemTypes.TASK,
+      drop: (item: { id: string }) => onDropTask(item.id, date, employeeId),
+      collect: (monitor) => ({
+        isOver: !!monitor.isOver(),
+      }),
     }),
-  }), [date, employeeId, onDropTask]);
+    [date, employeeId, onDropTask],
+  );
 
   return (
-    <div
-      ref={drop}
-      className={`relative ${isOver ? "bg-blue-100" : ""}`}
-    >
+    <div ref={drop} className={`relative ${isOver ? "bg-blue-100" : ""}`}>
       {children}
     </div>
   );
