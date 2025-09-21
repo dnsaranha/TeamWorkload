@@ -44,7 +44,6 @@ import {
   X,
   Grid3X3,
   Info,
-  Trash,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
@@ -85,7 +84,6 @@ type EditableOccurrence = {
 };
 
 const TaskManagement = () => {
-  console.log("TaskManagement component mounted");
   const [tasks, setTasks] = useState<TaskWithRelations[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -110,6 +108,8 @@ const TaskManagement = () => {
     null,
   );
   const [editingOccurrences, setEditingOccurrences] = useState<EditableOccurrence[]>([]);
+  const [editSource, setEditSource] = useState<'list' | 'calendar'>('list');
+
 
   useEffect(() => {
     if (isEditTaskDialogOpen && currentTask?.repeats_weekly) {
@@ -129,7 +129,7 @@ const TaskManagement = () => {
 
       const startDate = new Date(currentTask.start_date + "T00:00:00Z");
       const endDate = new Date(currentTask.end_date + "T00:00:00Z");
-      const repeatDays = new Set(currentTask.repeat_days?.map(day => dayMapping[day]));
+      const repeatDays = new Set((currentTask.repeat_days || []).map(day => dayMapping[day]));
       const exceptionsMap = new Map((currentTask.exceptions || []).map(ex => [ex.date, ex]));
 
       let currentDate = startDate > today ? startDate : today;
@@ -236,9 +236,7 @@ const TaskManagement = () => {
         );
       }
     }
-  }, [
-    currentTask,
-  ]);
+  }, [currentTask]);
 
   const loadData = async () => {
     try {
@@ -317,7 +315,12 @@ const TaskManagement = () => {
           if (field === 'is_removed') {
             return { ...occ, is_removed: value, override: {} }; // Reset overrides when removed
           }
-          return { ...occ, override: { ...occ.override, [field]: value } };
+          const newOverride = { ...occ.override, [field]: value };
+          // If a value is set back to undefined (e.g., clearing an input), remove it from overrides
+          if (value === undefined || value === null) {
+            delete (newOverride as any)[field];
+          }
+          return { ...occ, override: newOverride };
         }
         return occ;
       })
@@ -339,15 +342,19 @@ const TaskManagement = () => {
             occ.override.estimated_time !== undefined ||
             occ.override.assigned_employee_id !== undefined;
 
+          const isActuallyChanged =
+            (occ.override.estimated_time !== undefined && occ.override.estimated_time !== occ.original.estimated_time) ||
+            (occ.override.assigned_employee_id !== undefined && occ.override.assigned_employee_id !== occ.original.assigned_employee_id);
+
           if (occ.is_removed) {
             return { date: occ.date, is_removed: true };
           }
 
-          if (hasOverride) {
+          if (hasOverride && isActuallyChanged) {
             return {
               date: occ.date,
-              estimated_time: occ.override.estimated_time !== undefined ? occ.override.estimated_time : occ.original.estimated_time,
-              assigned_employee_id: occ.override.assigned_employee_id !== undefined ? occ.override.assigned_employee_id : occ.original.assigned_employee_id,
+              estimated_time: occ.override.estimated_time,
+              assigned_employee_id: occ.override.assigned_employee_id,
               is_removed: false,
             };
           }
@@ -379,10 +386,10 @@ const TaskManagement = () => {
         repeats_weekly: currentTask.repeats_weekly || false,
         repeat_days: currentTask.repeats_weekly
           ? currentTask.repeat_days
-          : null,
+          : [],
         hours_per_day: currentTask.repeats_weekly
           ? currentTask.hours_per_day
-          : null,
+          : 0,
         special_marker:
           currentTask.special_marker === "none"
             ? null
@@ -465,8 +472,9 @@ const TaskManagement = () => {
     }
   };
 
-  const openEditDialog = (task: TaskWithRelations) => {
+  const openEditDialog = (task: TaskWithRelations, source: 'list' | 'calendar' = 'list') => {
     setCurrentTask(task);
+    setEditSource(source);
     setIsEditTaskDialogOpen(true);
   };
 
@@ -674,7 +682,7 @@ const TaskManagement = () => {
 
   const handleTaskDrop = async (
     task: TaskWithRelations,
-    employeeId: string,
+    employeeId: string | null, // Allow null for un-assignment
     date: string,
   ) => {
     console.log("handleTaskDrop called with:", { task, employeeId, date });
@@ -686,21 +694,21 @@ const TaskManagement = () => {
       }
 
       if (!originalTask.repeats_weekly) {
+        // For non-recurring tasks, just update the assignment and dates
         const updatedTask = await taskService.update(originalTask.id, {
           assigned_employee_id: employeeId,
           start_date: date,
-          end_date: date,
+          end_date: date, // Simple drop assumes a single-day event
         });
-        const updatedTasks = tasks.map((t) =>
-          t.id === originalTask.id ? (updatedTask as TaskWithRelations) : t,
-        );
-        setTasks(updatedTasks);
+        setTasks(tasks.map((t) => (t.id === originalTask.id ? (updatedTask as TaskWithRelations) : t)));
         return;
       }
 
+      // For recurring tasks, create or update an exception
       const newException: Exception = {
         date: date,
         assigned_employee_id: employeeId,
+        is_removed: employeeId === null, // Mark as removed if dropped on an unassigned area
       };
 
       const currentExceptions = originalTask.exceptions || [];
@@ -710,24 +718,23 @@ const TaskManagement = () => {
 
       let updatedExceptions;
       if (existingExceptionIndex > -1) {
+        // Update existing exception for that date
         updatedExceptions = [...currentExceptions];
         updatedExceptions[existingExceptionIndex] = {
           ...updatedExceptions[existingExceptionIndex],
           ...newException,
-          is_removed: false,
         };
       } else {
+        // Add new exception
         updatedExceptions = [...currentExceptions, newException];
       }
 
-      const updatedTask = await taskService.update(originalTask.id, {
+      const updatedParentTask = await taskService.update(originalTask.id, {
         exceptions: updatedExceptions,
       });
 
-      const updatedTasks = tasks.map((t) =>
-        t.id === originalTask.id ? (updatedTask as TaskWithRelations) : t,
-      );
-      setTasks(updatedTasks);
+      setTasks(tasks.map((t) => (t.id === originalTask.id ? (updatedParentTask as TaskWithRelations) : t)));
+
     } catch (error) {
       console.error("Error handling task drop:", error);
       alert("Failed to modify task. Please try again.");
@@ -764,7 +771,7 @@ const TaskManagement = () => {
   });
 
   const weekDates = getWeekDates(gridStartDate);
-  const unassignedTasks = tasks.filter((task) => !task.assigned_employee_id);
+  const unassignedTasks = tasks.filter((task) => !task.assigned_employee_id && !task.repeats_weekly);
 
   const tasksForGrid = useMemo(() => {
     const dateMap: Map<string, TaskInstance[]> = new Map();
@@ -774,18 +781,21 @@ const TaskManagement = () => {
     const weekDatesSet = new Set(getWeekDates(gridStartDate));
 
     tasks.forEach(task => {
+      // Non-repeating tasks are simple: if they have an assignee, they appear in that user's row.
       if (!task.repeats_weekly) {
-        const startDate = new Date(task.start_date + "T00:00:00Z");
-        const endDate = new Date(task.end_date + "T00:00:00Z");
-        for (let d = new Date(startDate); d <= endDate; d.setUTCDate(d.getUTCDate() + 1)) {
-          const dateStr = d.toISOString().split('T')[0];
-          if (weekDatesSet.has(dateStr)) {
-            if (!dateMap.has(dateStr)) dateMap.set(dateStr, []);
-            const instance: TaskInstance = { ...task, instanceDate: dateStr, isException: false };
-            dateMap.get(dateStr)!.push(instance);
+        if (task.assigned_employee_id) {
+          const startDate = new Date(task.start_date + "T00:00:00Z");
+          const endDate = new Date(task.end_date + "T00:00:00Z");
+          for (let d = new Date(startDate); d <= endDate; d.setUTCDate(d.getUTCDate() + 1)) {
+            const dateStr = d.toISOString().split('T')[0];
+            if (weekDatesSet.has(dateStr)) {
+              if (!dateMap.has(dateStr)) dateMap.set(dateStr, []);
+              const instance: TaskInstance = { ...task, instanceDate: dateStr, isException: false };
+              dateMap.get(dateStr)!.push(instance);
+            }
           }
         }
-      } else {
+      } else { // Recurring tasks logic
         const exceptionsMap = new Map((task.exceptions || []).map(e => [e.date, e]));
         const startDate = new Date(task.start_date + "T00:00:00Z");
         const endDate = new Date(task.end_date + "T00:00:00Z");
@@ -799,22 +809,25 @@ const TaskManagement = () => {
             const exception = exceptionsMap.get(dateStr);
             if (exception?.is_removed) continue;
 
-            const employeeForInstance = exception?.assigned_employee_id
-              ? employees.find(e => e.id === exception.assigned_employee_id)
-              : task.assigned_employee;
+            const assignedEmployeeId = exception?.assigned_employee_id === undefined ? task.assigned_employee_id : exception.assigned_employee_id;
 
-            const instance: TaskInstance = {
-              ...task,
-              instanceDate: dateStr,
-              isException: !!exception,
-              assigned_employee_id: exception?.assigned_employee_id || task.assigned_employee_id,
-              assigned_employee: employeeForInstance || null,
-              estimated_time: exception?.estimated_time || task.hours_per_day || task.estimated_time,
-              name: exception ? `${task.name} (Exceção)` : task.name,
-            };
+            // Only render if it's assigned to someone
+            if (assignedEmployeeId) {
+              const employeeForInstance = employees.find(e => e.id === assignedEmployeeId) || null;
 
-            if (!dateMap.has(dateStr)) dateMap.set(dateStr, []);
-            dateMap.get(dateStr)!.push(instance);
+              const instance: TaskInstance = {
+                ...task,
+                instanceDate: dateStr,
+                isException: !!exception,
+                assigned_employee_id: assignedEmployeeId,
+                assigned_employee: employeeForInstance,
+                estimated_time: exception?.estimated_time ?? task.hours_per_day ?? 0,
+                name: exception ? `${task.name} (Exceção)` : task.name,
+              };
+
+              if (!dateMap.has(dateStr)) dateMap.set(dateStr, []);
+              dateMap.get(dateStr)!.push(instance);
+            }
           }
         }
       }
@@ -871,10 +884,6 @@ const TaskManagement = () => {
       }),
     }));
 
-    const [editingTask, setEditingTask] = useState<string | null>(null);
-    const [tempStartDate, setTempStartDate] = useState("");
-    const [tempEndDate, setTempEndDate] = useState("");
-
     const cellTasks = tasksForCell.filter(
       (task) => task.assigned_employee_id === employee.id,
     );
@@ -892,36 +901,6 @@ const TaskManagement = () => {
       return "bg-green-100 border-green-300";
     };
 
-    const handleEditTask = (task: TaskInstance) => {
-      setEditingTask(`${task.id}-${task.instanceDate}`);
-      setTempStartDate(task.start_date);
-      setTempEndDate(task.end_date);
-    };
-
-    const handleSaveTaskDates = async (task: TaskInstance) => {
-      console.log("handleSaveTaskDates called with:", { task, tempStartDate, tempEndDate });
-      try {
-        const originalTask = tasks.find(t => t.id === task.id);
-        if (!originalTask) return;
-
-        // For non-recurring tasks, update the task itself
-        const updatedTask = await taskService.update(task.id, { start_date: tempStartDate, end_date: tempEndDate });
-        setTasks(tasks.map(t => t.id === task.id ? updatedTask as TaskWithRelations : t));
-
-      } catch(e) {
-        console.error("Error in handleSaveTaskDates:", e);
-        alert("Erro ao atualizar a tarefa. Verifique os dados e tente novamente.");
-      } finally {
-        setEditingTask(null);
-      }
-    };
-
-    const handleCancelEdit = () => {
-      setEditingTask(null);
-      setTempStartDate("");
-      setTempEndDate("");
-    };
-
     return (
       <div
         ref={drop}
@@ -934,60 +913,13 @@ const TaskManagement = () => {
         </div>
         <div className="space-y-1">
           {cellTasks.map((task) => (
-            <div key={`${task.id}-${task.instanceDate}`}>
-              {editingTask === `${task.id}-${task.instanceDate}` ? (
-                <div className="text-xs p-2 bg-white border border-blue-300 rounded space-y-2">
-                  <div className="font-medium truncate text-blue-900">
-                    {task.name}
-                  </div>
-                  <div className="space-y-1">
-                    <div>
-                      <Label className="text-xs text-gray-600">Início:</Label>
-                      <Input
-                        type="date"
-                        value={tempStartDate}
-                        onChange={(e) => setTempStartDate(e.target.value)}
-                        className="h-6 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-gray-600">Fim:</Label>
-                      <Input
-                        type="date"
-                        value={tempEndDate}
-                        onChange={(e) => setTempEndDate(e.target.value)}
-                        className="h-6 text-xs"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex gap-1">
-                    <Button
-                      size="sm"
-                      onClick={() => handleSaveTaskDates(task)}
-                      disabled={task.repeats_weekly}
-                      className="h-5 px-2 text-xs"
-                    >
-                      Salvar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleCancelEdit}
-                      className="h-5 px-2 text-xs"
-                    >
-                      Cancelar
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div
-                  className="text-xs p-1 bg-white border border-gray-300 rounded truncate cursor-pointer hover:border-blue-300 hover:bg-blue-50 transition-colors"
-                  onClick={() => handleEditTask(task)}
-                >
-                  <div className="font-medium truncate">{task.name}</div>
-                  <div className="text-gray-500">{task.estimated_time}h</div>
-                </div>
-              )}
+            <div
+              key={`${task.id}-${task.instanceDate}`}
+              className="text-xs p-1 bg-white border border-gray-300 rounded truncate cursor-pointer hover:border-blue-300 hover:bg-blue-50 transition-colors"
+              onClick={() => openEditDialog(task, 'calendar')}
+            >
+              <div className="font-medium truncate">{task.name}</div>
+              <div className="text-gray-500">{task.estimated_time}h</div>
             </div>
           ))}
         </div>
@@ -1965,7 +1897,6 @@ const TaskManagement = () => {
                     id="edit-repeats_weekly"
                     type="checkbox"
                     checked={currentTask.repeats_weekly || false}
-                    disabled={currentTask.repeats_weekly || false}
                     onChange={(e) =>
                       setCurrentTask({
                         ...currentTask,
@@ -2009,7 +1940,6 @@ const TaskManagement = () => {
                             checked={(currentTask.repeat_days || []).includes(
                               day.value,
                             )}
-                            disabled={true}
                             onChange={(e) =>
                               handleCurrentTaskRepeatDayChange(
                                 day.value,
@@ -2076,88 +2006,7 @@ const TaskManagement = () => {
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* Exception Management UI */}
-              {currentTask.repeats_weekly && (
-                <div className="col-span-4 mt-4 pt-4 border-t">
-                  <h4 className="text-md font-semibold mb-2">
-                    Gerenciar Ocorrências
-                  </h4>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Ajuste ou remova ocorrências individuais. As alterações aqui
-                    serão salvas como exceções à regra de repetição.
-                  </p>
-                  <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
-                    {editingOccurrences.length > 0 ? (
-                      editingOccurrences.map((occ) => (
-                        <div
-                          key={occ.date}
-                          className={`p-3 rounded-md transition-colors ${
-                            occ.is_removed
-                              ? "bg-red-50 border-red-200"
-                              : "bg-gray-50 border-gray-200"
-                          } border`}
-                        >
-                          <div className="flex justify-between items-center mb-2">
-                            <Label className="font-semibold">
-                              {format(new Date(occ.date + "T00:00:00"), "EEE, dd/MM/yyyy")}
-                            </Label>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleOccurrenceChange(occ.date, 'is_removed', !occ.is_removed)}
-                              className="h-7 w-7"
-                            >
-                              <Trash2 className={`h-4 w-4 ${occ.is_removed ? 'text-red-500' : ''}`} />
-                            </Button>
-                          </div>
-                          {!occ.is_removed && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
-                              <div>
-                                <Label className="text-xs">Horas</Label>
-                                <Input
-                                  type="number"
-                                  step="0.5"
-                                  placeholder={occ.original.estimated_time?.toString() || '0'}
-                                  value={occ.override.estimated_time ?? ''}
-                                  onChange={(e) => handleOccurrenceChange(occ.date, 'estimated_time', e.target.value ? parseFloat(e.target.value) : null)}
-                                  className="h-8"
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs">Responsável</Label>
-                                <Select
-                                  value={occ.override.assigned_employee_id ?? occ.original.assigned_employee_id ?? 'none'}
-                                  onValueChange={(value) => handleOccurrenceChange(occ.date, 'assigned_employee_id', value === 'none' ? null : value)}
-                                >
-                                  <SelectTrigger className="h-8">
-                                    <SelectValue placeholder="Selecione" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">
-                                      Padrão ({employees.find(e => e.id === currentTask.assigned_employee_id)?.name || 'Não atribuído'})
-                                    </SelectItem>
-                                    {employees.map((employee) => (
-                                      <SelectItem key={employee.id} value={employee.id}>
-                                        {employee.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-center text-gray-500 py-4">
-                        Nenhuma ocorrência futura encontrada para esta tarefa no período selecionado.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+              </div>
             </ScrollArea>
           )}
           <DialogFooter>
@@ -2312,14 +2161,9 @@ const TaskManagement = () => {
                           Todas as tarefas estão atribuídas
                         </p>
                       ) : (
-                        unassignedTasks.map((task) => {
-                          const taskAsInstance: TaskInstance = {
-                            ...task,
-                            instanceDate: task.start_date,
-                            isException: false,
-                          };
-                          return <DraggableTask key={task.id} task={taskAsInstance} />
-                        })
+                        unassignedTasks.map((task) => (
+                          <DraggableTask key={task.id} task={task} />
+                        ))
                       )}
                     </CardContent>
                   </Card>
@@ -2368,7 +2212,7 @@ const TaskManagement = () => {
                             <DroppableCell
                               date={date}
                               employee={employee}
-                              tasksForCell={tasksForGrid.get(date) || []}
+                              tasks={tasks}
                             />
                           </div>
                         ))}
