@@ -55,6 +55,14 @@ export type ProjectInsert = {
 
 export type ProjectUpdate = Partial<ProjectInsert>;
 
+export type Exception = {
+  date: string;
+  assigned_employee_id?: string;
+  estimated_time?: number;
+  is_removed?: boolean;
+  status?: string;
+};
+
 export type Task = {
   id: string;
   name: string;
@@ -70,6 +78,7 @@ export type Task = {
   repeat_days?: string[] | null; // Days of the week for repetition
   hours_per_day?: number | null; // Hours per day for repeated tasks
   special_marker?: string | null;
+  exceptions?: Exception[] | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -88,6 +97,7 @@ export type TaskInsert = {
   repeat_days?: string[] | null;
   hours_per_day?: number | null;
   special_marker?: string | null;
+  exceptions?: Exception[] | null;
 };
 
 export type TaskUpdate = Partial<TaskInsert>;

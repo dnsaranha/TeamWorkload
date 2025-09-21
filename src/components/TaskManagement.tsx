@@ -55,20 +55,13 @@ import {
   type Task,
   type Project,
   type Employee,
-  TaskInsert,
+  type Exception,
+  type TaskInsert,
 } from "@/lib/supabaseClient";
 
 type TaskWithRelations = Task & {
   project: Project | null;
   assigned_employee: Employee | null;
-};
-
-// Helper to get recurrence ID from a task's special_marker
-const getRecurrenceId = (task: Task): string | null => {
-  if (task.special_marker && task.special_marker.startsWith("recurrence_id:")) {
-    return task.special_marker.substring("recurrence_id:".length);
-  }
-  return null;
 };
 
 const TaskManagement = () => {
@@ -195,12 +188,6 @@ const TaskManagement = () => {
 
   const handleCreateTask = async () => {
     try {
-      let specialMarker =
-        newTask.special_marker === "none" ? null : newTask.special_marker;
-      if (newTask.repeats_weekly) {
-        specialMarker = `recurrence_id:${crypto.randomUUID()}`;
-      }
-
       const taskData = {
         name: newTask.name,
         description: newTask.description,
@@ -221,7 +208,8 @@ const TaskManagement = () => {
         repeats_weekly: newTask.repeats_weekly,
         repeat_days: newTask.repeats_weekly ? newTask.repeat_days : null,
         hours_per_day: newTask.repeats_weekly ? newTask.hours_per_day : null,
-        special_marker: specialMarker,
+        special_marker:
+          newTask.special_marker === "none" ? null : newTask.special_marker,
       };
 
       const createdTask = await taskService.create(taskData);
@@ -281,16 +269,6 @@ const TaskManagement = () => {
             ? null
             : currentTask.special_marker,
       };
-
-      // Add recurrence_id if it's a recurring task and doesn't have one
-      if (updateData.repeats_weekly) {
-        const hasRecurrenceId =
-          updateData.special_marker &&
-          updateData.special_marker.includes("recurrence_id:");
-        if (!hasRecurrenceId) {
-          updateData.special_marker = `recurrence_id:${crypto.randomUUID()}`;
-        }
-      }
 
       const updatedTask = await taskService.update(currentTask.id, updateData);
 
@@ -368,10 +346,7 @@ const TaskManagement = () => {
   };
 
   const openEditDialog = (task: TaskWithRelations) => {
-    setCurrentTask({
-      ...task,
-      repeat_days: task.repeat_days || [], // Garante que repeat_days seja sempre um array
-    });
+    setCurrentTask(task);
     setIsEditTaskDialogOpen(true);
   };
 
@@ -583,49 +558,55 @@ const TaskManagement = () => {
     date: string,
   ) => {
     try {
-      const isRecurring =
-        task.repeats_weekly ||
-        (task.special_marker &&
-          task.special_marker.includes("recurrence_id:"));
-
-      if (isRecurring) {
-        // It's a recurring task, so create an exception instead of updating
-        const hoursForInstance =
-          task.hours_per_day ||
-          (task.repeat_days?.length
-            ? task.estimated_time / task.repeat_days.length
-            : task.estimated_time);
-
-        const exceptionTaskData: TaskInsert = {
-          name: task.name,
-          description: task.description,
-          project_id: task.project_id,
-          status: "in_progress", // Or copy from parent? Let's be explicit
-          special_marker: task.special_marker, // Copy recurrence_id
-          assigned_employee_id: employeeId,
-          start_date: date,
-          end_date: date,
-          repeats_weekly: false,
-          repeat_days: [],
-          estimated_time: hoursForInstance,
-          hours_per_day: 0,
-        };
-
-        const newException = await taskService.create(exceptionTaskData);
-        setTasks([...tasks, newException as TaskWithRelations]);
-      } else {
-        // It's a normal, non-recurring task, so update it directly
+      // If the task is not a weekly recurring one, handle it as a simple update
+      if (!task.repeats_weekly) {
         const updatedTask = await taskService.update(task.id, {
           assigned_employee_id: employeeId,
           start_date: date,
           end_date: date,
         });
-
         const updatedTasks = tasks.map((t) =>
           t.id === task.id ? (updatedTask as TaskWithRelations) : t,
         );
         setTasks(updatedTasks);
+        return;
       }
+
+      // For recurring tasks, we add or update an exception
+      const newException: Exception = {
+        date: date,
+        assigned_employee_id: employeeId,
+        // Preserve other potential exception properties by merging
+      };
+
+      const currentExceptions = task.exceptions || [];
+      const existingExceptionIndex = currentExceptions.findIndex(
+        (ex) => ex.date === date,
+      );
+
+      let updatedExceptions;
+      if (existingExceptionIndex > -1) {
+        // An exception for this date already exists, merge the changes
+        updatedExceptions = [...currentExceptions];
+        updatedExceptions[existingExceptionIndex] = {
+          ...updatedExceptions[existingExceptionIndex],
+          ...newException,
+          is_removed: false, // Ensure it's not marked as removed if we're dropping on it
+        };
+      } else {
+        // No exception for this date, so add a new one
+        updatedExceptions = [...currentExceptions, newException];
+      }
+
+      const updatedTask = await taskService.update(task.id, {
+        exceptions: updatedExceptions,
+      });
+
+      // Update local state to reflect the change immediately
+      const updatedTasks = tasks.map((t) =>
+        t.id === task.id ? (updatedTask as TaskWithRelations) : t,
+      );
+      setTasks(updatedTasks);
     } catch (error) {
       console.error("Error handling task drop:", error);
       alert("Failed to modify task. Please try again.");
@@ -669,73 +650,46 @@ const TaskManagement = () => {
     const dateMap: Map<string, TaskWithRelations[]> = new Map();
     if (!tasks.length) return dateMap;
 
-    const recurrenceGroups: Map<
-      string,
-      { parent: TaskWithRelations | null; exceptions: TaskWithRelations[] }
-    > = new Map();
-    const singleTasks: TaskWithRelations[] = [];
+    const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+    const weekDatesSet = new Set(getWeekDates(gridStartDate));
 
-    // 1. Group tasks by recurrence_id
-    tasks.forEach((task) => {
-      const recurrenceId = getRecurrenceId(task);
-      if (recurrenceId) {
-        if (!recurrenceGroups.has(recurrenceId)) {
-          recurrenceGroups.set(recurrenceId, { parent: null, exceptions: [] });
-        }
-        const group = recurrenceGroups.get(recurrenceId)!;
-        if (task.repeats_weekly) {
-          group.parent = task;
-        } else {
-          group.exceptions.push(task);
+    tasks.forEach(task => {
+      if (!task.repeats_weekly) {
+        // Handle non-recurring tasks
+        const startDate = new Date(task.start_date + "T00:00:00Z");
+        const endDate = new Date(task.end_date + "T00:00:00Z");
+        for (let d = new Date(startDate); d <= endDate; d.setUTCDate(d.getUTCDate() + 1)) {
+          const dateStr = d.toISOString().split('T')[0];
+          if (weekDatesSet.has(dateStr)) {
+            if (!dateMap.has(dateStr)) dateMap.set(dateStr, []);
+            dateMap.get(dateStr)!.push(task);
+          }
         }
       } else {
-        singleTasks.push(task);
-      }
-    });
+        // Handle recurring tasks and their exceptions
+        const exceptionsMap = new Map((task.exceptions || []).map(e => [e.date, e]));
+        const startDate = new Date(task.start_date + "T00:00:00Z");
+        const endDate = new Date(task.end_date + "T00:00:00Z");
 
-    // Helper to add a task to the map for a specific date
-    const addTaskToDate = (date: string, task: TaskWithRelations) => {
-      if (!dateMap.has(date)) {
-        dateMap.set(date, []);
-      }
-      dateMap.get(date)!.push(task);
-    };
+        for (let d = new Date(startDate); d <= endDate; d.setUTCDate(d.getUTCDate() + 1)) {
+          const dateStr = d.toISOString().split('T')[0];
+          if (!weekDatesSet.has(dateStr)) continue;
 
-    // 2. Add single, non-recurring tasks to the map
-    singleTasks.forEach((task) => {
-      // For tasks that span multiple days, add them to each day in their range
-      const sDate = new Date(task.start_date + "T00:00:00Z");
-      const eDate = new Date(task.end_date + "T00:00:00Z");
-      for (let d = sDate; d <= eDate; d.setUTCDate(d.getUTCDate() + 1)) {
-        addTaskToDate(d.toISOString().split("T")[0], task);
-      }
-    });
+          const exception = exceptionsMap.get(dateStr);
+          if (exception?.is_removed) continue;
 
-    // 3. Add exceptions to the map
-    recurrenceGroups.forEach((group) => {
-      group.exceptions.forEach((exception) => {
-        addTaskToDate(exception.start_date, exception);
-      });
-    });
-
-    // 4. Expand recurring tasks, avoiding dates where an exception already exists
-    const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-
-    recurrenceGroups.forEach((group) => {
-      if (!group.parent) return; // Skip if there's no parent task for the group
-
-      const parent = group.parent;
-      const exceptionDates = new Set(group.exceptions.map((e) => e.start_date));
-      const parentStartDate = new Date(parent.start_date + "T00:00:00Z");
-      const parentEndDate = new Date(parent.end_date + "T00:00:00Z");
-      const repeatDays = parent.repeat_days || [];
-
-      for (let d = new Date(parentStartDate); d <= parentEndDate; d.setUTCDate(d.getUTCDate() + 1)) {
-        const dateStr = d.toISOString().split("T")[0];
-        const dayName = dayNames[d.getUTCDay()];
-
-        if (repeatDays.includes(dayName) && !exceptionDates.has(dateStr)) {
-          addTaskToDate(dateStr, parent);
+          const dayName = dayNames[d.getUTCDay()];
+          if (task.repeat_days?.includes(dayName)) {
+            const instance = { ...task };
+            if (exception) {
+              instance.assigned_employee_id = exception.assigned_employee_id || task.assigned_employee_id;
+              instance.estimated_time = exception.estimated_time || task.hours_per_day || task.estimated_time;
+              // You can add a visual marker for exceptions if you want
+              instance.name = `${task.name} (Exceção)`;
+            }
+            if (!dateMap.has(dateStr)) dateMap.set(dateStr, []);
+            dateMap.get(dateStr)!.push(instance);
+          }
         }
       }
     });
@@ -798,6 +752,7 @@ const TaskManagement = () => {
     );
 
     const totalHours = cellTasks.reduce((sum, task) => {
+      // For recurring task instances, use hours_per_day if available
       if (task.repeats_weekly && task.hours_per_day) {
         return sum + task.hours_per_day;
       }
@@ -893,7 +848,6 @@ const TaskManagement = () => {
                 >
                   <div className="font-medium truncate">{task.name}</div>
                   <div className="text-gray-500">{task.estimated_time}h</div>
-                  {!task.repeats_weekly && <div className="text-xs text-blue-500">(Exceção)</div>}
                 </div>
               )}
             </div>
