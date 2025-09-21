@@ -8,68 +8,30 @@ import { Calendar } from "./ui/calendar";
 import { CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import type { TaskWithRelations, Employee, Exception } from '@/types/tasks';
-import { taskService } from '@/lib/supabaseClient';
 
 interface ExceptionEditorProps {
   task: TaskWithRelations;
-  setTask: (task: any) => void; // A bit generic, but needed to update the parent state
   instanceDate: string;
   employees: Employee[];
+  onUpdateException: (exceptionData: Partial<Exception>) => Promise<void>;
+  isSaving: boolean;
 }
 
-const ExceptionEditor = ({ task, setTask, instanceDate, employees }: ExceptionEditorProps) => {
-  const [exceptionDetails, setExceptionDetails] = useState({
-    date: instanceDate,
-    estimated_time: task.hours_per_day,
-    assigned_employee_id: task.assigned_employee_id,
-  });
+const ExceptionEditor = ({ task, instanceDate, employees, onUpdateException, isSaving }: ExceptionEditorProps) => {
+  const [details, setDetails] = useState<Partial<Exception>>({});
 
   useEffect(() => {
     const existingException = task.exceptions?.find(ex => ex.date === instanceDate);
-    if (existingException) {
-      setExceptionDetails({
-        date: existingException.date,
-        estimated_time: existingException.estimated_time ?? task.hours_per_day,
-        assigned_employee_id: existingException.assigned_employee_id ?? task.assigned_employee_id,
-      });
-    } else {
-        setExceptionDetails({
-            date: instanceDate,
-            estimated_time: task.hours_per_day,
-            assigned_employee_id: task.assigned_employee_id,
-        });
-    }
+    setDetails({
+        date: instanceDate,
+        estimated_time: existingException?.estimated_time ?? task.hours_per_day,
+        assigned_employee_id: existingException?.assigned_employee_id ?? task.assigned_employee_id,
+        is_removed: existingException?.is_removed ?? false,
+    });
   }, [instanceDate, task]);
 
-  const handleSaveException = async () => {
-    const currentExceptions = task.exceptions || [];
-    const existingIndex = currentExceptions.findIndex(ex => ex.date === instanceDate);
-
-    let newExceptions: Exception[];
-
-    const newExceptionData = {
-        date: exceptionDetails.date,
-        estimated_time: exceptionDetails.estimated_time,
-        assigned_employee_id: exceptionDetails.assigned_employee_id,
-        is_removed: false,
-    };
-
-    if (existingIndex > -1) {
-      newExceptions = [...currentExceptions];
-      newExceptions[existingIndex] = { ...newExceptions[existingIndex], ...newExceptionData };
-    } else {
-      newExceptions = [...currentExceptions, newExceptionData];
-    }
-
-    try {
-        const updatedTask = await taskService.update(task.id, { exceptions: newExceptions });
-        // Optimistically update the parent task state
-        setTask(updatedTask);
-        alert('Exception saved!');
-    } catch (error) {
-        console.error("Failed to save exception:", error);
-        alert('Error saving exception.');
-    }
+  const handleSave = () => {
+    onUpdateException(details);
   };
 
   return (
@@ -80,16 +42,16 @@ const ExceptionEditor = ({ task, setTask, instanceDate, employees }: ExceptionEd
                 <Label>Execution Date</Label>
                 <Popover>
                     <PopoverTrigger asChild>
-                        <Button variant={"outline"} className="w-full justify-start text-left font-normal">
+                        <Button variant={"outline"} className="w-full justify-start text-left font-normal" disabled={isSaving}>
                             <CalendarIcon className="mr-2 h-4 w-4" />
-                            {format(new Date(exceptionDetails.date + "T00:00:00"), "PPP")}
+                            {details.date ? format(new Date(details.date + "T00:00:00"), "PPP") : <span>Pick a date</span>}
                         </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0">
                         <Calendar
                             mode="single"
-                            selected={new Date(exceptionDetails.date + "T00:00:00")}
-                            onSelect={(date) => date && setExceptionDetails({ ...exceptionDetails, date: date.toISOString().split("T")[0] })}
+                            selected={details.date ? new Date(details.date + "T00:00:00") : undefined}
+                            onSelect={(date) => date && setDetails({ ...details, date: date.toISOString().split("T")[0] })}
                             initialFocus
                         />
                     </PopoverContent>
@@ -99,15 +61,17 @@ const ExceptionEditor = ({ task, setTask, instanceDate, employees }: ExceptionEd
                 <Label>Estimated Hours</Label>
                 <Input
                     type="number"
-                    value={exceptionDetails.estimated_time || ''}
-                    onChange={(e) => setExceptionDetails({ ...exceptionDetails, estimated_time: parseFloat(e.target.value) || null })}
+                    value={details.estimated_time || ''}
+                    onChange={(e) => setDetails({ ...details, estimated_time: parseFloat(e.target.value) || null })}
+                    disabled={isSaving}
                 />
             </div>
             <div>
                 <Label>Assigned To</Label>
                 <Select
-                    value={exceptionDetails.assigned_employee_id || 'none'}
-                    onValueChange={(value) => setExceptionDetails({ ...exceptionDetails, assigned_employee_id: value === 'none' ? null : value })}
+                    value={details.assigned_employee_id || 'none'}
+                    onValueChange={(value) => setDetails({ ...details, assigned_employee_id: value === 'none' ? null : value })}
+                    disabled={isSaving}
                 >
                     <SelectTrigger><SelectValue placeholder="Select an employee" /></SelectTrigger>
                     <SelectContent>
@@ -120,7 +84,9 @@ const ExceptionEditor = ({ task, setTask, instanceDate, employees }: ExceptionEd
             </div>
         </div>
         <div className="flex justify-end">
-            <Button onClick={handleSaveException}>Save Exception</Button>
+            <Button onClick={handleSave} disabled={isSaving}>
+                {isSaving ? 'Saving...' : 'Save Exception'}
+            </Button>
         </div>
     </div>
   );

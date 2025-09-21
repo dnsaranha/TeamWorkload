@@ -87,7 +87,40 @@ const TaskManagement = () => {
   );
   const [editingOccurrences, setEditingOccurrences] = useState<EditableOccurrence[]>([]);
   const [editSource, setEditSource] = useState<'list' | 'calendar'>('list');
+  const [isSaving, setIsSaving] = useState(false);
 
+
+  const handleUpdateException = async (exceptionData: Partial<Exception>) => {
+    if (!currentTask || !exceptionData.date) return;
+
+    setIsSaving(true);
+    try {
+      const parentTask = tasks.find(t => t.id === currentTask.id);
+      if (!parentTask) throw new Error("Parent task not found");
+
+      const currentExceptions = parentTask.exceptions || [];
+      const existingIndex = currentExceptions.findIndex(ex => ex.date === exceptionData.date);
+
+      let newExceptions: Exception[];
+      if (existingIndex > -1) {
+        newExceptions = [...currentExceptions];
+        newExceptions[existingIndex] = { ...newExceptions[existingIndex], ...exceptionData };
+      } else {
+        newExceptions = [...currentExceptions, exceptionData as Exception];
+      }
+
+      const updatedTask = await taskService.update(parentTask.id, { exceptions: newExceptions });
+
+      setTasks(currentTasks => currentTasks.map(t => t.id === updatedTask.id ? updatedTask as TaskWithRelations : t));
+      setIsEditTaskDialogOpen(false);
+
+    } catch (error) {
+      console.error("Failed to update exception:", error);
+      alert("Error updating exception.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (isEditTaskDialogOpen && currentTask?.repeats_weekly) {
@@ -1654,6 +1687,8 @@ const TaskManagement = () => {
           source={editSource}
           editingOccurrences={editingOccurrences}
           onOccurrenceChange={handleOccurrenceChange}
+          onUpdateException={handleUpdateException}
+          isSaving={isSaving}
         />
       )}
 

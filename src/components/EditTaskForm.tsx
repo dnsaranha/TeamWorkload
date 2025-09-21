@@ -83,6 +83,17 @@ const EditTaskForm = ({ task, setTask, employees, projects, isRecurring, source 
                 <h4 className="font-medium text-lg mb-4">Scheduling</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                     <div>
+                        <Label>Total Est. Hours</Label>
+                        <Input
+                            type="number"
+                            value={task.estimated_time || 0}
+                            readOnly={isRecurring}
+                            onChange={(e) => !isRecurring && setTask({ ...task, estimated_time: Number(e.target.value) })}
+                            className={isRecurring ? "bg-muted" : ""}
+                        />
+                    </div>
+                    <div></div> {/* Spacer */}
+                    <div>
                         <Label htmlFor="edit-startDate">Start Date</Label>
                         <Popover>
                             <PopoverTrigger asChild>

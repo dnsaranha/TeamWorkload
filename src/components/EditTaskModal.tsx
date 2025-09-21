@@ -27,6 +27,9 @@ interface EditTaskModalProps {
   // For exception list view
   editingOccurrences?: EditableOccurrence[];
   onOccurrenceChange?: (date: string, field: string, value: any) => void;
+  // For single exception editor
+  onUpdateException?: (exceptionData: Partial<Exception>) => Promise<void>;
+  isSaving?: boolean;
 }
 
 const EditTaskModal = ({
@@ -40,6 +43,8 @@ const EditTaskModal = ({
   source,
   editingOccurrences,
   onOccurrenceChange,
+  onUpdateException,
+  isSaving = false,
 }: EditTaskModalProps) => {
   if (!task) return null;
 
@@ -51,12 +56,13 @@ const EditTaskModal = ({
     if (source === 'calendar' && isRecurring) {
       return (
         <>
-          {instanceDate && (
+          {instanceDate && onUpdateException && (
             <ExceptionEditor
               task={task}
-              setTask={setTask}
               instanceDate={instanceDate}
               employees={employees}
+              onUpdateException={onUpdateException}
+              isSaving={isSaving}
             />
           )}
           <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
