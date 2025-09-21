@@ -753,13 +753,12 @@ const TaskManagement = () => {
 
   const tasksForGrid = useMemo(() => {
     const dateMap: Map<string, TaskInstance[]> = new Map();
-    if (!tasks.length) return dateMap;
+    if (!tasks.length || !employees.length) return dateMap;
 
     const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
     const weekDatesSet = new Set(getWeekDates(gridStartDate));
 
     tasks.forEach(task => {
-      // Non-repeating tasks are simple: if they have an assignee, they appear in that user's row.
       if (!task.repeats_weekly) {
         if (task.assigned_employee_id) {
           const startDate = new Date(task.start_date + "T00:00:00Z");
@@ -773,7 +772,7 @@ const TaskManagement = () => {
             }
           }
         }
-      } else { // Recurring tasks logic
+      } else {
         const exceptionsMap = new Map((task.exceptions || []).map(e => [e.date, e]));
         const startDate = new Date(task.start_date + "T00:00:00Z");
         const endDate = new Date(task.end_date + "T00:00:00Z");
@@ -785,11 +784,13 @@ const TaskManagement = () => {
           const dayName = dayNames[d.getUTCDay()];
           if ((task.repeat_days || []).includes(dayName)) {
             const exception = exceptionsMap.get(dateStr);
-            if (exception?.is_removed) continue;
 
-            const assignedEmployeeId = exception?.assigned_employee_id === undefined ? task.assigned_employee_id : exception.assigned_employee_id;
+            if (exception?.is_removed) {
+              continue; // Skip rendering for this day
+            }
 
-            // Only render if it's assigned to someone
+            const assignedEmployeeId = exception?.assigned_employee_id ?? task.assigned_employee_id;
+
             if (assignedEmployeeId) {
               const employeeForInstance = employees.find(e => e.id === assignedEmployeeId) || null;
 

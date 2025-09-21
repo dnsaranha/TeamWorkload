@@ -47,9 +47,63 @@ const EditTaskModal = ({
   // The instanceDate is only available when opened from the calendar
   const instanceDate = (task as TaskInstance).instanceDate;
 
+  const renderContent = () => {
+    if (source === 'calendar' && isRecurring) {
+      return (
+        <>
+          {instanceDate && (
+            <ExceptionEditor
+              task={task}
+              setTask={setTask}
+              instanceDate={instanceDate}
+              employees={employees}
+            />
+          )}
+          <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
+            <AccordionItem value="item-1">
+              <AccordionTrigger>Edit Entire Task Series</AccordionTrigger>
+              <AccordionContent>
+                <EditTaskForm
+                  task={task}
+                  setTask={setTask}
+                  employees={employees}
+                  projects={projects}
+                  isRecurring={isRecurring}
+                  source={source}
+                />
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </>
+      );
+    }
+
+    // Default view (from task list)
+    return (
+      <>
+        <EditTaskForm
+          task={task}
+          setTask={setTask}
+          employees={employees}
+          projects={projects}
+          isRecurring={isRecurring}
+          source={source}
+        />
+        {isRecurring && editingOccurrences && onOccurrenceChange && (
+          <ExceptionList
+            occurrences={editingOccurrences}
+            onOccurrenceChange={onOccurrenceChange}
+            employees={employees}
+            parentTask={task}
+          />
+        )}
+      </>
+    );
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Edit Task</DialogTitle>
           <DialogDescription>
@@ -60,58 +114,13 @@ const EditTaskModal = ({
         </DialogHeader>
         <ScrollArea className="max-h-[70vh]">
           <div className="p-4 space-y-4">
-            {isRecurring && source === 'calendar' && instanceDate && (
-              <ExceptionEditor
-                task={task}
-                setTask={setTask}
-                instanceDate={instanceDate}
-                employees={employees}
-              />
-            )}
-
-            {isRecurring && source === 'list' && editingOccurrences && onOccurrenceChange && (
-              <ExceptionList
-                occurrences={editingOccurrences}
-                onOccurrenceChange={onOccurrenceChange}
-                employees={employees}
-                parentTask={task}
-              />
-            )}
-
-            {source === 'list' && (
-                 <EditTaskForm
-                    task={task}
-                    setTask={setTask}
-                    employees={employees}
-                    projects={projects}
-                    isRecurring={isRecurring}
-                    source={source}
-                />
-            )}
-
-            {source === 'calendar' && (
-              <Accordion type="single" collapsible className="w-full">
-                <AccordionItem value="item-1">
-                  <AccordionTrigger>Edit Entire Task Series</AccordionTrigger>
-                  <AccordionContent>
-                    <EditTaskForm
-                        task={task}
-                        setTask={setTask}
-                        employees={employees}
-                        projects={projects}
-                        isRecurring={isRecurring}
-                        source={source}
-                    />
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-            )}
+            {renderContent()}
           </div>
         </ScrollArea>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button type="submit" onClick={handleUpdate}>
-            {source === 'calendar' && isRecurring ? 'Update Series' : 'Update Task'}
+            Update Task
           </Button>
         </DialogFooter>
       </DialogContent>
