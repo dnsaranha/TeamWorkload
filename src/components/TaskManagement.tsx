@@ -344,7 +344,10 @@ const TaskManagement = () => {
   };
 
   const openEditDialog = (task: TaskWithRelations) => {
-    setCurrentTask(task);
+    setCurrentTask({
+      ...task,
+      repeat_days: task.repeat_days || [], // Garante que repeat_days seja sempre um array
+    });
     setIsEditTaskDialogOpen(true);
   };
 
