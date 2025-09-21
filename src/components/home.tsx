@@ -95,7 +95,7 @@ const HomePage = () => {
         );
         const totalAssignedHours = tasks
           .filter((task) => task.assigned_employee_id)
-          .reduce((sum, task) => sum + task.estimated_time, 0);
+          .reduce((sum, task) => sum + (task.estimated_time || 0), 0);
 
         const avgWorkloadPercent =
           totalCapacity > 0
