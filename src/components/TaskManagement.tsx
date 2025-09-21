@@ -64,6 +64,13 @@ type TaskWithRelations = Task & {
   assigned_employee: Employee | null;
 };
 
+// This represents a task instance on the calendar, which might have overridden properties
+type TaskInstance = TaskWithRelations & {
+  instanceDate: string;
+  isException: boolean;
+};
+
+
 const TaskManagement = () => {
   const [tasks, setTasks] = useState<TaskWithRelations[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -188,7 +195,7 @@ const TaskManagement = () => {
 
   const handleCreateTask = async () => {
     try {
-      const taskData = {
+      const taskData: TaskInsert = {
         name: newTask.name,
         description: newTask.description,
         estimated_time: newTask.estimated_time,
@@ -206,10 +213,11 @@ const TaskManagement = () => {
             ? newTask.completion_date
             : null,
         repeats_weekly: newTask.repeats_weekly,
-        repeat_days: newTask.repeats_weekly ? newTask.repeat_days : null,
-        hours_per_day: newTask.repeats_weekly ? newTask.hours_per_day : null,
+        repeat_days: newTask.repeats_weekly ? newTask.repeat_days : [],
+        hours_per_day: newTask.repeats_weekly ? newTask.hours_per_day : 0,
         special_marker:
           newTask.special_marker === "none" ? null : newTask.special_marker,
+        exceptions: [],
       };
 
       const createdTask = await taskService.create(taskData);
@@ -268,6 +276,7 @@ const TaskManagement = () => {
           currentTask.special_marker === "none"
             ? null
             : currentTask.special_marker,
+        exceptions: currentTask.exceptions || [],
       };
 
       const updatedTask = await taskService.update(currentTask.id, updateData);
@@ -557,54 +566,55 @@ const TaskManagement = () => {
     employeeId: string,
     date: string,
   ) => {
+    console.log("handleTaskDrop called with:", { task, employeeId, date });
     try {
-      // If the task is not a weekly recurring one, handle it as a simple update
-      if (!task.repeats_weekly) {
-        const updatedTask = await taskService.update(task.id, {
+      const originalTask = tasks.find(t => t.id === task.id);
+      if (!originalTask) {
+        console.error("Original task not found for drop operation.");
+        return;
+      }
+
+      if (!originalTask.repeats_weekly) {
+        const updatedTask = await taskService.update(originalTask.id, {
           assigned_employee_id: employeeId,
           start_date: date,
           end_date: date,
         });
         const updatedTasks = tasks.map((t) =>
-          t.id === task.id ? (updatedTask as TaskWithRelations) : t,
+          t.id === originalTask.id ? (updatedTask as TaskWithRelations) : t,
         );
         setTasks(updatedTasks);
         return;
       }
 
-      // For recurring tasks, we add or update an exception
       const newException: Exception = {
         date: date,
         assigned_employee_id: employeeId,
-        // Preserve other potential exception properties by merging
       };
 
-      const currentExceptions = task.exceptions || [];
+      const currentExceptions = originalTask.exceptions || [];
       const existingExceptionIndex = currentExceptions.findIndex(
         (ex) => ex.date === date,
       );
 
       let updatedExceptions;
       if (existingExceptionIndex > -1) {
-        // An exception for this date already exists, merge the changes
         updatedExceptions = [...currentExceptions];
         updatedExceptions[existingExceptionIndex] = {
           ...updatedExceptions[existingExceptionIndex],
           ...newException,
-          is_removed: false, // Ensure it's not marked as removed if we're dropping on it
+          is_removed: false,
         };
       } else {
-        // No exception for this date, so add a new one
         updatedExceptions = [...currentExceptions, newException];
       }
 
-      const updatedTask = await taskService.update(task.id, {
+      const updatedTask = await taskService.update(originalTask.id, {
         exceptions: updatedExceptions,
       });
 
-      // Update local state to reflect the change immediately
       const updatedTasks = tasks.map((t) =>
-        t.id === task.id ? (updatedTask as TaskWithRelations) : t,
+        t.id === originalTask.id ? (updatedTask as TaskWithRelations) : t,
       );
       setTasks(updatedTasks);
     } catch (error) {
@@ -636,7 +646,6 @@ const TaskManagement = () => {
     const month = today.getUTCMonth();
     const date = today.getUTCDate();
     const day = today.getUTCDay();
-    // Calculate Monday of the current week in UTC
     const mondayUTCDate = new Date(
       Date.UTC(year, month, date - day + (day === 0 ? -6 : 1)),
     );
@@ -647,7 +656,7 @@ const TaskManagement = () => {
   const unassignedTasks = tasks.filter((task) => !task.assigned_employee_id);
 
   const tasksForGrid = useMemo(() => {
-    const dateMap: Map<string, TaskWithRelations[]> = new Map();
+    const dateMap: Map<string, TaskInstance[]> = new Map();
     if (!tasks.length) return dateMap;
 
     const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
@@ -655,18 +664,17 @@ const TaskManagement = () => {
 
     tasks.forEach(task => {
       if (!task.repeats_weekly) {
-        // Handle non-recurring tasks
         const startDate = new Date(task.start_date + "T00:00:00Z");
         const endDate = new Date(task.end_date + "T00:00:00Z");
         for (let d = new Date(startDate); d <= endDate; d.setUTCDate(d.getUTCDate() + 1)) {
           const dateStr = d.toISOString().split('T')[0];
           if (weekDatesSet.has(dateStr)) {
             if (!dateMap.has(dateStr)) dateMap.set(dateStr, []);
-            dateMap.get(dateStr)!.push(task);
+            const instance: TaskInstance = { ...task, instanceDate: dateStr, isException: false };
+            dateMap.get(dateStr)!.push(instance);
           }
         }
       } else {
-        // Handle recurring tasks and their exceptions
         const exceptionsMap = new Map((task.exceptions || []).map(e => [e.date, e]));
         const startDate = new Date(task.start_date + "T00:00:00Z");
         const endDate = new Date(task.end_date + "T00:00:00Z");
@@ -675,18 +683,25 @@ const TaskManagement = () => {
           const dateStr = d.toISOString().split('T')[0];
           if (!weekDatesSet.has(dateStr)) continue;
 
-          const exception = exceptionsMap.get(dateStr);
-          if (exception?.is_removed) continue;
-
           const dayName = dayNames[d.getUTCDay()];
           if (task.repeat_days?.includes(dayName)) {
-            const instance = { ...task };
-            if (exception) {
-              instance.assigned_employee_id = exception.assigned_employee_id || task.assigned_employee_id;
-              instance.estimated_time = exception.estimated_time || task.hours_per_day || task.estimated_time;
-              // You can add a visual marker for exceptions if you want
-              instance.name = `${task.name} (Exceção)`;
-            }
+            const exception = exceptionsMap.get(dateStr);
+            if (exception?.is_removed) continue;
+
+            const employeeForInstance = exception?.assigned_employee_id
+              ? employees.find(e => e.id === exception.assigned_employee_id)
+              : task.assigned_employee;
+
+            const instance: TaskInstance = {
+              ...task,
+              instanceDate: dateStr,
+              isException: !!exception,
+              assigned_employee_id: exception?.assigned_employee_id || task.assigned_employee_id,
+              assigned_employee: employeeForInstance || null,
+              estimated_time: exception?.estimated_time || task.hours_per_day || task.estimated_time,
+              name: exception ? `${task.name} (Exceção)` : task.name,
+            };
+
             if (!dateMap.has(dateStr)) dateMap.set(dateStr, []);
             dateMap.get(dateStr)!.push(instance);
           }
@@ -695,13 +710,13 @@ const TaskManagement = () => {
     });
 
     return dateMap;
-  }, [tasks, gridStartDate]);
+  }, [tasks, gridStartDate, employees]);
 
-  // Drag and Drop Grid Components
-  const DraggableTask = ({ task }: { task: TaskWithRelations }) => {
+  // Components defined inside TaskManagement to have access to its scope
+  const DraggableTask = ({ task }: { task: TaskInstance | TaskWithRelations }) => {
     const [{ isDragging }, drag] = useDrag(() => ({
       type: "task",
-      item: { task },
+      item: { task: tasks.find(t => t.id === task.id) }, // Pass the original task object
       collect: (monitor) => ({
         isDragging: monitor.isDragging(),
       }),
@@ -731,12 +746,14 @@ const TaskManagement = () => {
   }: {
     date: string;
     employee: Employee;
-    tasksForCell: TaskWithRelations[];
+    tasksForCell: TaskInstance[];
   }) => {
     const [{ isOver }, drop] = useDrop(() => ({
       accept: "task",
       drop: (item: { task: TaskWithRelations }) => {
-        handleTaskDrop(item.task, employee.id, date);
+        if (item.task) {
+          handleTaskDrop(item.task, employee.id, date);
+        }
       },
       collect: (monitor) => ({
         isOver: monitor.isOver(),
@@ -752,11 +769,7 @@ const TaskManagement = () => {
     );
 
     const totalHours = cellTasks.reduce((sum, task) => {
-      // For recurring task instances, use hours_per_day if available
-      if (task.repeats_weekly && task.hours_per_day) {
-        return sum + task.hours_per_day;
-      }
-      return sum + task.estimated_time;
+      return sum + (task.estimated_time || 0);
     }, 0);
 
     const dailyCapacity = employee.weekly_hours / (employee.dias_de_trabalho?.length || 5);
@@ -768,15 +781,28 @@ const TaskManagement = () => {
       return "bg-green-100 border-green-300";
     };
 
-    const handleEditTask = (task: TaskWithRelations) => {
-      setEditingTask(task.id);
+    const handleEditTask = (task: TaskInstance) => {
+      setEditingTask(`${task.id}-${task.instanceDate}`);
       setTempStartDate(task.start_date);
       setTempEndDate(task.end_date);
     };
 
-    const handleSaveTaskDates = async (taskId: string) => {
-      // This logic is deferred as it's complex and might need a different UI
-      setEditingTask(null);
+    const handleSaveTaskDates = async (task: TaskInstance) => {
+      console.log("handleSaveTaskDates called with:", { task, tempStartDate, tempEndDate });
+      try {
+        const originalTask = tasks.find(t => t.id === task.id);
+        if (!originalTask) return;
+
+        // For non-recurring tasks, update the task itself
+        const updatedTask = await taskService.update(task.id, { start_date: tempStartDate, end_date: tempEndDate });
+        setTasks(tasks.map(t => t.id === task.id ? updatedTask as TaskWithRelations : t));
+
+      } catch(e) {
+        console.error("Error in handleSaveTaskDates:", e);
+        alert("Erro ao atualizar a tarefa. Verifique os dados e tente novamente.");
+      } finally {
+        setEditingTask(null);
+      }
     };
 
     const handleCancelEdit = () => {
@@ -797,8 +823,8 @@ const TaskManagement = () => {
         </div>
         <div className="space-y-1">
           {cellTasks.map((task) => (
-            <div key={task.id}>
-              {editingTask === task.id ? (
+            <div key={`${task.id}-${task.instanceDate}`}>
+              {editingTask === `${task.id}-${task.instanceDate}` ? (
                 <div className="text-xs p-2 bg-white border border-blue-300 rounded space-y-2">
                   <div className="font-medium truncate text-blue-900">
                     {task.name}
@@ -826,7 +852,8 @@ const TaskManagement = () => {
                   <div className="flex gap-1">
                     <Button
                       size="sm"
-                      onClick={() => handleSaveTaskDates(task.id)}
+                      onClick={() => handleSaveTaskDates(task)}
+                      disabled={task.repeats_weekly}
                       className="h-5 px-2 text-xs"
                     >
                       Salvar
@@ -2091,9 +2118,14 @@ const TaskManagement = () => {
                           Todas as tarefas estão atribuídas
                         </p>
                       ) : (
-                        unassignedTasks.map((task) => (
-                          <DraggableTask key={task.id} task={task} />
-                        ))
+                        unassignedTasks.map((task) => {
+                          const taskAsInstance: TaskInstance = {
+                            ...task,
+                            instanceDate: task.start_date,
+                            isException: false,
+                          };
+                          return <DraggableTask key={task.id} task={taskAsInstance} />
+                        })
                       )}
                     </CardContent>
                   </Card>
