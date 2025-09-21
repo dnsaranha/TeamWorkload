@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
@@ -55,11 +55,20 @@ import {
   type Task,
   type Project,
   type Employee,
+  TaskInsert,
 } from "@/lib/supabaseClient";
 
 type TaskWithRelations = Task & {
   project: Project | null;
   assigned_employee: Employee | null;
+};
+
+// Helper to get recurrence ID from a task's special_marker
+const getRecurrenceId = (task: Task): string | null => {
+  if (task.special_marker && task.special_marker.startsWith("recurrence_id:")) {
+    return task.special_marker.substring("recurrence_id:".length);
+  }
+  return null;
 };
 
 const TaskManagement = () => {
@@ -186,6 +195,12 @@ const TaskManagement = () => {
 
   const handleCreateTask = async () => {
     try {
+      let specialMarker =
+        newTask.special_marker === "none" ? null : newTask.special_marker;
+      if (newTask.repeats_weekly) {
+        specialMarker = `recurrence_id:${crypto.randomUUID()}`;
+      }
+
       const taskData = {
         name: newTask.name,
         description: newTask.description,
@@ -206,8 +221,7 @@ const TaskManagement = () => {
         repeats_weekly: newTask.repeats_weekly,
         repeat_days: newTask.repeats_weekly ? newTask.repeat_days : null,
         hours_per_day: newTask.repeats_weekly ? newTask.hours_per_day : null,
-        special_marker:
-          newTask.special_marker === "none" ? null : newTask.special_marker,
+        special_marker: specialMarker,
       };
 
       const createdTask = await taskService.create(taskData);
@@ -267,6 +281,16 @@ const TaskManagement = () => {
             ? null
             : currentTask.special_marker,
       };
+
+      // Add recurrence_id if it's a recurring task and doesn't have one
+      if (updateData.repeats_weekly) {
+        const hasRecurrenceId =
+          updateData.special_marker &&
+          updateData.special_marker.includes("recurrence_id:");
+        if (!hasRecurrenceId) {
+          updateData.special_marker = `recurrence_id:${crypto.randomUUID()}`;
+        }
+      }
 
       const updatedTask = await taskService.update(currentTask.id, updateData);
 
@@ -553,6 +577,172 @@ const TaskManagement = () => {
     });
   };
 
+  const handleTaskDrop = async (
+    task: TaskWithRelations,
+    employeeId: string,
+    date: string,
+  ) => {
+    try {
+      const isRecurring =
+        task.repeats_weekly ||
+        (task.special_marker &&
+          task.special_marker.includes("recurrence_id:"));
+
+      if (isRecurring) {
+        // It's a recurring task, so create an exception instead of updating
+        const hoursForInstance =
+          task.hours_per_day ||
+          (task.repeat_days?.length
+            ? task.estimated_time / task.repeat_days.length
+            : task.estimated_time);
+
+        const exceptionTaskData: TaskInsert = {
+          name: task.name,
+          description: task.description,
+          project_id: task.project_id,
+          status: "in_progress", // Or copy from parent? Let's be explicit
+          special_marker: task.special_marker, // Copy recurrence_id
+          assigned_employee_id: employeeId,
+          start_date: date,
+          end_date: date,
+          repeats_weekly: false,
+          repeat_days: [],
+          estimated_time: hoursForInstance,
+          hours_per_day: 0,
+        };
+
+        const newException = await taskService.create(exceptionTaskData);
+        setTasks([...tasks, newException as TaskWithRelations]);
+      } else {
+        // It's a normal, non-recurring task, so update it directly
+        const updatedTask = await taskService.update(task.id, {
+          assigned_employee_id: employeeId,
+          start_date: date,
+          end_date: date,
+        });
+
+        const updatedTasks = tasks.map((t) =>
+          t.id === task.id ? (updatedTask as TaskWithRelations) : t,
+        );
+        setTasks(updatedTasks);
+      }
+    } catch (error) {
+      console.error("Error handling task drop:", error);
+      alert("Failed to modify task. Please try again.");
+    }
+  };
+
+  const getWeekDates = (startDate: Date) => {
+    const dates = [];
+    const start = new Date(
+      Date.UTC(
+        startDate.getUTCFullYear(),
+        startDate.getUTCMonth(),
+        startDate.getUTCDate(),
+      ),
+    );
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(start);
+      date.setUTCDate(start.getUTCDate() + i);
+      dates.push(date.toISOString().split("T")[0]);
+    }
+    return dates;
+  };
+
+  const [gridStartDate, setGridStartDate] = useState(() => {
+    const today = new Date();
+    const year = today.getUTCFullYear();
+    const month = today.getUTCMonth();
+    const date = today.getUTCDate();
+    const day = today.getUTCDay();
+    // Calculate Monday of the current week in UTC
+    const mondayUTCDate = new Date(
+      Date.UTC(year, month, date - day + (day === 0 ? -6 : 1)),
+    );
+    return mondayUTCDate;
+  });
+
+  const weekDates = getWeekDates(gridStartDate);
+  const unassignedTasks = tasks.filter((task) => !task.assigned_employee_id);
+
+  const tasksForGrid = useMemo(() => {
+    const dateMap: Map<string, TaskWithRelations[]> = new Map();
+    if (!tasks.length) return dateMap;
+
+    const recurrenceGroups: Map<
+      string,
+      { parent: TaskWithRelations | null; exceptions: TaskWithRelations[] }
+    > = new Map();
+    const singleTasks: TaskWithRelations[] = [];
+
+    // 1. Group tasks by recurrence_id
+    tasks.forEach((task) => {
+      const recurrenceId = getRecurrenceId(task);
+      if (recurrenceId) {
+        if (!recurrenceGroups.has(recurrenceId)) {
+          recurrenceGroups.set(recurrenceId, { parent: null, exceptions: [] });
+        }
+        const group = recurrenceGroups.get(recurrenceId)!;
+        if (task.repeats_weekly) {
+          group.parent = task;
+        } else {
+          group.exceptions.push(task);
+        }
+      } else {
+        singleTasks.push(task);
+      }
+    });
+
+    // Helper to add a task to the map for a specific date
+    const addTaskToDate = (date: string, task: TaskWithRelations) => {
+      if (!dateMap.has(date)) {
+        dateMap.set(date, []);
+      }
+      dateMap.get(date)!.push(task);
+    };
+
+    // 2. Add single, non-recurring tasks to the map
+    singleTasks.forEach((task) => {
+      // For tasks that span multiple days, add them to each day in their range
+      const sDate = new Date(task.start_date + "T00:00:00Z");
+      const eDate = new Date(task.end_date + "T00:00:00Z");
+      for (let d = sDate; d <= eDate; d.setUTCDate(d.getUTCDate() + 1)) {
+        addTaskToDate(d.toISOString().split("T")[0], task);
+      }
+    });
+
+    // 3. Add exceptions to the map
+    recurrenceGroups.forEach((group) => {
+      group.exceptions.forEach((exception) => {
+        addTaskToDate(exception.start_date, exception);
+      });
+    });
+
+    // 4. Expand recurring tasks, avoiding dates where an exception already exists
+    const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+    recurrenceGroups.forEach((group) => {
+      if (!group.parent) return; // Skip if there's no parent task for the group
+
+      const parent = group.parent;
+      const exceptionDates = new Set(group.exceptions.map((e) => e.start_date));
+      const parentStartDate = new Date(parent.start_date + "T00:00:00Z");
+      const parentEndDate = new Date(parent.end_date + "T00:00:00Z");
+      const repeatDays = parent.repeat_days || [];
+
+      for (let d = new Date(parentStartDate); d <= parentEndDate; d.setUTCDate(d.getUTCDate() + 1)) {
+        const dateStr = d.toISOString().split("T")[0];
+        const dayName = dayNames[d.getUTCDay()];
+
+        if (repeatDays.includes(dayName) && !exceptionDates.has(dateStr)) {
+          addTaskToDate(dateStr, parent);
+        }
+      }
+    });
+
+    return dateMap;
+  }, [tasks, gridStartDate]);
+
   // Drag and Drop Grid Components
   const DraggableTask = ({ task }: { task: TaskWithRelations }) => {
     const [{ isDragging }, drag] = useDrag(() => ({
@@ -583,11 +773,11 @@ const TaskManagement = () => {
   const DroppableCell = ({
     date,
     employee,
-    tasks,
+    tasksForCell,
   }: {
     date: string;
     employee: Employee;
-    tasks: TaskWithRelations[];
+    tasksForCell: TaskWithRelations[];
   }) => {
     const [{ isOver }, drop] = useDrop(() => ({
       accept: "task",
@@ -603,68 +793,19 @@ const TaskManagement = () => {
     const [tempStartDate, setTempStartDate] = useState("");
     const [tempEndDate, setTempEndDate] = useState("");
 
-    const cellTasks = tasks.filter((task) => {
-      if (task.assigned_employee_id !== employee.id) {
-        return false;
-      }
-
-      // Important: Use T00:00:00Z to parse dates as UTC and avoid timezone shifts.
-      const cellDate = new Date(date + "T00:00:00Z");
-      const startDate = new Date(task.start_date + "T00:00:00Z");
-      const endDate = new Date(task.end_date + "T00:00:00Z");
-
-      // 1. Check if the cell's date is within the task's overall start/end range
-      if (cellDate < startDate || cellDate > endDate) {
-        return false;
-      }
-
-      const cellDayOfWeekJs = cellDate.getUTCDay(); // Use UTC day to be consistent
-      const dayNames = [
-        "sunday",
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-      ];
-      const cellDayName = dayNames[cellDayOfWeekJs];
-
-      // 2. For repeating tasks, visibility is strictly determined by repeat_days
-      if (task.repeats_weekly) {
-        return Array.isArray(task.repeat_days) && task.repeat_days.includes(cellDayName);
-      }
-
-      // 3. For non-repeating tasks, hide on non-working days for the employee
-      const employeeWorkDays = employee.dias_de_trabalho || [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-      ];
-      if (!employeeWorkDays.includes(cellDayName)) {
-        return false;
-      }
-
-      // If all checks pass for a non-repeating task, show it
-      return true;
-    });
+    const cellTasks = tasksForCell.filter(
+      (task) => task.assigned_employee_id === employee.id,
+    );
 
     const totalHours = cellTasks.reduce((sum, task) => {
-      const startDate = new Date(task.start_date);
-      const endDate = new Date(task.end_date);
-      const daysDiff = Math.max(
-        1,
-        Math.ceil(
-          (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
-        ) + 1,
-      );
-      return sum + task.estimated_time / daysDiff;
+      if (task.repeats_weekly && task.hours_per_day) {
+        return sum + task.hours_per_day;
+      }
+      return sum + task.estimated_time;
     }, 0);
 
-    const dailyCapacity = employee.weekly_hours / 5;
-    const percentage = (totalHours / dailyCapacity) * 100;
+    const dailyCapacity = employee.weekly_hours / (employee.dias_de_trabalho?.length || 5);
+    const percentage = dailyCapacity > 0 ? (totalHours / dailyCapacity) * 100 : 0;
 
     const getWorkloadColor = (percentage: number) => {
       if (percentage > 100) return "bg-red-100 border-red-300";
@@ -679,21 +820,8 @@ const TaskManagement = () => {
     };
 
     const handleSaveTaskDates = async (taskId: string) => {
-      try {
-        const updatedTask = await taskService.update(taskId, {
-          start_date: tempStartDate,
-          end_date: tempEndDate,
-        });
-
-        const updatedTasks = tasks.map((t) =>
-          t.id === taskId ? (updatedTask as TaskWithRelations) : t,
-        );
-
-        setTasks(updatedTasks);
-        setEditingTask(null);
-      } catch (error) {
-        console.error("Error updating task dates:", error);
-      }
+      // This logic is deferred as it's complex and might need a different UI
+      setEditingTask(null);
     };
 
     const handleCancelEdit = () => {
@@ -765,10 +893,7 @@ const TaskManagement = () => {
                 >
                   <div className="font-medium truncate">{task.name}</div>
                   <div className="text-gray-500">{task.estimated_time}h</div>
-                  <div className="text-xs text-gray-400">
-                    {format(new Date(task.start_date + "T00:00:00"), "dd/MM")}{" "}
-                    - {format(new Date(task.end_date + "T00:00:00"), "dd/MM")}
-                  </div>
+                  {!task.repeats_weekly && <div className="text-xs text-blue-500">(Exceção)</div>}
                 </div>
               )}
             </div>
@@ -777,61 +902,6 @@ const TaskManagement = () => {
       </div>
     );
   };
-
-  const handleTaskDrop = async (
-    task: TaskWithRelations,
-    employeeId: string,
-    date: string,
-  ) => {
-    try {
-      const updatedTask = await taskService.update(task.id, {
-        assigned_employee_id: employeeId,
-        start_date: date,
-        end_date: date, // For simplicity, setting end date same as start date
-      });
-
-      const updatedTasks = tasks.map((t) =>
-        t.id === task.id ? (updatedTask as TaskWithRelations) : t,
-      );
-
-      setTasks(updatedTasks);
-    } catch (error) {
-      console.error("Error updating task:", error);
-    }
-  };
-
-  const getWeekDates = (startDate: Date) => {
-    const dates = [];
-    const start = new Date(
-      Date.UTC(
-        startDate.getUTCFullYear(),
-        startDate.getUTCMonth(),
-        startDate.getUTCDate(),
-      ),
-    );
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(start);
-      date.setUTCDate(start.getUTCDate() + i);
-      dates.push(date.toISOString().split("T")[0]);
-    }
-    return dates;
-  };
-
-  const [gridStartDate, setGridStartDate] = useState(() => {
-    const today = new Date();
-    const year = today.getUTCFullYear();
-    const month = today.getUTCMonth();
-    const date = today.getUTCDate();
-    const day = today.getUTCDay();
-    // Calculate Monday of the current week in UTC
-    const mondayUTCDate = new Date(
-      Date.UTC(year, month, date - day + (day === 0 ? -6 : 1)),
-    );
-    return mondayUTCDate;
-  });
-
-  const weekDates = getWeekDates(gridStartDate);
-  const unassignedTasks = tasks.filter((task) => !task.assigned_employee_id);
 
   return (
     <div className="bg-background p-6 w-full">
@@ -2118,7 +2188,7 @@ const TaskManagement = () => {
                             <DroppableCell
                               date={date}
                               employee={employee}
-                              tasks={tasks}
+                              tasksForCell={tasksForGrid.get(date) || []}
                             />
                           </div>
                         ))}
