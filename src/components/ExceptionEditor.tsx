@@ -7,17 +7,18 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Calendar } from "./ui/calendar";
 import { CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
-import type { TaskWithRelations, Employee, Exception } from '@/types/tasks';
+import { Employee, Exception, Task } from '@/lib/supabaseClient';
+import { TaskInstance, TaskWithRelations } from '@/types/tasks';
 
 interface ExceptionEditorProps {
-  task: TaskWithRelations;
+  task: TaskInstance | TaskWithRelations;
   instanceDate: string;
   employees: Employee[];
   onUpdateException: (exceptionData: Partial<Exception>) => Promise<void>;
-  isSaving: boolean;
+  isSaving?: boolean;
 }
 
-const ExceptionEditor = ({ task, instanceDate, employees, onUpdateException, isSaving }: ExceptionEditorProps) => {
+const ExceptionEditor = ({ task, instanceDate, employees, onUpdateException, isSaving = false }: ExceptionEditorProps) => {
   const [details, setDetails] = useState<Partial<Exception>>({});
 
   useEffect(() => {
@@ -36,7 +37,7 @@ const ExceptionEditor = ({ task, instanceDate, employees, onUpdateException, isS
 
   return (
     <div className="p-4 border bg-muted rounded-lg space-y-4">
-        <h4 className="font-semibold text-lg">Edit Occurrence</h4>
+        <h4 className="font-semibold text-lg">Edit Occurrence for {format(new Date(instanceDate + "T00:00:00"), "PPP")}</h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div>
                 <Label>Execution Date</Label>
@@ -83,10 +84,17 @@ const ExceptionEditor = ({ task, instanceDate, employees, onUpdateException, isS
                 </Select>
             </div>
         </div>
-        <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={isSaving}>
-                {isSaving ? 'Saving...' : 'Save Exception'}
-            </Button>
+        <div className="flex justify-between items-center">
+            <div>
+                <Button variant="destructive" onClick={() => onUpdateException({ ...details, is_removed: true })} disabled={isSaving}>
+                    Remove Occurrence
+                </Button>
+            </div>
+            <div className="flex items-center gap-2">
+                <Button onClick={handleSave} disabled={isSaving}>
+                    {isSaving ? 'Saving...' : 'Save Exception'}
+                </Button>
+            </div>
         </div>
     </div>
   );

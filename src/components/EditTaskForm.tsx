@@ -67,6 +67,17 @@ const EditTaskForm = ({ task, setTask, employees, projects, isRecurring, source 
                                 </SelectContent>
                             </Select>
                         </div>
+                         <div>
+                            <Label htmlFor="edit-status">Status</Label>
+                            <Select onValueChange={(value: "pending" | "in_progress" | "completed") => setTask({ ...task, status: value })} value={task.status}>
+                                <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="pending">Pendente</SelectItem>
+                                    <SelectItem value="in_progress">Em Andamento</SelectItem>
+                                    <SelectItem value="completed">Concluída</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
                     {/* Column 2 */}
                     <div className="space-y-4">

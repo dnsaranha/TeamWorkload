@@ -14,6 +14,7 @@ import ExceptionEditor from './ExceptionEditor';
 import ExceptionList from './ExceptionList';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
 import type { TaskWithRelations, Employee, Project, EditableOccurrence, TaskInstance } from '@/types/tasks';
+import { Exception } from '@/lib/supabaseClient';
 
 interface EditTaskModalProps {
   isOpen: boolean;
@@ -24,10 +25,8 @@ interface EditTaskModalProps {
   employees: Employee[];
   projects: Project[];
   source: 'list' | 'calendar';
-  // For exception list view
   editingOccurrences?: EditableOccurrence[];
   onOccurrenceChange?: (date: string, field: string, value: any) => void;
-  // For single exception editor
   onUpdateException?: (exceptionData: Partial<Exception>) => Promise<void>;
   isSaving?: boolean;
 }
@@ -48,9 +47,8 @@ const EditTaskModal = ({
 }: EditTaskModalProps) => {
   if (!task) return null;
 
-  const isRecurring = task.repeats_weekly;
-  // The instanceDate is only available when opened from the calendar
-  const instanceDate = (task as TaskInstance).instanceDate;
+  const isRecurring = task.repeats_weekly ?? false;
+  const instanceDate = (task as TaskInstance)?.instanceDate;
 
   const renderContent = () => {
     if (source === 'calendar' && isRecurring) {
@@ -58,7 +56,7 @@ const EditTaskModal = ({
         <>
           {instanceDate && onUpdateException && (
             <ExceptionEditor
-              task={task}
+              task={task as TaskInstance}
               instanceDate={instanceDate}
               employees={employees}
               onUpdateException={onUpdateException}
@@ -70,7 +68,7 @@ const EditTaskModal = ({
               <AccordionTrigger>Edit Entire Task Series</AccordionTrigger>
               <AccordionContent>
                 <EditTaskForm
-                  task={task}
+                  task={task as TaskWithRelations}
                   setTask={setTask}
                   employees={employees}
                   projects={projects}
@@ -84,11 +82,10 @@ const EditTaskModal = ({
       );
     }
 
-    // Default view (from task list)
     return (
       <>
         <EditTaskForm
-          task={task}
+          task={task as TaskWithRelations}
           setTask={setTask}
           employees={employees}
           projects={projects}
@@ -100,7 +97,7 @@ const EditTaskModal = ({
             occurrences={editingOccurrences}
             onOccurrenceChange={onOccurrenceChange}
             employees={employees}
-            parentTask={task}
+            parentTask={task as TaskWithRelations}
           />
         )}
       </>
@@ -125,8 +122,8 @@ const EditTaskModal = ({
         </ScrollArea>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button type="submit" onClick={handleUpdate}>
-            Update Task
+          <Button type="submit" onClick={handleUpdate} disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Update Task'}
           </Button>
         </DialogFooter>
       </DialogContent>
