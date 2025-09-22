@@ -430,42 +430,30 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     return projects.find((proj) => proj.id === projectId);
   };
 
-  const handleDropTask = async (
-    taskId: string,
-    newStartDate: Date,
-    employeeId?: string,
-  ) => {
-    if (!employeeId) {
-      console.warn("No employee selected to assign the task to.");
+  const handleDropTask = async (taskId: string, newStartDate: Date) => {
+    const originalTask = tasks.find((task) => task.id === taskId);
+
+    if (!originalTask) {
+      console.error("Failed to find task to update.", taskId);
       return;
     }
 
-    const originalTask = tasks.find((task) => task.id === taskId);
-
     const formattedStartDate = newStartDate.toISOString().split("T")[0];
-    let formattedEndDate = formattedStartDate; // Default for new tasks
 
-    // If the task already exists in the calendar, it's a reschedule. Preserve duration.
-    if (originalTask) {
-      // Ensure dates are parsed correctly as UTC to avoid timezone issues.
-      const originalStartDate = new Date(originalTask.start_date + "T00:00:00Z");
-      const originalEndDate = new Date(originalTask.end_date + "T00:00:00Z");
-      const durationInMillis =
-        originalEndDate.getTime() - originalStartDate.getTime();
-
-      const newEndDate = new Date(newStartDate.getTime() + durationInMillis);
-      formattedEndDate = newEndDate.toISOString().split("T")[0];
-    }
-    // If originalTask is not found, it's a new allocation.
-    // The default formattedEndDate (same as start date) will be used.
+    // Preserve duration
+    const originalStartDate = new Date(originalTask.start_date + "T00:00:00Z");
+    const originalEndDate = new Date(originalTask.end_date + "T00:00:00Z");
+    const durationInMillis =
+      originalEndDate.getTime() - originalStartDate.getTime();
+    const newEndDate = new Date(newStartDate.getTime() + durationInMillis);
+    const formattedEndDate = newEndDate.toISOString().split("T")[0];
 
     try {
       await taskService.update(taskId, {
-        assigned_employee_id: employeeId,
         start_date: formattedStartDate,
         end_date: formattedEndDate,
       });
-      onTaskAssigned();
+      onTaskAssigned(); // This should trigger a re-fetch and UI update
     } catch (error) {
       console.error("Failed to update task", error);
     }
@@ -1176,9 +1164,11 @@ const DraggableTask: React.FC<DraggableTaskProps> = ({
   selectedEmployeeId,
   onTaskClick,
 }) => {
+  const isDraggable = !task.repeats_weekly;
   const [{ isDragging }, drag] = useDrag(() => ({
     type: ItemTypes.TASK,
     item: { id: task.id },
+    canDrag: isDraggable,
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging(),
     }),
@@ -1188,8 +1178,12 @@ const DraggableTask: React.FC<DraggableTaskProps> = ({
     <div
       ref={drag}
       onClick={() => onTaskClick(task)}
-      className={`text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate cursor-pointer hover:bg-blue-100 ${
-        isDragging ? "opacity-50 cursor-grabbing" : "cursor-grab"
+      className={`text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate hover:bg-blue-100 ${
+        isDragging
+          ? "opacity-50 cursor-grabbing"
+          : isDraggable
+            ? "cursor-grab"
+            : "cursor-not-allowed"
       }`}
       title={`${task.name} - ${employee?.name} (${project?.name})`}
     >
