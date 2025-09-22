@@ -473,14 +473,35 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     newDate: Date,
     employeeId?: string,
   ) => {
+    // Prevent dropping if no employee is selected in the view
+    if (!employeeId) {
+      alert("Please select an employee to assign the task to.");
+      return;
+    }
+
     const { id: taskId, instanceDate } = item;
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task) return;
+    let task = tasks.find((t) => t.id === taskId);
+
+    // If task is not in the current view (e.g., unassigned), fetch it
+    if (!task) {
+      try {
+        const fetchedTask = await taskService.get(taskId);
+        if (fetchedTask) {
+          task = fetchedTask as Task;
+        } else {
+          console.error("Failed to fetch task details for drop operation.");
+          return;
+        }
+      } catch (error) {
+        console.error("Error fetching task:", error);
+        return;
+      }
+    }
 
     const newDateStr = newDate.toISOString().split("T")[0];
 
     if (instanceDate) {
-      // It's a recurring task instance
+      // It's a recurring task instance being moved
       const originalException =
         task.exceptions?.find((ex) => ex.date === instanceDate) || {};
       const otherExceptions =
@@ -490,7 +511,6 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
       const newExceptions: Exception[] = [
         ...otherExceptions,
-        // Mark original as removed
         {
           date: instanceDate,
           is_removed: true,
@@ -499,7 +519,6 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
           estimated_time:
             originalException.estimated_time ?? task.hours_per_day,
         },
-        // Add new occurrence
         {
           date: newDateStr,
           is_removed: false,
@@ -514,12 +533,12 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
       try {
         await taskService.update(taskId, { exceptions: newExceptions });
-        loadData(); // Reload to reflect changes
+        onTaskAssigned();
       } catch (error) {
         console.error("Failed to create exception for recurring task", error);
       }
     } else {
-      // It's a non-recurring task
+      // It's a non-recurring task or a new assignment
       const originalStartDate = new Date(task.start_date + "T00:00:00Z");
       const originalEndDate = new Date(task.end_date + "T00:00:00Z");
       const duration = originalEndDate.getTime() - originalStartDate.getTime();
@@ -529,9 +548,9 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
         await taskService.update(taskId, {
           start_date: newDateStr,
           end_date: newEndDate.toISOString().split("T")[0],
-          assigned_employee_id: employeeId ?? task.assigned_employee_id,
+          assigned_employee_id: employeeId,
         });
-        loadData();
+        onTaskAssigned();
       } catch (error) {
         console.error("Failed to update task", error);
       }

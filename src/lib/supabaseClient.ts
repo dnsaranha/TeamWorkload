@@ -227,6 +227,23 @@ export const taskService = {
     return data;
   },
 
+  async get(id: string) {
+    const { data, error } = await supabase
+      .from("workload_tasks")
+      .select(
+        `
+        *,
+        project:workload_projects(*),
+        assigned_employee:employees(*)
+      `,
+      )
+      .eq("id", id)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
   async create(task: TaskInsert) {
     const { data, error } = await supabase
       .from("workload_tasks")
