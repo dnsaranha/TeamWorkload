@@ -1,6 +1,6 @@
 import React from "react";
 import { useDrop } from "react-dnd";
-import { ItemTypes } from "../../lib/dnd";
+import { ItemTypes } from "@/lib/dnd";
 import { Trash2 } from "lucide-react";
 import { TaskInstance } from "@/types/tasks";
 

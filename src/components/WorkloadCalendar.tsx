@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { supabase } from "../../lib/supabaseClient";
+import { supabase } from "@/lib/supabaseClient";
 import {
   type Task,
   type Employee,
@@ -7,7 +7,7 @@ import {
   type Exception,
   taskService,
 } from "@/lib/supabaseClient";
-import EditTaskModal from "../EditTaskModal";
+import EditTaskModal from "@/components/EditTaskModal";
 import { TaskInstance, TaskWithRelations } from "@/types/tasks";
 import CalendarHeader from "./workload-calendar/CalendarHeader";
 import CalendarGrid from "./workload-calendar/CalendarGrid";
@@ -164,7 +164,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
     const otherExceptions =
       task.exceptions?.filter((ex) => ex.date !== exceptionData.date) || [];
-    const newExceptions = [...otherExceptions, exceptionData];
+    const newExceptions = [...otherExceptions, exceptionData as Exception];
 
     try {
       const updatedTask = await taskService.update(taskId, {

@@ -5,7 +5,7 @@ import {
   Calendar as CalendarIcon,
   Search,
 } from "lucide-react";
-import { Input } from "../ui/input";
+import { Input } from "@/components/ui/input";
 import { formatDate } from "./utils";
 
 interface CalendarHeaderProps {

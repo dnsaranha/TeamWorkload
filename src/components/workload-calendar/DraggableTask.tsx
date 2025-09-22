@@ -1,9 +1,8 @@
 import React from "react";
 import { useDrag } from "react-dnd";
-import { ItemTypes } from "../../lib/dnd";
+import { ItemTypes } from "@/lib/dnd";
 import { Repeat } from "lucide-react";
-import { TaskInstance } from "@/types/tasks";
-import { Project, Employee } from "@/lib/supabaseClient";
+import { TaskInstance, Project, Employee } from "@/types/tasks";
 
 interface DraggableTaskProps {
   task: TaskInstance;

@@ -1,6 +1,6 @@
 import React from "react";
 import { useDrop } from "react-dnd";
-import { ItemTypes } from "../../lib/dnd";
+import { ItemTypes } from "@/lib/dnd";
 import { TaskInstance } from "@/types/tasks";
 
 interface DayCellProps {

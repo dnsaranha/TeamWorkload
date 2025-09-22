@@ -1,3 +1,4 @@
+export type { Task, Project, Employee } from '@/lib/supabaseClient';
 import type { Task, Project, Employee } from '@/lib/supabaseClient';
 
 export type TaskWithRelations = Task & {
@@ -8,6 +9,7 @@ export type TaskWithRelations = Task & {
 export type TaskInstance = TaskWithRelations & {
   instanceDate: string;
   isException: boolean;
+  is_recurring_instance?: boolean;
 };
 
 export type EditableOccurrence = {

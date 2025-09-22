@@ -371,7 +371,7 @@ const TaskManagement = () => {
           }
           return null;
         })
-        .filter((ex): ex is Exception => ex !== null);
+        .filter((ex): ex is Exception => ex !== null) as Exception[];
 
 
       const finalExceptions = [...existingExceptions, ...newExceptions];
@@ -1887,7 +1887,7 @@ const TaskManagement = () => {
                             <DroppableCell
                               date={date}
                               employee={employee}
-                              tasks={tasks}
+                              tasksForCell={tasksForGrid.get(date) || []}
                             />
                           </div>
                         ))}
