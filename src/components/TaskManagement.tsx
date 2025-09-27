@@ -283,6 +283,71 @@ const TaskManagement = () => {
     }
   };
 
+  const handleExceptionChange = (
+    index: number,
+    field: string,
+    value: any,
+  ) => {
+    if (!currentTask) return;
+
+    const updatedExceptions = [...(currentTask.exceptions || [])];
+    updatedExceptions[index] = { ...updatedExceptions[index], [field]: value };
+
+    // Se a data for alterada, garantir que é única
+    if (field === "date") {
+      const isDuplicate = updatedExceptions.some(
+        (exception, i) => i !== index && exception.date === value,
+      );
+      if (isDuplicate) {
+        alert("Já existe uma exceção para esta data. Escolha outra data.");
+        return; // Impede a atualização se a data for duplicada
+      }
+    }
+
+    setCurrentTask({
+      ...currentTask,
+      exceptions: updatedExceptions,
+    });
+  };
+
+  const handleAddException = () => {
+    if (!currentTask) return;
+
+    // Encontrar uma data que ainda não tenha exceção
+    let newExceptionDate = new Date();
+    const existingDates = (currentTask.exceptions || []).map(
+      (ex) => ex.date,
+    );
+    while (existingDates.includes(newExceptionDate.toISOString().split("T")[0])) {
+      newExceptionDate.setDate(newExceptionDate.getDate() + 1);
+    }
+
+    const newException = {
+      date: newExceptionDate.toISOString().split("T")[0],
+      estimated_hours: currentTask.hours_per_day,
+      assigned_employee_id: currentTask.assigned_employee_id,
+      completed: false,
+      removed: false,
+    };
+
+    setCurrentTask({
+      ...currentTask,
+      exceptions: [...(currentTask.exceptions || []), newException],
+    });
+  };
+
+  const handleRemoveException = (index: number) => {
+    if (!currentTask) return;
+
+    const updatedExceptions = [...(currentTask.exceptions || [])];
+    updatedExceptions.splice(index, 1);
+
+    setCurrentTask({
+      ...currentTask,
+      exceptions: updatedExceptions,
+    });
+  };
+
   const handleAssignTask = async () => {
     if (!currentTask) return;
 
@@ -1880,6 +1945,123 @@ const TaskManagement = () => {
                       className="col-span-3"
                       placeholder="Ex: 2.5"
                     />
+                  </div>
+
+                  {/* Seção de Exceções */}
+                  <div className="col-span-4 pt-4">
+                    <div className="border-t pt-4">
+                      <h4 className="text-md font-semibold mb-2 text-center">
+                        Exceções da Repetição
+                      </h4>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Data</TableHead>
+                            <TableHead>Horas</TableHead>
+                            <TableHead>Responsável</TableHead>
+                            <TableHead>Realizado</TableHead>
+                            <TableHead>Ações</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {(currentTask.exceptions || []).map(
+                            (exception, index) => (
+                              <TableRow key={index}>
+                                <TableCell>
+                                  <Input
+                                    type="date"
+                                    value={exception.date}
+                                    onChange={(e) =>
+                                      handleExceptionChange(
+                                        index,
+                                        "date",
+                                        e.target.value,
+                                      )
+                                    }
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Input
+                                    type="number"
+                                    value={exception.estimated_hours || ""}
+                                    onChange={(e) =>
+                                      handleExceptionChange(
+                                        index,
+                                        "estimated_hours",
+                                        parseFloat(e.target.value) || null,
+                                      )
+                                    }
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Select
+                                    value={
+                                      exception.assigned_employee_id || "none"
+                                    }
+                                    onValueChange={(value) =>
+                                      handleExceptionChange(
+                                        index,
+                                        "assigned_employee_id",
+                                        value === "none" ? null : value,
+                                      )
+                                    }
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">
+                                        Padrão
+                                      </SelectItem>
+                                      {employees.map((employee) => (
+                                        <SelectItem
+                                          key={employee.id}
+                                          value={employee.id}
+                                        >
+                                          {employee.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={exception.completed || false}
+                                    onChange={(e) =>
+                                      handleExceptionChange(
+                                        index,
+                                        "completed",
+                                        e.target.checked,
+                                      )
+                                    }
+                                    className="h-4 w-4"
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleRemoveException(index)}
+                                  >
+                                    <Trash2 size={16} />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ),
+                          )}
+                        </TableBody>
+                      </Table>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                        onClick={handleAddException}
+                      >
+                        <Plus size={16} className="mr-2" />
+                        Adicionar Exceção
+                      </Button>
+                    </div>
                   </div>
                 </>
               )}
