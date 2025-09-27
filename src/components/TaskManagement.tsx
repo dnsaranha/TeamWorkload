@@ -1307,7 +1307,7 @@ const TaskManagement = () => {
                   </div>
                 </div>
                 {newTask.repeats_weekly && (
-                  <>
+                  <div className="grid grid-cols-1 gap-4 col-span-4 border-t pt-4 mt-4">
                     <div className="grid grid-cols-4 items-start gap-4">
                       <Label className="text-right pt-2">Dias da Semana</Label>
                       <div className="col-span-3 grid grid-cols-2 gap-2">
@@ -1366,7 +1366,7 @@ const TaskManagement = () => {
                         placeholder="Ex: 2.5"
                       />
                     </div>
-                  </>
+                  </div>
                 )}
               </div>
               </ScrollArea>
@@ -1885,7 +1885,7 @@ const TaskManagement = () => {
                 </div>
               </div>
               {currentTask.repeats_weekly && (
-                <>
+                <div className="grid grid-cols-1 gap-4 col-span-4 border-t pt-4 mt-4">
                   <div className="grid grid-cols-4 items-start gap-4">
                     <Label className="text-right pt-2">Dias da Semana</Label>
                     <div className="col-span-3 grid grid-cols-2 gap-2">
@@ -1948,126 +1948,122 @@ const TaskManagement = () => {
                   </div>
 
                   {/* Seção de Exceções */}
-                  {currentTask.repeats_weekly && (
-                    <div className="col-span-4 pt-4">
-                      <div className="border-t pt-4">
-                        <h4 className="text-md font-semibold mb-2 text-center">
-                          Exceções da Repetição
-                        </h4>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Data</TableHead>
-                              <TableHead>Horas</TableHead>
-                              <TableHead>Responsável</TableHead>
-                              <TableHead>Realizado</TableHead>
-                              <TableHead>Ações</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {(currentTask.exceptions || []).map(
-                              (exception, index) => (
-                                <TableRow key={index}>
-                                  <TableCell>
-                                    <Input
-                                      type="date"
-                                      value={exception.date}
-                                      onChange={(e) =>
-                                        handleExceptionChange(
-                                          index,
-                                          "date",
-                                          e.target.value,
-                                        )
-                                      }
-                                    />
-                                  </TableCell>
-                                  <TableCell>
-                                    <Input
-                                      type="number"
-                                      value={exception.estimated_hours || ""}
-                                      onChange={(e) =>
-                                        handleExceptionChange(
-                                          index,
-                                          "estimated_hours",
-                                          parseFloat(e.target.value) || null,
-                                        )
-                                      }
-                                    />
-                                  </TableCell>
-                                  <TableCell>
-                                    <Select
-                                      value={
-                                        exception.assigned_employee_id || "none"
-                                      }
-                                      onValueChange={(value) =>
-                                        handleExceptionChange(
-                                          index,
-                                          "assigned_employee_id",
-                                          value === "none" ? null : value,
-                                        )
-                                      }
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="none">
-                                          Padrão
+                  <div className="col-span-4 pt-4">
+                    <div className="border-t pt-4">
+                      <h4 className="text-md font-semibold mb-2 text-center">
+                        Exceções da Repetição
+                      </h4>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Data</TableHead>
+                            <TableHead>Horas</TableHead>
+                            <TableHead>Responsável</TableHead>
+                            <TableHead>Realizado</TableHead>
+                            <TableHead>Ações</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {(currentTask.exceptions || []).map(
+                            (exception, index) => (
+                              <TableRow key={index}>
+                                <TableCell>
+                                  <Input
+                                    type="date"
+                                    value={exception.date}
+                                    onChange={(e) =>
+                                      handleExceptionChange(
+                                        index,
+                                        "date",
+                                        e.target.value,
+                                      )
+                                    }
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Input
+                                    type="number"
+                                    value={exception.estimated_hours || ""}
+                                    onChange={(e) =>
+                                      handleExceptionChange(
+                                        index,
+                                        "estimated_hours",
+                                        parseFloat(e.target.value) || null,
+                                      )
+                                    }
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Select
+                                    value={
+                                      exception.assigned_employee_id || "none"
+                                    }
+                                    onValueChange={(value) =>
+                                      handleExceptionChange(
+                                        index,
+                                        "assigned_employee_id",
+                                        value === "none" ? null : value,
+                                      )
+                                    }
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">
+                                        Padrão
+                                      </SelectItem>
+                                      {employees.map((employee) => (
+                                        <SelectItem
+                                          key={employee.id}
+                                          value={employee.id}
+                                        >
+                                          {employee.name}
                                         </SelectItem>
-                                        {employees.map((employee) => (
-                                          <SelectItem
-                                            key={employee.id}
-                                            value={employee.id}
-                                          >
-                                            {employee.name}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </TableCell>
-                                  <TableCell className="text-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={exception.completed || false}
-                                      onChange={(e) =>
-                                        handleExceptionChange(
-                                          index,
-                                          "completed",
-                                          e.target.checked,
-                                        )
-                                      }
-                                      className="h-4 w-4"
-                                    />
-                                  </TableCell>
-                                  <TableCell>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() =>
-                                        handleRemoveException(index)
-                                      }
-                                    >
-                                      <Trash2 size={16} />
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              ),
-                            )}
-                          </TableBody>
-                        </Table>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="mt-2"
-                          onClick={handleAddException}
-                        >
-                          <Plus size={16} className="mr-2" />
-                          Adicionar Exceção
-                        </Button>
-                      </div>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={exception.completed || false}
+                                    onChange={(e) =>
+                                      handleExceptionChange(
+                                        index,
+                                        "completed",
+                                        e.target.checked,
+                                      )
+                                    }
+                                    className="h-4 w-4"
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleRemoveException(index)}
+                                  >
+                                    <Trash2 size={16} />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ),
+                          )}
+                        </TableBody>
+                      </Table>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                        onClick={handleAddException}
+                      >
+                        <Plus size={16} className="mr-2" />
+                        Adicionar Exceção
+                      </Button>
                     </div>
-                  )}
-                </>
+                  </div>
+                </div>
               )}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="edit-assigned-employee" className="text-right">
