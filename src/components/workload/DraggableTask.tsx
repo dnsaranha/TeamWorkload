@@ -1,0 +1,53 @@
+import React from "react";
+import { useDrag } from "react-dnd";
+import { ItemTypes } from "../../lib/dnd";
+import { Repeat } from "lucide-react";
+import { Task, Project, Employee } from "@/lib/supabaseClient";
+
+interface DraggableTaskProps {
+  task: Task & { is_recurring_instance?: boolean };
+  project?: Project;
+  employee?: Employee;
+  selectedEmployeeId?: string;
+  onTaskClick: (task: Task) => void;
+}
+
+export const DraggableTask: React.FC<DraggableTaskProps> = ({
+  task,
+  project,
+  employee,
+  selectedEmployeeId,
+  onTaskClick,
+}) => {
+  const [{ isDragging }, drag] = useDrag(() => ({
+    type: ItemTypes.TASK,
+    item: { id: task.id },
+    collect: (monitor) => ({
+      isDragging: !!monitor.isDragging(),
+    }),
+  }));
+
+  return (
+    <div
+      ref={drag}
+      onClick={() => onTaskClick(task)}
+      className={`text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate cursor-pointer hover:bg-blue-100 ${
+        isDragging ? "opacity-50 cursor-grabbing" : "cursor-grab"
+      }`}
+      title={`${task.name} - ${employee?.name} (${project?.name})`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="font-medium text-blue-900 truncate">{task.name}</div>
+        {task.is_recurring_instance && (
+          <Repeat
+            className="h-3 w-3 text-blue-400 flex-shrink-0"
+            aria-label="Recurring task"
+          />
+        )}
+      </div>
+      {!selectedEmployeeId && employee && (
+        <div className="text-blue-600 truncate">{employee.name}</div>
+      )}
+    </div>
+  );
+};
