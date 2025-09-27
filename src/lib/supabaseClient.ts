@@ -72,6 +72,16 @@ export type Task = {
   special_marker?: string | null;
   created_at: string | null;
   updated_at: string | null;
+  exceptions: TaskException[] | null;
+};
+
+export type TaskException = {
+  id: string;
+  exception_date: string;
+  estimated_hours?: number;
+  assigned_employee_id?: string;
+  is_completed?: boolean;
+  is_removed?: boolean;
 };
 
 export type TaskInsert = {
@@ -88,6 +98,7 @@ export type TaskInsert = {
   repeat_days?: string[] | null;
   hours_per_day?: number | null;
   special_marker?: string | null;
+  exceptions?: TaskException[] | null;
 };
 
 export type TaskUpdate = Partial<TaskInsert>;
@@ -142,6 +153,57 @@ export const employeeService = {
 
     if (error) throw error;
     return data;
+  },
+
+  async addException(taskId: string, exception: Omit<TaskException, "id">) {
+    const { data: task, error: fetchError } = await supabase
+      .from("workload_tasks")
+      .select("exceptions")
+      .eq("id", taskId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const newException = { ...exception, id: crypto.randomUUID() };
+    const updatedExceptions = [...(task.exceptions || []), newException];
+
+    return await this.update(taskId, { exceptions: updatedExceptions });
+  },
+
+  async updateException(
+    taskId: string,
+    exceptionId: string,
+    updates: Partial<TaskException>,
+  ) {
+    const { data: task, error: fetchError } = await supabase
+      .from("workload_tasks")
+      .select("exceptions")
+      .eq("id", taskId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const updatedExceptions = (task.exceptions || []).map((exc) =>
+      exc.id === exceptionId ? { ...exc, ...updates } : exc,
+    );
+
+    return await this.update(taskId, { exceptions: updatedExceptions });
+  },
+
+  async deleteException(taskId: string, exceptionId: string) {
+    const { data: task, error: fetchError } = await supabase
+      .from("workload_tasks")
+      .select("exceptions")
+      .eq("id", taskId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const updatedExceptions = (task.exceptions || []).filter(
+      (exc) => exc.id !== exceptionId,
+    );
+
+    return await this.update(taskId, { exceptions: updatedExceptions });
   },
 };
 
