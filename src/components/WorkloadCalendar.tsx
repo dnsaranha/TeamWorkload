@@ -13,12 +13,14 @@ import {
   PlusCircle,
   MinusCircle,
   Trash2,
+  ChevronsUpDown,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import {
   type Task,
   type Employee,
   type Project,
+  type TaskException,
   taskService,
 } from "@/lib/supabaseClient";
 import { format } from "date-fns";
@@ -81,8 +83,21 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   const [isEditTaskDialogOpen, setIsEditTaskDialogOpen] = useState(false);
   const [currentTask, setCurrentTask] = useState<Task | null>(null);
 
-  const openEditDialog = (task: Task) => {
-    setCurrentTask(task);
+  const openEditDialog = (
+    task: Task & { is_recurring_instance?: boolean },
+  ) => {
+    if (task.is_recurring_instance) {
+      const originalId = task.id.substring(0, 36);
+      const originalTask = tasks.find((t) => t.id === originalId);
+      if (originalTask) {
+        setCurrentTask(originalTask);
+      } else {
+        alert("Could not find the original recurring task to edit.");
+        return;
+      }
+    } else {
+      setCurrentTask(task);
+    }
     setIsEditTaskDialogOpen(true);
   };
 
@@ -262,24 +277,45 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     const dateStr = date.toISOString().split("T")[0];
 
     filteredTasks.forEach((task) => {
-      // FIX: Parse all dates as UTC to ensure correct comparison
       const taskStart = new Date(task.start_date + "T00:00:00Z");
       const taskEnd = new Date(task.end_date + "T00:00:00Z");
+      const dateStr = date.toISOString().split("T")[0];
 
       if (task.repeats_weekly && task.repeat_days && dayOfWeekName) {
-        if (
-          date >= taskStart &&
-          date <= taskEnd &&
-          task.repeat_days.includes(dayOfWeekName)
-        ) {
-          dayTasks.push({
-            ...task,
-            id: `${task.id}-${dateStr}`,
-            start_date: dateStr,
-            end_date: dateStr,
-            estimated_time: task.hours_per_day || 0,
-            is_recurring_instance: true,
-          });
+        if (date >= taskStart && date <= taskEnd) {
+          const exception = (task.exceptions || []).find(
+            (ex) => ex.date === dateStr,
+          );
+
+          if (exception) {
+            if (exception.removed) {
+              return; // Não renderiza a tarefa neste dia
+            }
+            // Aplica a exceção
+            dayTasks.push({
+              ...task,
+              id: `${task.id}-${dateStr}`, // ID único para a instância
+              start_date: dateStr,
+              end_date: dateStr,
+              estimated_time:
+                exception.estimated_hours ?? task.hours_per_day ?? 0,
+              assigned_employee_id:
+                exception.assigned_employee_id ?? task.assigned_employee_id,
+              status: exception.completed ? "completed" : task.status,
+              is_recurring_instance: true,
+              name: exception.completed ? `✓ ${task.name}` : task.name, // Adiciona um checkmark
+            });
+          } else if (task.repeat_days.includes(dayOfWeekName)) {
+            // Renderiza a ocorrência normal se não houver exceção
+            dayTasks.push({
+              ...task,
+              id: `${task.id}-${dateStr}`,
+              start_date: dateStr,
+              end_date: dateStr,
+              estimated_time: task.hours_per_day || 0,
+              is_recurring_instance: true,
+            });
+          }
         }
       } else {
         if (date >= taskStart && date <= taskEnd) {
@@ -486,6 +522,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     if (!currentTask) return;
 
     try {
+      // Build the payload with all fields from the form, ensuring no data is lost.
       const updateData: any = {
         name: currentTask.name,
         description: currentTask.description || null,
@@ -514,6 +551,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
           currentTask.special_marker === "none"
             ? null
             : currentTask.special_marker,
+        exceptions: currentTask.exceptions,
       };
 
       const updatedTask = await taskService.update(currentTask.id, updateData);
@@ -804,7 +842,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
             </DialogDescription>
           </DialogHeader>
           {currentTask && (
-            <ScrollArea className="h-96">
+            <ScrollArea className="max-h-[75vh]">
               <div className="grid gap-4 p-4">
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="edit-name" className="text-right">
@@ -1052,71 +1090,46 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                   </div>
                 </div>
                 {currentTask.repeats_weekly && (
-                  <>
-                    <div className="grid grid-cols-4 items-start gap-4">
-                      <Label className="text-right pt-2">Dias da Semana</Label>
-                      <div className="col-span-3 grid grid-cols-2 gap-2">
-                        {[
-                          { value: "monday", label: "Segunda" },
-                          { value: "tuesday", label: "Terça" },
-                          { value: "wednesday", label: "Quarta" },
-                          { value: "thursday", label: "Quinta" },
-                          { value: "friday", label: "Sexta" },
-                          { value: "saturday", label: "Sábado" },
-                          { value: "sunday", label: "Domingo" },
-                        ].map((day) => (
-                          <div
-                            key={day.value}
-                            className="flex items-center space-x-2"
+                  <div className="grid grid-cols-4 items-start gap-4">
+                    <Label className="text-right pt-2">Dias da Semana</Label>
+                    <div className="col-span-3 grid grid-cols-2 gap-2">
+                      {[
+                        { value: "monday", label: "Segunda" },
+                        { value: "tuesday", label: "Terça" },
+                        { value: "wednesday", label: "Quarta" },
+                        { value: "thursday", label: "Quinta" },
+                        { value: "friday", label: "Sexta" },
+                        { value: "saturday", label: "Sábado" },
+                        { value: "sunday", label: "Domingo" },
+                      ].map((day) => (
+                        <div
+                          key={day.value}
+                          className="flex items-center space-x-2"
+                        >
+                          <input
+                            id={`edit-day-${day.value}`}
+                            type="checkbox"
+                            checked={(
+                              currentTask.repeat_days || []
+                            ).includes(day.value)}
+                            onChange={(e) =>
+                              handleCurrentTaskRepeatDayChange(
+                                day.value,
+                                e.target.checked,
+                              )
+                            }
+                            className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                          />
+                          <Label
+                            htmlFor={`edit-day-${day.value}`}
+                            className="text-sm"
                           >
-                            <input
-                              id={`edit-day-${day.value}`}
-                              type="checkbox"
-                              checked={(
-                                currentTask.repeat_days || []
-                              ).includes(day.value)}
-                              onChange={(e) =>
-                                handleCurrentTaskRepeatDayChange(
-                                  day.value,
-                                  e.target.checked,
-                                )
-                              }
-                              className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                            />
-                            <Label
-                              htmlFor={`edit-day-${day.value}`}
-                              className="text-sm"
-                            >
-                              {day.label}
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
+                            {day.label}
+                          </Label>
+                        </div>
+                      ))}
                     </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label
-                        htmlFor="edit-hours_per_day"
-                        className="text-right"
-                      >
-                        Horas por Dia
-                      </Label>
-                      <Input
-                        id="edit-hours_per_day"
-                        type="number"
-                        min="0"
-                        step="0.5"
-                        value={currentTask.hours_per_day || 0}
-                        onChange={(e) =>
-                          setCurrentTask({
-                            ...currentTask,
-                            hours_per_day: parseFloat(e.target.value) || 0,
-                          })
-                        }
-                        className="col-span-3"
-                        placeholder="Ex: 2.5"
-                      />
-                    </div>
-                  </>
+                  </div>
                 )}
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label
@@ -1184,18 +1197,26 @@ const DraggableTask: React.FC<DraggableTaskProps> = ({
     }),
   }));
 
+  const isCompleted = task.status === "completed";
+
   return (
     <div
       ref={drag}
       onClick={() => onTaskClick(task)}
-      className={`text-xs p-1 bg-blue-50 border border-blue-200 rounded truncate cursor-pointer hover:bg-blue-100 ${
-        isDragging ? "opacity-50 cursor-grabbing" : "cursor-grab"
+      className={`text-xs p-1 rounded truncate cursor-pointer ${
+        isDragging
+          ? "opacity-50 cursor-grabbing"
+          : "cursor-grab"
+      } ${
+        isCompleted
+          ? "bg-green-100 border border-green-300 text-green-900 hover:bg-green-200"
+          : "bg-blue-50 border border-blue-200 text-blue-900 hover:bg-blue-100"
       }`}
       title={`${task.name} - ${employee?.name} (${project?.name})`}
     >
       <div className="flex items-center justify-between">
-        <div className="font-medium text-blue-900 truncate">{task.name}</div>
-        {task.is_recurring_instance && (
+        <div className="font-medium truncate">{task.name}</div>
+        {task.is_recurring_instance && !isCompleted && (
           <Repeat
             className="h-3 w-3 text-blue-400 flex-shrink-0"
             aria-label="Recurring task"
@@ -1203,7 +1224,13 @@ const DraggableTask: React.FC<DraggableTaskProps> = ({
         )}
       </div>
       {!selectedEmployeeId && employee && (
-        <div className="text-blue-600 truncate">{employee.name}</div>
+        <div
+          className={
+            isCompleted ? "text-green-700 truncate" : "text-blue-600 truncate"
+          }
+        >
+          {employee.name}
+        </div>
       )}
     </div>
   );
