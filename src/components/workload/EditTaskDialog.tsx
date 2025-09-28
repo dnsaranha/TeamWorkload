@@ -169,10 +169,7 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({
                     <AccordionContent>
                       <div className="grid gap-4 pt-4">
                         <div className="grid grid-cols-4 items-center gap-4">
-                          <Label
-                            htmlFor="edit-name-main"
-                            className="text-right"
-                          >
+                          <Label htmlFor="edit-name-main" className="text-right">
                             Task Name
                           </Label>
                           <Input
@@ -192,6 +189,161 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({
                           <Textarea
                             id="edit-description-main"
                             value={currentTask.description || ""}
+                            readOnly
+                            className="col-span-3 bg-gray-100"
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label
+                            htmlFor="edit-startDate-main"
+                            className="text-right"
+                          >
+                            Start Date
+                          </Label>
+                          <Input
+                            id="edit-startDate-main"
+                            value={currentTask.start_date}
+                            readOnly
+                            className="col-span-3 bg-gray-100"
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label
+                            htmlFor="edit-endDate-main"
+                            className="text-right"
+                          >
+                            End Date
+                          </Label>
+                          <Input
+                            id="edit-endDate-main"
+                            value={currentTask.end_date}
+                            readOnly
+                            className="col-span-3 bg-gray-100"
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label
+                            htmlFor="edit-project-main"
+                            className="text-right"
+                          >
+                            Project
+                          </Label>
+                          <Input
+                            id="edit-project-main"
+                            value={
+                              projects.find(
+                                (p) => p.id === currentTask.project_id,
+                              )?.name || "No project"
+                            }
+                            readOnly
+                            className="col-span-3 bg-gray-100"
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label
+                            htmlFor="edit-status-main"
+                            className="text-right"
+                          >
+                            Status
+                          </Label>
+                          <Input
+                            id="edit-status-main"
+                            value={currentTask.status}
+                            readOnly
+                            className="col-span-3 bg-gray-100"
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label
+                            htmlFor="edit-repeats_weekly-main"
+                            className="text-right"
+                          >
+                            Repetição Semanal
+                          </Label>
+                          <div className="col-span-3 flex items-center space-x-2">
+                            <input
+                              id="edit-repeats_weekly-main"
+                              type="checkbox"
+                              checked={currentTask.repeats_weekly}
+                              readOnly
+                              disabled
+                              className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                            />
+                            <Label
+                              htmlFor="edit-repeats_weekly-main"
+                              className="text-sm"
+                            >
+                              Esta tarefa se repete semanalmente
+                            </Label>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-4 items-start gap-4">
+                          <Label className="text-right pt-2">
+                            Dias da Semana
+                          </Label>
+                          <div className="col-span-3 grid grid-cols-2 gap-2">
+                            {[
+                              { value: "monday", label: "Segunda" },
+                              { value: "tuesday", label: "Terça" },
+                              { value: "wednesday", label: "Quarta" },
+                              { value: "thursday", label: "Quinta" },
+                              { value: "friday", label: "Sexta" },
+                              { value: "saturday", label: "Sábado" },
+                              { value: "sunday", label: "Domingo" },
+                            ].map((day) => (
+                              <div
+                                key={day.value}
+                                className="flex items-center space-x-2"
+                              >
+                                <input
+                                  id={`edit-day-${day.value}-main`}
+                                  type="checkbox"
+                                  checked={(
+                                    currentTask.repeat_days || []
+                                  ).includes(day.value)}
+                                  readOnly
+                                  disabled
+                                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                                />
+                                <Label
+                                  htmlFor={`edit-day-${day.value}-main`}
+                                  className="text-sm"
+                                >
+                                  {day.label}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label
+                            htmlFor="edit-hours_per_day-main"
+                            className="text-right"
+                          >
+                            Horas por Dia
+                          </Label>
+                          <Input
+                            id="edit-hours_per_day-main"
+                            type="number"
+                            value={currentTask.hours_per_day || 0}
+                            readOnly
+                            className="col-span-3 bg-gray-100"
+                          />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label
+                            htmlFor="edit-assigned-employee-main"
+                            className="text-right"
+                          >
+                            Responsável Principal
+                          </Label>
+                          <Input
+                            id="edit-assigned-employee-main"
+                            value={
+                              employees.find(
+                                (e) => e.id === currentTask.assigned_employee_id,
+                              )?.name || "Não atribuído"
+                            }
                             readOnly
                             className="col-span-3 bg-gray-100"
                           />
