@@ -1,8 +1,9 @@
-import { Task, Project, Employee } from "@/lib/supabaseClient";
+import { Task, Project, Employee, TaskException } from "@/lib/supabaseClient";
 
 export type TaskWithRelations = Task & {
   project: Project | null;
   assigned_employee: Employee | null;
+  exceptions: TaskException[] | null;
 };
 
 export type NewTask = {

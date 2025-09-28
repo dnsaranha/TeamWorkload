@@ -73,6 +73,9 @@ export type Task = {
   created_at: string | null;
   updated_at: string | null;
   exceptions: TaskException[] | null;
+  is_recurring_instance?: boolean;
+  is_completed?: boolean;
+  original_id?: string;
 };
 
 export type TaskException = {
@@ -153,57 +156,6 @@ export const employeeService = {
 
     if (error) throw error;
     return data;
-  },
-
-  async addException(taskId: string, exception: Omit<TaskException, "id">) {
-    const { data: task, error: fetchError } = await supabase
-      .from("workload_tasks")
-      .select("exceptions")
-      .eq("id", taskId)
-      .single();
-
-    if (fetchError) throw fetchError;
-
-    const newException = { ...exception, id: crypto.randomUUID() };
-    const updatedExceptions = [...(task.exceptions || []), newException];
-
-    return await this.update(taskId, { exceptions: updatedExceptions });
-  },
-
-  async updateException(
-    taskId: string,
-    exceptionId: string,
-    updates: Partial<TaskException>,
-  ) {
-    const { data: task, error: fetchError } = await supabase
-      .from("workload_tasks")
-      .select("exceptions")
-      .eq("id", taskId)
-      .single();
-
-    if (fetchError) throw fetchError;
-
-    const updatedExceptions = (task.exceptions || []).map((exc) =>
-      exc.id === exceptionId ? { ...exc, ...updates } : exc,
-    );
-
-    return await this.update(taskId, { exceptions: updatedExceptions });
-  },
-
-  async deleteException(taskId: string, exceptionId: string) {
-    const { data: task, error: fetchError } = await supabase
-      .from("workload_tasks")
-      .select("exceptions")
-      .eq("id", taskId)
-      .single();
-
-    if (fetchError) throw fetchError;
-
-    const updatedExceptions = (task.exceptions || []).filter(
-      (exc) => exc.id !== exceptionId,
-    );
-
-    return await this.update(taskId, { exceptions: updatedExceptions });
   },
 };
 

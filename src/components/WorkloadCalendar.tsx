@@ -4,6 +4,7 @@ import {
   type Task,
   type Employee,
   type Project,
+  type TaskException,
   taskService,
 } from "@/lib/supabaseClient";
 import { CalendarHeader } from "./workload/CalendarHeader";
@@ -221,14 +222,28 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
           date <= taskEnd &&
           task.repeat_days.includes(dayOfWeekName)
         ) {
-          dayTasks.push({
+          const exception = task.exceptions?.find(
+            (e: TaskException) => e.exception_date === dateStr,
+          );
+
+          if (exception?.is_removed) {
+            return;
+          }
+
+          const instance = {
             ...task,
             id: `${task.id}-${dateStr}`,
+            original_id: task.id,
             start_date: dateStr,
             end_date: dateStr,
-            estimated_time: task.hours_per_day || 0,
+            estimated_time:
+              exception?.estimated_hours ?? task.hours_per_day ?? 0,
+            assigned_employee_id:
+              exception?.assigned_employee_id ?? task.assigned_employee_id,
+            is_completed: exception?.is_completed,
             is_recurring_instance: true,
-          });
+          };
+          dayTasks.push(instance);
         }
       } else {
         if (date >= taskStart && date <= taskEnd) {
@@ -418,36 +433,70 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     if (!currentTask) return;
 
     try {
-      const updateData = {
-        ...currentTask,
-        project_id:
-          currentTask.project_id === "none" ? null : currentTask.project_id,
-        assigned_employee_id:
-          currentTask.assigned_employee_id === "none"
-            ? null
-            : currentTask.assigned_employee_id,
-        completion_date:
-          currentTask.status === "completed" && currentTask.completion_date
-            ? currentTask.completion_date
-            : null,
-        repeat_days: currentTask.repeats_weekly
-          ? currentTask.repeat_days
-          : null,
-        hours_per_day: currentTask.repeats_weekly
-          ? currentTask.hours_per_day
-          : null,
-        special_marker:
-          currentTask.special_marker === "none"
-            ? null
-            : currentTask.special_marker,
-      };
+      if (currentTask.is_recurring_instance && currentTask.original_id) {
+        const originalTask = tasks.find((t) => t.id === currentTask.original_id);
+        if (!originalTask) {
+          throw new Error("Original task not found to update exception.");
+        }
 
-      const updatedTask = await taskService.update(currentTask.id, updateData);
-      setTasks(
-        tasks.map((task) =>
-          task.id === currentTask.id ? (updatedTask as Task) : task,
-        ),
-      );
+        const exceptionDate = currentTask.start_date;
+        const updatedExceptions = [...(originalTask.exceptions || [])];
+        const existingExceptionIndex = updatedExceptions.findIndex(
+          (e) => e.exception_date === exceptionDate,
+        );
+
+        const exceptionData = {
+          id:
+            existingExceptionIndex > -1
+              ? updatedExceptions[existingExceptionIndex].id
+              : crypto.randomUUID(),
+          exception_date: exceptionDate,
+          estimated_hours: currentTask.estimated_time,
+          assigned_employee_id: currentTask.assigned_employee_id,
+          is_completed: currentTask.is_completed,
+          is_removed: false,
+        };
+
+        if (existingExceptionIndex > -1) {
+          updatedExceptions[existingExceptionIndex] = exceptionData;
+        } else {
+          updatedExceptions.push(exceptionData);
+        }
+
+        await taskService.update(originalTask.id, {
+          exceptions: updatedExceptions,
+        });
+      } else {
+        const updateData = {
+          ...currentTask,
+          project_id:
+            currentTask.project_id === "none" ? null : currentTask.project_id,
+          assigned_employee_id:
+            currentTask.assigned_employee_id === "none"
+              ? null
+              : currentTask.assigned_employee_id,
+          completion_date:
+            currentTask.status === "completed" && currentTask.completion_date
+              ? currentTask.completion_date
+              : null,
+          repeat_days: currentTask.repeats_weekly
+            ? currentTask.repeat_days
+            : null,
+          hours_per_day: currentTask.repeats_weekly
+            ? currentTask.hours_per_day
+            : null,
+          exceptions: currentTask.repeats_weekly
+            ? currentTask.exceptions
+            : null,
+          special_marker:
+            currentTask.special_marker === "none"
+              ? null
+              : currentTask.special_marker,
+        };
+        await taskService.update(currentTask.id, updateData);
+      }
+
+      await loadTasks();
       setCurrentTask(null);
       setIsEditTaskDialogOpen(false);
     } catch (error) {
@@ -478,6 +527,45 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
         ...currentTask,
         repeat_days: currentDays.filter((d) => d !== day),
       });
+    }
+  };
+
+  const handleExceptionChange = (
+    index: number,
+    field: keyof TaskException,
+    value: any,
+  ) => {
+    if (currentTask && currentTask.exceptions) {
+      const updatedExceptions = [...currentTask.exceptions];
+      updatedExceptions[index] = {
+        ...updatedExceptions[index],
+        [field]: value,
+      };
+      setCurrentTask({ ...currentTask, exceptions: updatedExceptions });
+    }
+  };
+
+  const handleAddException = () => {
+    if (currentTask) {
+      const newException: TaskException = {
+        id: crypto.randomUUID(),
+        exception_date: new Date().toISOString().split("T")[0],
+        estimated_hours: currentTask.hours_per_day,
+        assigned_employee_id: currentTask.assigned_employee_id,
+        is_completed: false,
+        is_removed: false,
+      };
+      const exceptions = [...(currentTask.exceptions || []), newException];
+      setCurrentTask({ ...currentTask, exceptions });
+    }
+  };
+
+  const handleRemoveException = (index: number) => {
+    if (currentTask && currentTask.exceptions) {
+      const updatedExceptions = currentTask.exceptions.filter(
+        (_, i) => i !== index,
+      );
+      setCurrentTask({ ...currentTask, exceptions: updatedExceptions });
     }
   };
 
@@ -536,6 +624,9 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
         employees={employees}
         onSubmit={handleUpdateTask}
         handleCurrentTaskRepeatDayChange={handleCurrentTaskRepeatDayChange}
+        handleExceptionChange={handleExceptionChange}
+        handleAddException={handleAddException}
+        handleRemoveException={handleRemoveException}
       />
     </div>
   );
