@@ -355,36 +355,28 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({
               </>
             ) : (
               <>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-name" className="text-right">
-                    Task Name
-                  </Label>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-name">Task Name</Label>
                   <Input
                     id="edit-name"
                     value={currentTask.name}
                     onChange={(e) =>
                       onCurrentTaskChange("name", e.target.value)
                     }
-                    className="col-span-3"
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-description" className="text-right">
-                    Description
-                  </Label>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-description">Description</Label>
                   <Textarea
                     id="edit-description"
                     value={currentTask.description || ""}
                     onChange={(e) =>
                       onCurrentTaskChange("description", e.target.value)
                     }
-                    className="col-span-3"
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-estimatedTime" className="text-right">
-                    Est. Hours
-                  </Label>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-estimatedTime">Est. Hours</Label>
                   <Input
                     id="edit-estimated_time"
                     type="number"
@@ -397,18 +389,16 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({
                         Number(e.target.value),
                       )
                     }
-                    className={`col-span-3 ${
+                    className={`${
                       currentTask.repeats_weekly
                         ? "bg-gray-100 cursor-not-allowed"
                         : ""
                     }`}
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-startDate" className="text-right">
-                    Start Date
-                  </Label>
-                  <div className="col-span-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-startDate">Start Date</Label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
@@ -440,12 +430,8 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({
                       </PopoverContent>
                     </Popover>
                   </div>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-endDate" className="text-right">
-                    End Date
-                  </Label>
-                  <div className="col-span-3">
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-endDate">End Date</Label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
@@ -478,55 +464,52 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({
                     </Popover>
                   </div>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-project" className="text-right">
-                    Project
-                  </Label>
-                  <Select
-                    onValueChange={(value) =>
-                      onCurrentTaskChange("project_id", value)
-                    }
-                    value={currentTask.project_id || "none"}
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Select a project" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No project</SelectItem>
-                      {projects.map((project) => (
-                        <SelectItem key={project.id} value={project.id}>
-                          {project.name}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-project">Project</Label>
+                    <Select
+                      onValueChange={(value) =>
+                        onCurrentTaskChange("project_id", value)
+                      }
+                      value={currentTask.project_id || "none"}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a project" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No project</SelectItem>
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-status">Status</Label>
+                    <Select
+                      onValueChange={(
+                        value: "pending" | "in_progress" | "completed",
+                      ) => onCurrentTaskChange("status", value)}
+                      value={currentTask.status}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pendente</SelectItem>
+                        <SelectItem value="in_progress">
+                          Em Andamento
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-status" className="text-right">
-                    Status
-                  </Label>
-                  <Select
-                    onValueChange={(
-                      value: "pending" | "in_progress" | "completed",
-                    ) => onCurrentTaskChange("status", value)}
-                    value={currentTask.status}
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">Pendente</SelectItem>
-                      <SelectItem value="in_progress">Em Andamento</SelectItem>
-                      <SelectItem value="completed">Concluída</SelectItem>
-                    </SelectContent>
-                  </Select>
+                        <SelectItem value="completed">Concluída</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 {currentTask.status === "completed" && (
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label
-                      htmlFor="edit-completion_date"
-                      className="text-right"
-                    >
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-completion_date">
                       Data de Conclusão
                     </Label>
                     <Input
@@ -536,21 +519,18 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({
                       onChange={(e) =>
                         onCurrentTaskChange("completion_date", e.target.value)
                       }
-                      className="col-span-3"
                     />
                   </div>
                 )}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-special_marker" className="text-right">
-                    Marcador Especial
-                  </Label>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-special_marker">Marcador Especial</Label>
                   <Select
                     onValueChange={(value) =>
                       onCurrentTaskChange("special_marker", value)
                     }
                     value={currentTask.special_marker || "none"}
                   >
-                    <SelectTrigger className="col-span-3">
+                    <SelectTrigger>
                       <SelectValue placeholder="Selecione um marcador" />
                     </SelectTrigger>
                     <SelectContent>
@@ -565,30 +545,28 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-repeats_weekly" className="text-right">
-                    Repetição Semanal
+                <div className="flex items-center space-x-2 pt-2">
+                  <input
+                    id="edit-repeats_weekly"
+                    type="checkbox"
+                    checked={currentTask.repeats_weekly || false}
+                    onChange={(e) =>
+                      onCurrentTaskChange("repeats_weekly", e.target.checked)
+                    }
+                    className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                  />
+                  <Label
+                    htmlFor="edit-repeats_weekly"
+                    className="text-sm font-normal"
+                  >
+                    Esta tarefa se repete semanalmente
                   </Label>
-                  <div className="col-span-3 flex items-center space-x-2">
-                    <input
-                      id="edit-repeats_weekly"
-                      type="checkbox"
-                      checked={currentTask.repeats_weekly || false}
-                      onChange={(e) =>
-                        onCurrentTaskChange("repeats_weekly", e.target.checked)
-                      }
-                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                    />
-                    <Label htmlFor="edit-repeats_weekly" className="text-sm">
-                      Esta tarefa se repete semanalmente
-                    </Label>
-                  </div>
                 </div>
                 {currentTask.repeats_weekly && (
                   <>
-                    <div className="grid grid-cols-4 items-start gap-4">
-                      <Label className="text-right pt-2">Dias da Semana</Label>
-                      <div className="col-span-3 grid grid-cols-2 gap-2">
+                    <div className="grid gap-2">
+                      <Label>Dias da Semana</Label>
+                      <div className="grid grid-cols-4 gap-2">
                         {[
                           { value: "monday", label: "Segunda" },
                           { value: "tuesday", label: "Terça" },
@@ -618,7 +596,7 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({
                             />
                             <Label
                               htmlFor={`edit-day-${day.value}`}
-                              className="text-sm"
+                              className="text-sm font-normal"
                             >
                               {day.label}
                             </Label>
@@ -626,13 +604,8 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({
                         ))}
                       </div>
                     </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label
-                        htmlFor="edit-hours_per_day"
-                        className="text-right"
-                      >
-                        Horas por Dia
-                      </Label>
+                    <div className="grid gap-2">
+                      <Label htmlFor="edit-hours_per_day">Horas por Dia</Label>
                       <Input
                         id="edit-hours_per_day"
                         type="number"
@@ -645,7 +618,6 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({
                             parseFloat(e.target.value) || 0,
                           )
                         }
-                        className="col-span-3"
                         placeholder="Ex: 2.5"
                       />
                     </div>
@@ -754,20 +726,15 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({
                     </div>
                   </div>
                 )}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label
-                    htmlFor="edit-assigned-employee"
-                    className="text-right"
-                  >
-                    Responsável
-                  </Label>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-assigned-employee">Responsável</Label>
                   <Select
                     onValueChange={(value) =>
                       onCurrentTaskChange("assigned_employee_id", value)
                     }
                     value={currentTask.assigned_employee_id || "none"}
                   >
-                    <SelectTrigger className="col-span-3">
+                    <SelectTrigger>
                       <SelectValue placeholder="Select an employee" />
                     </SelectTrigger>
                     <SelectContent>
