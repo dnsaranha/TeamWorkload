@@ -35,10 +35,12 @@ import { DateRange } from "react-day-picker";
 import { Card } from "./ui/card";
 
 interface ProjectVisualizationProps {
-  activeView: "overview" | "workload" | "timeline";
+  activeView?: "overview" | "workload" | "timeline";
 }
 
-const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({ activeView }) => {
+const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({ 
+  activeView = "overview" 
+}) => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -214,7 +216,7 @@ const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({ activeView 
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-medium text-gray-900">
-          {activeView.charAt(0).toUpperCase() + activeView.slice(1)} View
+          {activeView ? activeView.charAt(0).toUpperCase() + activeView.slice(1) : "Overview"} View
         </h3>
         <div className="flex items-center space-x-2">
           <div className="relative">

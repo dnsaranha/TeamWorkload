@@ -802,11 +802,11 @@ const TaskManagement = () => {
                       />
                     </div>
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 mt-1">
                     <Button
                       size="sm"
                       onClick={() => handleSaveTaskDates(task.id)}
-                      className="h-5 px-2 text-xs"
+                      className="h-6 px-2 text-xs flex-1"
                     >
                       Salvar
                     </Button>
@@ -814,7 +814,7 @@ const TaskManagement = () => {
                       size="sm"
                       variant="outline"
                       onClick={handleCancelEdit}
-                      className="h-5 px-2 text-xs"
+                      className="h-6 px-2 text-xs flex-1"
                     >
                       Cancelar
                     </Button>
@@ -1606,20 +1606,22 @@ const TaskManagement = () => {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end items-center gap-1">
                         <Button
                           variant="ghost"
-                          size="icon"
+                          size="sm"
                           onClick={() => openEditDialog(task)}
+                          className="h-8 w-8 p-0"
                         >
-                          <Edit size={16} />
+                          <Edit size={14} />
                         </Button>
                         <Button
                           variant="ghost"
-                          size="icon"
+                          size="sm"
                           onClick={() => handleDeleteTask(task.id)}
+                          className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={14} />
                         </Button>
                       </div>
                     </TableCell>
@@ -1646,329 +1648,361 @@ const TaskManagement = () => {
           {currentTask && (
             <ScrollArea className="max-h-[75vh]">
               <div className="grid gap-4 p-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-name" className="text-right">
-                  Task Name
-                </Label>
-                <Input
-                  id="edit-name"
-                  value={currentTask.name}
-                  onChange={(e) =>
-                    setCurrentTask({ ...currentTask, name: e.target.value })
-                  }
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-description" className="text-right">
-                  Description
-                </Label>
-                <Textarea
-                  id="edit-description"
-                  value={currentTask.description || ""}
-                  onChange={(e) =>
-                    setCurrentTask({
-                      ...currentTask,
-                      description: e.target.value,
-                    })
-                  }
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-estimatedTime" className="text-right">
-                  Est. Hours
-                </Label>
-                <Input
-                  id="edit-estimated_time"
-                  type="number"
-                  value={currentTask.estimated_time}
-                  readOnly={currentTask.repeats_weekly}
-                  onChange={(e) =>
-                    !currentTask.repeats_weekly &&
-                    setCurrentTask({
-                      ...currentTask,
-                      estimated_time: Number(e.target.value),
-                    })
-                  }
-                  className={`col-span-3 ${
-                    currentTask.repeats_weekly
-                      ? "bg-gray-100 cursor-not-allowed"
-                      : ""
-                  }`}
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-startDate" className="text-right">
-                  Start Date
-                </Label>
-                <div className="col-span-3">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className="w-full justify-start text-left font-normal"
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {format(
-                          new Date(currentTask.start_date + "T00:00:00"),
-                          "PPP",
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={new Date(currentTask.start_date + "T00:00:00")}
-                        onSelect={(date) =>
-                          date &&
+                <div className="min-h-[600px]">
+                  <div className="grid gap-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="edit-name" className="text-right">
+                        Task Name
+                      </Label>
+                      <Input
+                        id="edit-name"
+                        value={currentTask.name}
+                        onChange={(e) =>
+                          setCurrentTask({ ...currentTask, name: e.target.value })
+                        }
+                        className="col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="edit-description" className="text-right">
+                        Description
+                      </Label>
+                      <Textarea
+                        id="edit-description"
+                        value={currentTask.description || ""}
+                        onChange={(e) =>
                           setCurrentTask({
                             ...currentTask,
-                            start_date: date.toISOString().split("T")[0],
+                            description: e.target.value,
                           })
                         }
-                        initialFocus
+                        className="col-span-3"
                       />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-endDate" className="text-right">
-                  End Date
-                </Label>
-                <div className="col-span-3">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className="w-full justify-start text-left font-normal"
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {format(
-                          new Date(currentTask.end_date + "T00:00:00"),
-                          "PPP",
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={new Date(currentTask.end_date + "T00:00:00")}
-                        onSelect={(date) =>
-                          date &&
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="edit-estimatedTime" className="text-right">
+                        Est. Hours
+                      </Label>
+                      <Input
+                        id="edit-estimated_time"
+                        type="number"
+                        value={currentTask.estimated_time}
+                        readOnly={currentTask.repeats_weekly}
+                        onChange={(e) =>
+                          !currentTask.repeats_weekly &&
                           setCurrentTask({
                             ...currentTask,
-                            end_date: date.toISOString().split("T")[0],
+                            estimated_time: Number(e.target.value),
                           })
                         }
-                        initialFocus
+                        className={`col-span-3 ${
+                          currentTask.repeats_weekly
+                            ? "bg-gray-100 cursor-not-allowed"
+                            : ""
+                        }`}
                       />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-project" className="text-right">
-                  Project
-                </Label>
-                <Select
-                  onValueChange={(value) =>
-                    setCurrentTask({ ...currentTask, project_id: value })
-                  }
-                  value={currentTask.project_id || "none"}
-                >
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select a project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No project</SelectItem>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-status" className="text-right">
-                  Status
-                </Label>
-                <Select
-                  onValueChange={(
-                    value: "pending" | "in_progress" | "completed",
-                  ) => setCurrentTask({ ...currentTask, status: value })}
-                  value={currentTask.status}
-                >
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pendente</SelectItem>
-                    <SelectItem value="in_progress">Em Andamento</SelectItem>
-                    <SelectItem value="completed">Concluída</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {currentTask.status === "completed" && (
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-completion_date" className="text-right">
-                    Data de Conclusão
-                  </Label>
-                  <Input
-                    id="edit-completion_date"
-                    type="date"
-                    value={currentTask.completion_date || ""}
-                    onChange={(e) =>
-                      setCurrentTask({
-                        ...currentTask,
-                        completion_date: e.target.value,
-                      })
-                    }
-                    className="col-span-3"
-                  />
-                </div>
-              )}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-special_marker" className="text-right">
-                  Marcador Especial
-                </Label>
-                <Select
-                  onValueChange={(value) =>
-                    setCurrentTask({
-                      ...currentTask,
-                      special_marker: value,
-                    })
-                  }
-                  value={currentTask.special_marker || "none"}
-                >
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Selecione um marcador" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
-                    <SelectItem value="major_release">Major Release</SelectItem>
-                    <SelectItem value="major_deployment">
-                      Major Deployment
-                    </SelectItem>
-                    <SelectItem value="major_theme">Major Theme</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-repeats_weekly" className="text-right">
-                  Repetição Semanal
-                </Label>
-                <div className="col-span-3 flex items-center space-x-2">
-                  <input
-                    id="edit-repeats_weekly"
-                    type="checkbox"
-                    checked={currentTask.repeats_weekly || false}
-                    onChange={(e) =>
-                      setCurrentTask({
-                        ...currentTask,
-                        repeats_weekly: e.target.checked,
-                        repeat_days: e.target.checked
-                          ? currentTask.repeat_days || []
-                          : null,
-                        hours_per_day: e.target.checked
-                          ? currentTask.hours_per_day || 0
-                          : null,
-                      })
-                    }
-                    className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                  />
-                  <Label htmlFor="edit-repeats_weekly" className="text-sm">
-                    Esta tarefa se repete semanalmente
-                  </Label>
-                </div>
-              </div>
-              {currentTask.repeats_weekly && (
-                <>
-                  <div className="grid grid-cols-4 items-start gap-4">
-                    <Label className="text-right pt-2">Dias da Semana</Label>
-                    <div className="col-span-3 grid grid-cols-2 gap-2">
-                      {[
-                        { value: "monday", label: "Segunda" },
-                        { value: "tuesday", label: "Terça" },
-                        { value: "wednesday", label: "Quarta" },
-                        { value: "thursday", label: "Quinta" },
-                        { value: "friday", label: "Sexta" },
-                        { value: "saturday", label: "Sábado" },
-                        { value: "sunday", label: "Domingo" },
-                      ].map((day) => (
-                        <div
-                          key={day.value}
-                          className="flex items-center space-x-2"
-                        >
-                          <input
-                            id={`edit-day-${day.value}`}
-                            type="checkbox"
-                            checked={(currentTask.repeat_days || []).includes(
-                              day.value,
-                            )}
-                            onChange={(e) =>
-                              handleCurrentTaskRepeatDayChange(
-                                day.value,
-                                e.target.checked,
-                              )
-                            }
-                            className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                          />
-                          <Label
-                            htmlFor={`edit-day-${day.value}`}
-                            className="text-sm"
-                          >
-                            {day.label}
-                          </Label>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="edit-startDate" className="text-right">
+                        Start Date
+                      </Label>
+                      <div className="col-span-3">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant={"outline"}
+                              className="w-full justify-start text-left font-normal"
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {format(
+                                new Date(currentTask.start_date + "T00:00:00"),
+                                "PPP",
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={new Date(currentTask.start_date + "T00:00:00")}
+                              onSelect={(date) =>
+                                date &&
+                                setCurrentTask({
+                                  ...currentTask,
+                                  start_date: date.toISOString().split("T")[0],
+                                })
+                              }
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="edit-endDate" className="text-right">
+                        End Date
+                      </Label>
+                      <div className="col-span-3">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant={"outline"}
+                              className="w-full justify-start text-left font-normal"
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {format(
+                                new Date(currentTask.end_date + "T00:00:00"),
+                                "PPP",
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={new Date(currentTask.end_date + "T00:00:00")}
+                              onSelect={(date) =>
+                                date &&
+                                setCurrentTask({
+                                  ...currentTask,
+                                  end_date: date.toISOString().split("T")[0],
+                                })
+                              }
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="edit-project" className="text-right">
+                        Project
+                      </Label>
+                      <Select
+                        onValueChange={(value) =>
+                          setCurrentTask({ ...currentTask, project_id: value })
+                        }
+                        value={currentTask.project_id || "none"}
+                      >
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Select a project" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No project</SelectItem>
+                          {projects.map((project) => (
+                            <SelectItem key={project.id} value={project.id}>
+                              {project.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="edit-status" className="text-right">
+                        Status
+                      </Label>
+                      <Select
+                        onValueChange={(
+                          value: "pending" | "in_progress" | "completed",
+                        ) => setCurrentTask({ ...currentTask, status: value })}
+                        value={currentTask.status}
+                      >
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Pendente</SelectItem>
+                          <SelectItem value="in_progress">Em Andamento</SelectItem>
+                          <SelectItem value="completed">Concluída</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {currentTask.status === "completed" && (
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="edit-completion_date" className="text-right">
+                          Data de Conclusão
+                        </Label>
+                        <Input
+                          id="edit-completion_date"
+                          type="date"
+                          value={currentTask.completion_date || ""}
+                          onChange={(e) =>
+                            setCurrentTask({
+                              ...currentTask,
+                              completion_date: e.target.value,
+                            })
+                          }
+                          className="col-span-3"
+                        />
+                      </div>
+                    )}
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="edit-special_marker" className="text-right">
+                        Marcador Especial
+                      </Label>
+                      <Select
+                        onValueChange={(value) =>
+                          setCurrentTask({
+                            ...currentTask,
+                            special_marker: value,
+                          })
+                        }
+                        value={currentTask.special_marker || "none"}
+                      >
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Selecione um marcador" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Nenhum</SelectItem>
+                          <SelectItem value="major_release">Major Release</SelectItem>
+                          <SelectItem value="major_deployment">
+                            Major Deployment
+                          </SelectItem>
+                          <SelectItem value="major_theme">Major Theme</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="edit-repeats_weekly" className="text-right">
+                        Repetição Semanal
+                      </Label>
+                      <div className="col-span-3 flex items-center space-x-2">
+                        <input
+                          id="edit-repeats_weekly"
+                          type="checkbox"
+                          checked={currentTask.repeats_weekly || false}
+                          onChange={(e) =>
+                            setCurrentTask({
+                              ...currentTask,
+                              repeats_weekly: e.target.checked,
+                              repeat_days: e.target.checked
+                                ? currentTask.repeat_days || []
+                                : null,
+                              hours_per_day: e.target.checked
+                                ? currentTask.hours_per_day || 0
+                                : null,
+                            })
+                          }
+                          className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                        />
+                        <Label htmlFor="edit-repeats_weekly" className="text-sm">
+                          Esta tarefa se repete semanalmente
+                        </Label>
+                      </div>
+                    </div>
+                    {currentTask.repeats_weekly && (
+                      <>
+                        <div className="grid grid-cols-4 items-start gap-4">
+                          <Label className="text-right pt-2">Dias da Semana</Label>
+                          <div className="col-span-3 grid grid-cols-2 gap-2">
+                            {[
+                              { value: "monday", label: "Segunda" },
+                              { value: "tuesday", label: "Terça" },
+                              { value: "wednesday", label: "Quarta" },
+                              { value: "thursday", label: "Quinta" },
+                              { value: "friday", label: "Sexta" },
+                              { value: "saturday", label: "Sábado" },
+                              { value: "sunday", label: "Domingo" },
+                            ].map((day) => (
+                              <div
+                                key={day.value}
+                                className="flex items-center space-x-2"
+                              >
+                                <input
+                                  id={`edit-day-${day.value}`}
+                                  type="checkbox"
+                                  checked={(currentTask.repeat_days || []).includes(
+                                    day.value,
+                                  )}
+                                  onChange={(e) =>
+                                    handleCurrentTaskRepeatDayChange(
+                                      day.value,
+                                      e.target.checked,
+                                    )
+                                  }
+                                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                                />
+                                <Label
+                                  htmlFor={`edit-day-${day.value}`}
+                                  className="text-sm"
+                                >
+                                  {day.label}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      ))}
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="edit-hours_per_day" className="text-right">
+                            Horas por Dia
+                          </Label>
+                          <Input
+                            id="edit-hours_per_day"
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            value={currentTask.hours_per_day || 0}
+                            onChange={(e) =>
+                              setCurrentTask({
+                                ...currentTask,
+                                hours_per_day: parseFloat(e.target.value) || 0,
+                              })
+                            }
+                            className="col-span-3"
+                            placeholder="Ex: 2.5"
+                          />
+                        </div>
+                      </>
+                    )}
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="edit-assigned-employee" className="text-right">
+                        Responsável
+                      </Label>
+                      <Select
+                        onValueChange={(value) =>
+                          setCurrentTask({
+                            ...currentTask,
+                            assigned_employee_id: value,
+                          })
+                        }
+                        value={currentTask.assigned_employee_id || "none"}
+                      >
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Select an employee" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Não atribuído</SelectItem>
+                          {employees.map((employee) => (
+                            <SelectItem key={employee.id} value={employee.id}>
+                              {employee.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="edit-hours_per_day" className="text-right">
-                      Horas por Dia
-                    </Label>
-                    <Input
-                      id="edit-hours_per_day"
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      value={currentTask.hours_per_day || 0}
-                      onChange={(e) =>
-                        setCurrentTask({
-                          ...currentTask,
-                          hours_per_day: parseFloat(e.target.value) || 0,
-                        })
-                      }
-                      className="col-span-3"
-                      placeholder="Ex: 2.5"
-                    />
-                  </div>
+                </div>
 
-                  {/* Seção de Exceções */}
-                  {currentTask.repeats_weekly && (
-                    <div className="col-span-4 pt-4">
-                      <div className="border-t pt-4">
-                        <h4 className="text-md font-semibold mb-2 text-center">
-                          Exceções da Repetição
-                        </h4>
+                {currentTask.repeats_weekly && (
+                  <div className="mt-6 pt-6 border-t border-gray-200">
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h4 className="text-md font-semibold mb-4 text-center text-gray-700">
+                        Exceções da Repetição
+                      </h4>
+                      <div className="space-y-4">
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>Data</TableHead>
-                              <TableHead>Horas</TableHead>
-                              <TableHead>Responsável</TableHead>
-                              <TableHead>Realizado</TableHead>
-                              <TableHead>Ações</TableHead>
+                              <TableHead className="text-xs">Data</TableHead>
+                              <TableHead className="text-xs">Horas</TableHead>
+                              <TableHead className="text-xs">Responsável</TableHead>
+                              <TableHead className="text-xs">Realizado</TableHead>
+                              <TableHead className="text-xs">Ações</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {(currentTask.exceptions || []).map(
                               (exception, index) => (
                                 <TableRow key={index}>
-                                  <TableCell>
+                                  <TableCell className="p-2">
                                     <Input
                                       type="date"
                                       value={exception.date}
@@ -1979,9 +2013,10 @@ const TaskManagement = () => {
                                           e.target.value,
                                         )
                                       }
+                                      className="text-xs"
                                     />
                                   </TableCell>
-                                  <TableCell>
+                                  <TableCell className="p-2">
                                     <Input
                                       type="number"
                                       value={exception.estimated_hours || ""}
@@ -1992,9 +2027,10 @@ const TaskManagement = () => {
                                           parseFloat(e.target.value) || null,
                                         )
                                       }
+                                      className="text-xs"
                                     />
                                   </TableCell>
-                                  <TableCell>
+                                  <TableCell className="p-2">
                                     <Select
                                       value={
                                         exception.assigned_employee_id || "none"
@@ -2007,7 +2043,7 @@ const TaskManagement = () => {
                                         )
                                       }
                                     >
-                                      <SelectTrigger>
+                                      <SelectTrigger className="text-xs">
                                         <SelectValue />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -2025,7 +2061,7 @@ const TaskManagement = () => {
                                       </SelectContent>
                                     </Select>
                                   </TableCell>
-                                  <TableCell className="text-center">
+                                  <TableCell className="text-center p-2">
                                     <input
                                       type="checkbox"
                                       checked={exception.completed || false}
@@ -2039,15 +2075,16 @@ const TaskManagement = () => {
                                       className="h-4 w-4"
                                     />
                                   </TableCell>
-                                  <TableCell>
+                                  <TableCell className="p-2">
                                     <Button
                                       variant="ghost"
-                                      size="icon"
+                                      size="sm"
                                       onClick={() =>
                                         handleRemoveException(index)
                                       }
+                                      className="h-6 w-6 p-0"
                                     >
-                                      <Trash2 size={16} />
+                                      <Trash2 size={12} />
                                     </Button>
                                   </TableCell>
                                 </TableRow>
@@ -2058,7 +2095,7 @@ const TaskManagement = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="mt-2"
+                          className="w-full"
                           onClick={handleAddException}
                         >
                           <Plus size={16} className="mr-2" />
@@ -2066,35 +2103,8 @@ const TaskManagement = () => {
                         </Button>
                       </div>
                     </div>
-                  )}
-                </>
-              )}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-assigned-employee" className="text-right">
-                  Responsável
-                </Label>
-                <Select
-                  onValueChange={(value) =>
-                    setCurrentTask({
-                      ...currentTask,
-                      assigned_employee_id: value,
-                    })
-                  }
-                  value={currentTask.assigned_employee_id || "none"}
-                >
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select an employee" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Não atribuído</SelectItem>
-                    {employees.map((employee) => (
-                      <SelectItem key={employee.id} value={employee.id}>
-                        {employee.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                  </div>
+                )}
               </div>
             </ScrollArea>
           )}
