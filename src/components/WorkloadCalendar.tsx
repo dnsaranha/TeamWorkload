@@ -87,12 +87,12 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   const [isWeekExpanded, setIsWeekExpanded] = useState(false);
   const [isEditTaskDialogOpen, setIsEditTaskDialogOpen] = useState(false);
   const [currentTask, setCurrentTask] = useState<Task | null>(null);
-  const [selectedExceptionDate, setSelectedExceptionDate] = useState<string | null>(null);
+  const [selectedExceptionDate, setSelectedExceptionDate] = useState<
+    string | null
+  >(null);
   const [isMainTaskCollapsed, setIsMainTaskCollapsed] = useState(true);
 
-  const openEditDialog = (
-    task: Task & { is_recurring_instance?: boolean },
-  ) => {
+  const openEditDialog = (task: Task & { is_recurring_instance?: boolean }) => {
     if (task.is_recurring_instance) {
       const originalId = task.id.substring(0, 36);
       const originalTask = tasks.find((t) => t.id === originalId);
@@ -407,8 +407,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
       return {
         hours: totalHours,
-        percentage:
-          dailyCapacity > 0 ? (totalHours / dailyCapacity) * 100 : 0,
+        percentage: dailyCapacity > 0 ? (totalHours / dailyCapacity) * 100 : 0,
         capacity: dailyCapacity,
       };
     }
@@ -483,14 +482,19 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     employeeId?: string,
   ) => {
     // Check if this is a recurring instance being moved
-    if (taskId.includes('-') && taskId.length > 36) {
+    if (taskId.includes("-") && taskId.length > 36) {
       const originalId = taskId.substring(0, 36);
       const oldDateStr = taskId.substring(37);
       const newDateStr = newStartDate.toISOString().split("T")[0];
-      
+
       const originalTask = tasks.find((task) => task.id === originalId);
       if (originalTask && originalTask.repeats_weekly) {
-        await handleMoveException(originalId, oldDateStr, newDateStr, employeeId);
+        await handleMoveException(
+          originalId,
+          oldDateStr,
+          newDateStr,
+          employeeId,
+        );
         return;
       }
     }
@@ -508,7 +512,9 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     // If the task already exists in the calendar, it's a reschedule. Preserve duration.
     if (originalTask) {
       // Ensure dates are parsed correctly as UTC to avoid timezone issues.
-      const originalStartDate = new Date(originalTask.start_date + "T00:00:00Z");
+      const originalStartDate = new Date(
+        originalTask.start_date + "T00:00:00Z",
+      );
       const originalEndDate = new Date(originalTask.end_date + "T00:00:00Z");
       const durationInMillis =
         originalEndDate.getTime() - originalStartDate.getTime();
@@ -541,10 +547,12 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     if (!task) return;
 
     const exceptions = task.exceptions || [];
-    const existingExceptionIndex = exceptions.findIndex(ex => ex.date === oldDateStr);
-    
+    const existingExceptionIndex = exceptions.findIndex(
+      (ex) => ex.date === oldDateStr,
+    );
+
     let updatedExceptions = [...exceptions];
-    
+
     if (existingExceptionIndex >= 0) {
       // Move existing exception to new date
       const exception = updatedExceptions[existingExceptionIndex];
@@ -562,7 +570,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
         completed: false,
         removed: false,
       });
-      
+
       // Mark old date as removed
       updatedExceptions.push({
         date: oldDateStr,
@@ -583,10 +591,10 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
   const handleDeallocateTask = async (taskId: string) => {
     // Check if this is a recurring instance
-    if (taskId.includes('-') && taskId.length > 36) {
+    if (taskId.includes("-") && taskId.length > 36) {
       const originalId = taskId.substring(0, 36);
       const dateStr = taskId.substring(37);
-      
+
       const originalTask = tasks.find((task) => task.id === originalId);
       if (originalTask && originalTask.repeats_weekly) {
         await handleRemoveException(originalId, dateStr);
@@ -610,9 +618,11 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
     const exceptions = task.exceptions || [];
     const updatedExceptions = [...exceptions];
-    
-    const existingExceptionIndex = exceptions.findIndex(ex => ex.date === dateStr);
-    
+
+    const existingExceptionIndex = exceptions.findIndex(
+      (ex) => ex.date === dateStr,
+    );
+
     if (existingExceptionIndex >= 0) {
       // Mark existing exception as removed
       updatedExceptions[existingExceptionIndex] = {
@@ -846,7 +856,6 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
           </div>
         </div>
       </div>
-
       {/* Calendar Grid */}
       <div className="p-6">
         <div className="grid grid-cols-7 gap-2">
@@ -941,9 +950,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                         ? dayTasks
                         : dayTasks.slice(0, 3)
                       ).map((task) => {
-                        const employee = getEmployee(
-                          task.assigned_employee_id,
-                        );
+                        const employee = getEmployee(task.assigned_employee_id);
                         const project = getProject(task.project_id);
 
                         return (
@@ -990,7 +997,6 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
         </div>
       </div>
       <DeallocationZone onDropTask={handleDeallocateTask} />
-
       {/* Edit Task Dialog */}
       <Dialog
         open={isEditTaskDialogOpen}
@@ -1002,32 +1008,37 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
           }
         }}
       >
-        <DialogContent className="sm:max-w-[700px]">
+        <DialogContent className="sm:max-w-[750px]">
           <DialogHeader>
             <DialogTitle>
-              {currentTask?.repeats_weekly ? "Edit Recurring Task" : "Edit Task"}
+              {currentTask?.repeats_weekly
+                ? "Edit Recurring Task"
+                : "Edit Task"}
             </DialogTitle>
             <DialogDescription>
-              {currentTask?.repeats_weekly 
+              {currentTask?.repeats_weekly
                 ? "Manage exceptions and task details for recurring task."
-                : "Update task details and time estimates."
-              }
+                : "Update task details and time estimates."}
             </DialogDescription>
           </DialogHeader>
           {currentTask && (
             <ScrollArea className="max-h-[75vh]">
               <div className="space-y-6 p-4">
-                
                 {/* Single Day Exception Section - Only for recurring tasks */}
                 {currentTask.repeats_weekly && selectedExceptionDate && (
                   <div className="border border-blue-200 rounded-lg p-4 bg-blue-50">
                     <h4 className="text-lg font-semibold mb-4 text-blue-900">
-                      Registro do Dia - {new Date(selectedExceptionDate + "T00:00:00").toLocaleDateString('pt-BR')}
+                      Registro do Dia -{" "}
+                      {new Date(
+                        selectedExceptionDate + "T00:00:00",
+                      ).toLocaleDateString("pt-BR")}
                     </h4>
-                    
+
                     {(() => {
                       // Find or create exception for the selected date
-                      const existingException = (currentTask.exceptions || []).find(ex => ex.date === selectedExceptionDate);
+                      const existingException = (
+                        currentTask.exceptions || []
+                      ).find((ex) => ex.date === selectedExceptionDate);
                       const exception = existingException || {
                         date: selectedExceptionDate,
                         estimated_hours: currentTask.hours_per_day || 0,
@@ -1035,19 +1046,26 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                         completed: false,
                         removed: false,
                       };
-                      
+
                       return (
                         <div className="grid grid-cols-12 gap-4 items-center p-4 bg-white border border-gray-200 rounded-lg">
                           <div className="col-span-3">
-                            <Label className="text-sm font-medium text-gray-700">Data de Execução</Label>
+                            <Label className="text-sm font-medium text-gray-700">
+                              Data de Execução
+                            </Label>
                             <Input
                               type="date"
                               value={exception.date}
                               onChange={(e) => {
                                 const newDate = e.target.value;
-                                const updatedExceptions = [...(currentTask.exceptions || [])];
-                                const exceptionIndex = updatedExceptions.findIndex(ex => ex.date === selectedExceptionDate);
-                                
+                                const updatedExceptions = [
+                                  ...(currentTask.exceptions || []),
+                                ];
+                                const exceptionIndex =
+                                  updatedExceptions.findIndex(
+                                    (ex) => ex.date === selectedExceptionDate,
+                                  );
+
                                 if (exceptionIndex >= 0) {
                                   updatedExceptions[exceptionIndex] = {
                                     ...updatedExceptions[exceptionIndex],
@@ -1059,7 +1077,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                                     date: newDate,
                                   });
                                 }
-                                
+
                                 setCurrentTask({
                                   ...currentTask,
                                   exceptions: updatedExceptions,
@@ -1069,28 +1087,37 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                               className="mt-1"
                             />
                           </div>
-                          <div className="col-span-2">
-                            <Label className="text-sm font-medium text-gray-700">Horas</Label>
+                          <div className="col-span-2 w-[80px]">
+                            <Label className="text-sm font-medium text-gray-700">
+                              Horas
+                            </Label>
                             <Input
                               type="number"
                               step="0.5"
                               value={exception.estimated_hours || ""}
                               onChange={(e) => {
-                                const updatedExceptions = [...(currentTask.exceptions || [])];
-                                const exceptionIndex = updatedExceptions.findIndex(ex => ex.date === selectedExceptionDate);
-                                
+                                const updatedExceptions = [
+                                  ...(currentTask.exceptions || []),
+                                ];
+                                const exceptionIndex =
+                                  updatedExceptions.findIndex(
+                                    (ex) => ex.date === selectedExceptionDate,
+                                  );
+
                                 if (exceptionIndex >= 0) {
                                   updatedExceptions[exceptionIndex] = {
                                     ...updatedExceptions[exceptionIndex],
-                                    estimated_hours: parseFloat(e.target.value) || null,
+                                    estimated_hours:
+                                      parseFloat(e.target.value) || null,
                                   };
                                 } else {
                                   updatedExceptions.push({
                                     ...exception,
-                                    estimated_hours: parseFloat(e.target.value) || null,
+                                    estimated_hours:
+                                      parseFloat(e.target.value) || null,
                                   });
                                 }
-                                
+
                                 setCurrentTask({
                                   ...currentTask,
                                   exceptions: updatedExceptions,
@@ -1100,25 +1127,34 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                             />
                           </div>
                           <div className="col-span-3">
-                            <Label className="text-sm font-medium text-gray-700">Responsável</Label>
+                            <Label className="text-sm font-medium text-gray-700">
+                              Responsável
+                            </Label>
                             <Select
                               value={exception.assigned_employee_id || "none"}
                               onValueChange={(value) => {
-                                const updatedExceptions = [...(currentTask.exceptions || [])];
-                                const exceptionIndex = updatedExceptions.findIndex(ex => ex.date === selectedExceptionDate);
-                                
+                                const updatedExceptions = [
+                                  ...(currentTask.exceptions || []),
+                                ];
+                                const exceptionIndex =
+                                  updatedExceptions.findIndex(
+                                    (ex) => ex.date === selectedExceptionDate,
+                                  );
+
                                 if (exceptionIndex >= 0) {
                                   updatedExceptions[exceptionIndex] = {
                                     ...updatedExceptions[exceptionIndex],
-                                    assigned_employee_id: value === "none" ? null : value,
+                                    assigned_employee_id:
+                                      value === "none" ? null : value,
                                   };
                                 } else {
                                   updatedExceptions.push({
                                     ...exception,
-                                    assigned_employee_id: value === "none" ? null : value,
+                                    assigned_employee_id:
+                                      value === "none" ? null : value,
                                   });
                                 }
-                                
+
                                 setCurrentTask({
                                   ...currentTask,
                                   exceptions: updatedExceptions,
@@ -1131,7 +1167,10 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                               <SelectContent>
                                 <SelectItem value="none">Padrão</SelectItem>
                                 {employees.map((employee) => (
-                                  <SelectItem key={employee.id} value={employee.id}>
+                                  <SelectItem
+                                    key={employee.id}
+                                    value={employee.id}
+                                  >
                                     {employee.name}
                                   </SelectItem>
                                 ))}
@@ -1139,14 +1178,21 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                             </Select>
                           </div>
                           <div className="col-span-2 text-center">
-                            <Label className="text-sm font-medium text-gray-700 block mb-2">Realizado</Label>
+                            <Label className="text-sm font-medium text-gray-700 block mb-2">
+                              Realizado
+                            </Label>
                             <input
                               type="checkbox"
                               checked={exception.completed || false}
                               onChange={(e) => {
-                                const updatedExceptions = [...(currentTask.exceptions || [])];
-                                const exceptionIndex = updatedExceptions.findIndex(ex => ex.date === selectedExceptionDate);
-                                
+                                const updatedExceptions = [
+                                  ...(currentTask.exceptions || []),
+                                ];
+                                const exceptionIndex =
+                                  updatedExceptions.findIndex(
+                                    (ex) => ex.date === selectedExceptionDate,
+                                  );
+
                                 if (exceptionIndex >= 0) {
                                   updatedExceptions[exceptionIndex] = {
                                     ...updatedExceptions[exceptionIndex],
@@ -1158,7 +1204,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                                     completed: e.target.checked,
                                   });
                                 }
-                                
+
                                 setCurrentTask({
                                   ...currentTask,
                                   exceptions: updatedExceptions,
@@ -1172,9 +1218,14 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                               variant="destructive"
                               size="sm"
                               onClick={() => {
-                                const updatedExceptions = [...(currentTask.exceptions || [])];
-                                const exceptionIndex = updatedExceptions.findIndex(ex => ex.date === selectedExceptionDate);
-                                
+                                const updatedExceptions = [
+                                  ...(currentTask.exceptions || []),
+                                ];
+                                const exceptionIndex =
+                                  updatedExceptions.findIndex(
+                                    (ex) => ex.date === selectedExceptionDate,
+                                  );
+
                                 if (exceptionIndex >= 0) {
                                   updatedExceptions[exceptionIndex] = {
                                     ...updatedExceptions[exceptionIndex],
@@ -1186,16 +1237,16 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                                     removed: true,
                                   });
                                 }
-                                
+
                                 setCurrentTask({
                                   ...currentTask,
                                   exceptions: updatedExceptions,
                                 });
                               }}
-                              className="w-full mt-6"
+                              className="w-full mt-6 flex flex-wrap h-[40px]"
                             >
                               <Trash2 size={14} className="mr-1" />
-                              Remover do Calendário
+                              Remover
                             </Button>
                           </div>
                         </div>
@@ -1205,13 +1256,16 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                 )}
 
                 {/* Main Task Details - Collapsible for recurring tasks */}
-                <Collapsible 
-                  open={!currentTask.repeats_weekly || !isMainTaskCollapsed} 
+                <Collapsible
+                  open={!currentTask.repeats_weekly || !isMainTaskCollapsed}
                   onOpenChange={setIsMainTaskCollapsed}
                 >
                   <CollapsibleTrigger asChild>
                     {currentTask.repeats_weekly ? (
-                      <Button variant="ghost" className="w-full justify-between p-0 h-auto">
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-between p-0 h-auto"
+                      >
                         <h4 className="text-lg font-semibold text-gray-900">
                           Detalhes da Tarefa
                         </h4>
@@ -1230,7 +1284,10 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                         id="edit-name"
                         value={currentTask.name}
                         onChange={(e) =>
-                          setCurrentTask({ ...currentTask, name: e.target.value })
+                          setCurrentTask({
+                            ...currentTask,
+                            name: e.target.value,
+                          })
                         }
                         className="col-span-3"
                       />
@@ -1252,7 +1309,10 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                       />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="edit-estimatedTime" className="text-right">
+                      <Label
+                        htmlFor="edit-estimatedTime"
+                        className="text-right"
+                      >
                         Est. Hours
                       </Label>
                       <Input
@@ -1332,7 +1392,9 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                           <PopoverContent className="w-auto p-0">
                             <Calendar
                               mode="single"
-                              selected={new Date(currentTask.end_date + "T00:00:00")}
+                              selected={
+                                new Date(currentTask.end_date + "T00:00:00")
+                              }
                               onSelect={(date) =>
                                 date &&
                                 setCurrentTask({
@@ -1384,7 +1446,9 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="pending">Pendente</SelectItem>
-                          <SelectItem value="in_progress">Em Andamento</SelectItem>
+                          <SelectItem value="in_progress">
+                            Em Andamento
+                          </SelectItem>
                           <SelectItem value="completed">Concluída</SelectItem>
                         </SelectContent>
                       </Select>
@@ -1412,7 +1476,10 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                       </div>
                     )}
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="edit-special_marker" className="text-right">
+                      <Label
+                        htmlFor="edit-special_marker"
+                        className="text-right"
+                      >
                         Marcador Especial
                       </Label>
                       <Select
@@ -1435,12 +1502,17 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                           <SelectItem value="major_deployment">
                             Major Deployment
                           </SelectItem>
-                          <SelectItem value="major_theme">Major Theme</SelectItem>
+                          <SelectItem value="major_theme">
+                            Major Theme
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="edit-repeats_weekly" className="text-right">
+                      <Label
+                        htmlFor="edit-repeats_weekly"
+                        className="text-right"
+                      >
                         Repetição Semanal
                       </Label>
                       <div className="col-span-3 flex items-center space-x-2">
@@ -1462,7 +1534,10 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                           }
                           className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
                         />
-                        <Label htmlFor="edit-repeats_weekly" className="text-sm">
+                        <Label
+                          htmlFor="edit-repeats_weekly"
+                          className="text-sm"
+                        >
                           Esta tarefa se repete semanalmente
                         </Label>
                       </div>
@@ -1470,7 +1545,9 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                     {currentTask.repeats_weekly && (
                       <>
                         <div className="grid grid-cols-4 items-start gap-4">
-                          <Label className="text-right pt-2">Dias da Semana</Label>
+                          <Label className="text-right pt-2">
+                            Dias da Semana
+                          </Label>
                           <div className="col-span-3 grid grid-cols-2 gap-2">
                             {[
                               { value: "monday", label: "Segunda" },
@@ -1510,7 +1587,10 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                           </div>
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
-                          <Label htmlFor="edit-hours_per_day" className="text-right">
+                          <Label
+                            htmlFor="edit-hours_per_day"
+                            className="text-right"
+                          >
                             Horas por Dia
                           </Label>
                           <Input
@@ -1606,9 +1686,7 @@ const DraggableTask: React.FC<DraggableTaskProps> = ({
       ref={drag}
       onClick={() => onTaskClick(task)}
       className={`text-xs p-1 rounded truncate cursor-pointer ${
-        isDragging
-          ? "opacity-50 cursor-grabbing"
-          : "cursor-grab"
+        isDragging ? "opacity-50 cursor-grabbing" : "cursor-grab"
       } ${
         isCompleted
           ? "bg-green-100 border border-green-300 text-green-900 hover:bg-green-200"
