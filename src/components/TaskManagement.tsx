@@ -1647,7 +1647,7 @@ const TaskManagement = () => {
         open={isEditTaskDialogOpen}
         onOpenChange={setIsEditTaskDialogOpen}
       >
-        <DialogContent className="sm:max-w-[600px] w-[740px] container">
+        <DialogContent className="sm:max-w-[700px] w-[740px] container">
           <DialogHeader>
             <DialogTitle>Edit Task</DialogTitle>
             <DialogDescription>
