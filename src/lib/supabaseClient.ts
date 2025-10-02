@@ -70,8 +70,18 @@ export type Task = {
   repeat_days?: string[] | null; // Days of the week for repetition
   hours_per_day?: number | null; // Hours per day for repeated tasks
   special_marker?: string | null;
+  exceptions?: TaskException[] | null; // Adicionado para exceções
   created_at: string | null;
   updated_at: string | null;
+};
+
+// Novo tipo para exceções de tarefa
+export type TaskException = {
+  date: string; // YYYY-MM-DD
+  estimated_hours?: number | null;
+  assigned_employee_id?: string | null;
+  completed?: boolean;
+  removed?: boolean;
 };
 
 export type TaskInsert = {
@@ -88,6 +98,7 @@ export type TaskInsert = {
   repeat_days?: string[] | null;
   hours_per_day?: number | null;
   special_marker?: string | null;
+  exceptions?: TaskException[] | null;
 };
 
 export type TaskUpdate = Partial<TaskInsert>;

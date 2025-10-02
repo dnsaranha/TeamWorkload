@@ -141,14 +141,13 @@ const HomePage = () => {
             variant="ghost"
             size="sm"
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className={`mb-4 ${sidebarCollapsed ? "w-8 h-8 p-0" : "w-full justify-start"}`}
+            className={`mb-4 ${sidebarCollapsed ? "w-8 h-8 p-0" : "w-full items-center justify-start"}`}
           >
             {sidebarCollapsed ? (
               <Menu className="h-4 w-4" />
             ) : (
               <>
-                <Menu className="mr-2 h-4 w-4" />
-                Toggle
+                <Menu className="mr-2 h-4 w-4 flex justify-end items-center" />
               </>
             )}
           </Button>
@@ -245,7 +244,6 @@ const HomePage = () => {
           </div>
         )}
       </div>
-
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         <div className={`flex-1 overflow-auto p-6 ${isMobile ? "pb-20" : ""}`}>
@@ -253,16 +251,7 @@ const HomePage = () => {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-3xl font-bold">Dashboard</h2>
-                <div className="flex space-x-2">
-                  <Button variant="outline" size="sm">
-                    <Calendar className="mr-2 h-4 w-4" />
-                    Weekly View
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <Calendar className="mr-2 h-4 w-4" />
-                    Monthly View
-                  </Button>
-                </div>
+                <div className="flex space-x-2"></div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
