@@ -22,6 +22,8 @@ import {
   type Project,
   type TaskException,
   taskService,
+  employeeService,
+  projectService,
 } from "@/lib/supabaseClient";
 import { format } from "date-fns";
 import { Input } from "./ui/input";
@@ -140,18 +142,9 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
   const loadTasks = async () => {
     try {
-      let query = supabase
-        .from("workload_tasks")
-        .select("*")
-        .order("start_date", { ascending: true });
-
-      if (selectedEmployeeId) {
-        query = query.eq("assigned_employee_id", selectedEmployeeId);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-
+      // Use taskService instead of direct supabase query to get workspace filtering
+      const data = await taskService.getAll();
+      
       const validStatusValues = ["pending", "in_progress", "completed"];
       const cleanedData = (data || []).map((task) => {
         if (!validStatusValues.includes(task.status)) {
@@ -160,7 +153,12 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
         return task;
       });
 
-      setTasks(cleanedData);
+      // Apply employee filter if selectedEmployeeId is provided
+      const filteredData = selectedEmployeeId 
+        ? cleanedData.filter(task => task.assigned_employee_id === selectedEmployeeId)
+        : cleanedData;
+
+      setTasks(filteredData);
     } catch (error) {
       console.error("Error loading tasks:", error);
     }
@@ -168,12 +166,8 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
   const loadEmployees = async () => {
     try {
-      const { data, error } = await supabase
-        .from("employees")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (error) throw error;
+      // Use employeeService instead of direct supabase query to get workspace filtering
+      const data = await employeeService.getAll();
       setEmployees(data || []);
     } catch (error) {
       console.error("Error loading employees:", error);
@@ -182,12 +176,8 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
   const loadProjects = async () => {
     try {
-      const { data, error } = await supabase
-        .from("workload_projects")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (error) throw error;
+      // Use projectService instead of direct supabase query to get workspace filtering
+      const data = await projectService.getAll();
       setProjects(data || []);
     } catch (error) {
       console.error("Error loading projects:", error);

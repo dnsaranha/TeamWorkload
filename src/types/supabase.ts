@@ -212,13 +212,15 @@ export type Database = {
       employees: {
         Row: {
           created_at: string | null
-          id: string
           dias_de_trabalho: string[] | null
+          id: string
           name: string
           role: string
           skills: Json | null
+          trabalha_fim_de_semana: boolean | null
           updated_at: string | null
           weekly_hours: number
+          workspace_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -227,8 +229,10 @@ export type Database = {
           name: string
           role: string
           skills?: Json | null
+          trabalha_fim_de_semana?: boolean | null
           updated_at?: string | null
           weekly_hours?: number
+          workspace_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -237,10 +241,20 @@ export type Database = {
           name?: string
           role?: string
           skills?: Json | null
+          trabalha_fim_de_semana?: boolean | null
           updated_at?: string | null
           weekly_hours?: number
+          workspace_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "employees_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       m3u_sources: {
         Row: {
@@ -441,6 +455,7 @@ export type Database = {
           start_date: string | null
           status: string
           updated_at: string
+          workspace_id: string | null
         }
         Insert: {
           category?: string | null
@@ -454,6 +469,7 @@ export type Database = {
           start_date?: string | null
           status?: string
           updated_at?: string
+          workspace_id?: string | null
         }
         Update: {
           category?: string | null
@@ -467,6 +483,7 @@ export type Database = {
           start_date?: string | null
           status?: string
           updated_at?: string
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -474,6 +491,13 @@ export type Database = {
             columns: ["owner_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -527,6 +551,126 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      stripe_customers: {
+        Row: {
+          created_at: string | null
+          customer_id: string
+          deleted_at: string | null
+          id: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          customer_id: string
+          deleted_at?: string | null
+          id?: never
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          customer_id?: string
+          deleted_at?: string | null
+          id?: never
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      stripe_orders: {
+        Row: {
+          amount_subtotal: number
+          amount_total: number
+          checkout_session_id: string
+          created_at: string | null
+          currency: string
+          customer_id: string
+          deleted_at: string | null
+          id: number
+          payment_intent_id: string
+          payment_status: string
+          status: Database["public"]["Enums"]["stripe_order_status"]
+          updated_at: string | null
+        }
+        Insert: {
+          amount_subtotal: number
+          amount_total: number
+          checkout_session_id: string
+          created_at?: string | null
+          currency: string
+          customer_id: string
+          deleted_at?: string | null
+          id?: never
+          payment_intent_id: string
+          payment_status: string
+          status?: Database["public"]["Enums"]["stripe_order_status"]
+          updated_at?: string | null
+        }
+        Update: {
+          amount_subtotal?: number
+          amount_total?: number
+          checkout_session_id?: string
+          created_at?: string | null
+          currency?: string
+          customer_id?: string
+          deleted_at?: string | null
+          id?: never
+          payment_intent_id?: string
+          payment_status?: string
+          status?: Database["public"]["Enums"]["stripe_order_status"]
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      stripe_subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean | null
+          created_at: string | null
+          current_period_end: number | null
+          current_period_start: number | null
+          customer_id: string
+          deleted_at: string | null
+          id: number
+          payment_method_brand: string | null
+          payment_method_last4: string | null
+          price_id: string | null
+          status: Database["public"]["Enums"]["stripe_subscription_status"]
+          subscription_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string | null
+          current_period_end?: number | null
+          current_period_start?: number | null
+          customer_id: string
+          deleted_at?: string | null
+          id?: never
+          payment_method_brand?: string | null
+          payment_method_last4?: string | null
+          price_id?: string | null
+          status: Database["public"]["Enums"]["stripe_subscription_status"]
+          subscription_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string | null
+          current_period_end?: number | null
+          current_period_start?: number | null
+          customer_id?: string
+          deleted_at?: string | null
+          id?: never
+          payment_method_brand?: string | null
+          payment_method_last4?: string | null
+          price_id?: string | null
+          status?: Database["public"]["Enums"]["stripe_subscription_status"]
+          subscription_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       task_assignees: {
         Row: {
@@ -618,6 +762,7 @@ export type Database = {
           special_marker: string | null
           start_date: string
           updated_at: string
+          workspace_id: string | null
         }
         Insert: {
           category?: string | null
@@ -636,6 +781,7 @@ export type Database = {
           special_marker?: string | null
           start_date: string
           updated_at?: string
+          workspace_id?: string | null
         }
         Update: {
           category?: string | null
@@ -654,6 +800,7 @@ export type Database = {
           special_marker?: string | null
           start_date?: string
           updated_at?: string
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -675,6 +822,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -703,6 +857,44 @@ export type Database = {
         }
         Relationships: []
       }
+      users: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          current_workspace_id: string | null
+          email: string
+          full_name: string | null
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          current_workspace_id?: string | null
+          email: string
+          full_name?: string | null
+          id: string
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          current_workspace_id?: string | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "users_current_workspace_id_fkey"
+            columns: ["current_workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workload_projects: {
         Row: {
           categoria_estrategica: string | null
@@ -714,6 +906,7 @@ export type Database = {
           special_marker: string | null
           start_date: string | null
           updated_at: string | null
+          workspace_id: string | null
         }
         Insert: {
           categoria_estrategica?: string | null
@@ -725,6 +918,7 @@ export type Database = {
           special_marker?: string | null
           start_date?: string | null
           updated_at?: string | null
+          workspace_id?: string | null
         }
         Update: {
           categoria_estrategica?: string | null
@@ -736,8 +930,17 @@ export type Database = {
           special_marker?: string | null
           start_date?: string | null
           updated_at?: string | null
+          workspace_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "workload_projects_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       workload_tasks: {
         Row: {
@@ -749,6 +952,7 @@ export type Database = {
           description: string | null
           end_date: string
           estimated_time: number
+          exceptions: Json | null
           hours_per_day: number | null
           id: string
           name: string
@@ -759,6 +963,7 @@ export type Database = {
           start_date: string
           status: string | null
           updated_at: string | null
+          workspace_id: string | null
         }
         Insert: {
           assigned_employee_id?: string | null
@@ -769,6 +974,7 @@ export type Database = {
           description?: string | null
           end_date: string
           estimated_time?: number
+          exceptions?: Json | null
           hours_per_day?: number | null
           id?: string
           name: string
@@ -779,6 +985,7 @@ export type Database = {
           start_date: string
           status?: string | null
           updated_at?: string | null
+          workspace_id?: string | null
         }
         Update: {
           assigned_employee_id?: string | null
@@ -789,6 +996,7 @@ export type Database = {
           description?: string | null
           end_date?: string
           estimated_time?: number
+          exceptions?: Json | null
           hours_per_day?: number | null
           id?: string
           name?: string
@@ -799,6 +1007,7 @@ export type Database = {
           start_date?: string
           status?: string | null
           updated_at?: string | null
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -815,11 +1024,131 @@ export type Database = {
             referencedRelation: "workload_projects"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "workload_tasks_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      workspace_members: {
+        Row: {
+          created_at: string | null
+          id: string
+          invited_at: string | null
+          invited_by: string | null
+          joined_at: string | null
+          role: string | null
+          status: string | null
+          updated_at: string | null
+          user_id: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          invited_at?: string | null
+          invited_by?: string | null
+          joined_at?: string | null
+          role?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          invited_at?: string | null
+          invited_by?: string | null
+          joined_at?: string | null
+          role?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_members_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspaces: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+          owner_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          owner_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          owner_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
     }
     Views: {
-      [_ in never]: never
+      stripe_user_orders: {
+        Row: {
+          amount_subtotal: number | null
+          amount_total: number | null
+          checkout_session_id: string | null
+          currency: string | null
+          customer_id: string | null
+          order_date: string | null
+          order_id: number | null
+          order_status:
+            | Database["public"]["Enums"]["stripe_order_status"]
+            | null
+          payment_intent_id: string | null
+          payment_status: string | null
+        }
+        Relationships: []
+      }
+      stripe_user_subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean | null
+          current_period_end: number | null
+          current_period_start: number | null
+          customer_id: string | null
+          payment_method_brand: string | null
+          payment_method_last4: string | null
+          price_id: string | null
+          subscription_id: string | null
+          subscription_status:
+            | Database["public"]["Enums"]["stripe_subscription_status"]
+            | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       can_access_task: {
@@ -879,6 +1208,17 @@ export type Database = {
     }
     Enums: {
       backlog_status: "pending" | "in_progress" | "done" | "converted"
+      stripe_order_status: "pending" | "completed" | "canceled"
+      stripe_subscription_status:
+        | "not_started"
+        | "incomplete"
+        | "incomplete_expired"
+        | "trialing"
+        | "active"
+        | "past_due"
+        | "canceled"
+        | "unpaid"
+        | "paused"
       user_role: "admin" | "editor" | "viewer"
     }
     CompositeTypes: {
@@ -1008,6 +1348,18 @@ export const Constants = {
   public: {
     Enums: {
       backlog_status: ["pending", "in_progress", "done", "converted"],
+      stripe_order_status: ["pending", "completed", "canceled"],
+      stripe_subscription_status: [
+        "not_started",
+        "incomplete",
+        "incomplete_expired",
+        "trialing",
+        "active",
+        "past_due",
+        "canceled",
+        "unpaid",
+        "paused",
+      ],
       user_role: ["admin", "editor", "viewer"],
     },
   },

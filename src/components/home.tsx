@@ -21,6 +21,8 @@ import ProjectVisualization from "./ProjectVisualization";
 import ProjectList from "./ProjectList";
 import UserProfile from "./UserProfile";
 import Roadmap from "./Roadmap";
+import WorkspaceManager from "./WorkspaceManager";
+import WorkspaceInvitations from "./WorkspaceInvitations";
 import {
   employeeService,
   taskService,
@@ -41,6 +43,19 @@ const HomePage = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState(false);
+
+  const handleWorkspaceChange = () => {
+    // Reload all data when workspace changes
+    loadDashboardData();
+    setDataVersion((v) => v + 1);
+  };
+
+  const handleInvitationAccepted = () => {
+    // Reload workspace data and dashboard when invitation is accepted
+    handleWorkspaceChange();
+    // Force re-render of WorkspaceManager to update invitation count
+    setDataVersion((v) => v + 1);
+  };
 
   useEffect(() => {
     loadDashboardData();
@@ -244,9 +259,20 @@ const HomePage = () => {
           </div>
         )}
       </div>
+      
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         <div className={`flex-1 overflow-auto p-6 ${isMobile ? "pb-20" : ""}`}>
+          {/* Workspace Invitations - Show at top if there are pending invitations */}
+          <div className="mb-6">
+            <WorkspaceInvitations onInvitationAccepted={handleInvitationAccepted} />
+          </div>
+
+          {/* Workspace Manager */}
+          <div className="mb-6">
+            <WorkspaceManager onWorkspaceChange={handleWorkspaceChange} />
+          </div>
+
           {activeTab === "dashboard" && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
