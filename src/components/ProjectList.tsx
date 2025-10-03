@@ -48,7 +48,11 @@ import {
   Upload,
 } from "lucide-react";
 import * as XLSX from "xlsx";
-import { projectService, type Project, type ProjectInsert } from "@/lib/supabaseClient";
+import {
+  projectService,
+  type Project,
+  type ProjectInsert,
+} from "@/lib/supabaseClient";
 
 const ProjectList = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -252,7 +256,9 @@ const ProjectList = () => {
               const upsertedProject = await projectService.upsert(projectData);
 
               setProjects((prev) => {
-                const existingProjectIndex = prev.findIndex(p => p.id === upsertedProject.id);
+                const existingProjectIndex = prev.findIndex(
+                  (p) => p.id === upsertedProject.id,
+                );
                 if (existingProjectIndex > -1) {
                   const newProjects = [...prev];
                   newProjects[existingProjectIndex] = upsertedProject;
@@ -261,7 +267,6 @@ const ProjectList = () => {
                   return [...prev, upsertedProject];
                 }
               });
-
             } catch (error) {
               console.error("Error importing project:", error);
             }
@@ -280,9 +285,8 @@ const ProjectList = () => {
   return (
     <div className="bg-background p-6 w-full">
       <Card className="w-full">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Project Management</CardTitle>
-          <div className="flex items-center space-x-2">
+        <CardHeader className="flex items-center justify-between flex-row-reverse h-[66px]">
+          <div className="flex items-center space-x-2 flex-row-reverse content-between flex-wrap">
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -503,9 +507,7 @@ const ProjectList = () => {
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancel</AlertDialogCancel>
                               <AlertDialogAction
-                                onClick={() =>
-                                  handleDeleteProject(project.id)
-                                }
+                                onClick={() => handleDeleteProject(project.id)}
                                 className="bg-destructive text-destructive-foreground"
                               >
                                 Delete
@@ -531,7 +533,6 @@ const ProjectList = () => {
           </Table>
         </CardContent>
       </Card>
-
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -622,9 +623,7 @@ const ProjectList = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">None</SelectItem>
-                  <SelectItem value="major_release">
-                    Major Release
-                  </SelectItem>
+                  <SelectItem value="major_release">Major Release</SelectItem>
                   <SelectItem value="major_deployment">
                     Major Deployment
                   </SelectItem>

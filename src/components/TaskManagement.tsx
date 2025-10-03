@@ -947,9 +947,8 @@ const TaskManagement = () => {
 
   return (
     <div className="bg-background p-6 w-full">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Task Management</h1>
-        <div className="flex items-center gap-2">
+      <div className="flex justify-between items-center mb-6 flex-row-reverse">
+        <div className="flex items-center gap-2 flex-wrap flex-row-reverse">
           <Input
             placeholder="Search tasks..."
             value={searchTerm}
@@ -1222,7 +1221,10 @@ const TaskManagement = () => {
                     <Label htmlFor="project" className="text-right">
                       Project
                     </Label>
-                    <Popover open={projectComboboxOpen} onOpenChange={setProjectComboboxOpen}>
+                    <Popover
+                      open={projectComboboxOpen}
+                      onOpenChange={setProjectComboboxOpen}
+                    >
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
@@ -1231,7 +1233,8 @@ const TaskManagement = () => {
                           className="col-span-3 justify-between"
                         >
                           {newTask.project_id && newTask.project_id !== "none"
-                            ? projects.find((p) => p.id === newTask.project_id)?.name
+                            ? projects.find((p) => p.id === newTask.project_id)
+                                ?.name
                             : "Selecione um projeto"}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
@@ -1240,18 +1243,25 @@ const TaskManagement = () => {
                         <Command>
                           <CommandInput placeholder="Pesquisar projeto..." />
                           <CommandList>
-                            <CommandEmpty>Nenhum projeto encontrado.</CommandEmpty>
+                            <CommandEmpty>
+                              Nenhum projeto encontrado.
+                            </CommandEmpty>
                             <CommandGroup>
                               <CommandItem
                                 value="none"
                                 onSelect={() => {
-                                  setNewTask({ ...newTask, project_id: "none" });
+                                  setNewTask({
+                                    ...newTask,
+                                    project_id: "none",
+                                  });
                                   setProjectComboboxOpen(false);
                                 }}
                               >
                                 <Check
                                   className={`mr-2 h-4 w-4 ${
-                                    newTask.project_id === "none" ? "opacity-100" : "opacity-0"
+                                    newTask.project_id === "none"
+                                      ? "opacity-100"
+                                      : "opacity-0"
                                   }`}
                                 />
                                 Sem projeto
@@ -1261,13 +1271,18 @@ const TaskManagement = () => {
                                   key={project.id}
                                   value={project.name}
                                   onSelect={() => {
-                                    setNewTask({ ...newTask, project_id: project.id });
+                                    setNewTask({
+                                      ...newTask,
+                                      project_id: project.id,
+                                    });
                                     setProjectComboboxOpen(false);
                                   }}
                                 >
                                   <Check
                                     className={`mr-2 h-4 w-4 ${
-                                      newTask.project_id === project.id ? "opacity-100" : "opacity-0"
+                                      newTask.project_id === project.id
+                                        ? "opacity-100"
+                                        : "opacity-0"
                                     }`}
                                   />
                                   {project.name}
@@ -1724,9 +1739,7 @@ const TaskManagement = () => {
                           <PopoverContent className="w-auto p-0">
                             <Calendar
                               mode="single"
-                              selected={
-                                new Date(task.start_date + "T00:00:00")
-                              }
+                              selected={new Date(task.start_date + "T00:00:00")}
                               onSelect={(date) => {
                                 if (date) {
                                   handleInlineUpdate(
@@ -1742,7 +1755,11 @@ const TaskManagement = () => {
                         </Popover>
                       ) : (
                         <>
-                          {format(new Date(task.start_date + "T00:00:00"), "MMM d")} -{" "}
+                          {format(
+                            new Date(task.start_date + "T00:00:00"),
+                            "MMM d",
+                          )}{" "}
+                          -{" "}
                           {format(
                             new Date(task.end_date + "T00:00:00"),
                             "MMM d, yyyy",
@@ -1760,7 +1777,9 @@ const TaskManagement = () => {
                       editingCell?.field === "status" ? (
                         <Select
                           value={task.status}
-                          onValueChange={(value: "pending" | "in_progress" | "completed") => {
+                          onValueChange={(
+                            value: "pending" | "in_progress" | "completed",
+                          ) => {
                             handleInlineUpdate(task.id, "status", value);
                           }}
                           open={true}
@@ -1796,12 +1815,16 @@ const TaskManagement = () => {
                                 ? "Em Andamento"
                                 : "Concluída"}
                           </Badge>
-                          {task.status === "completed" && task.completion_date && (
-                            <div className="text-xs text-muted-foreground mt-1">
-                              Concluída em{" "}
-                              {format(new Date(task.completion_date), "dd/MM/yyyy")}
-                            </div>
-                          )}
+                          {task.status === "completed" &&
+                            task.completion_date && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                Concluída em{" "}
+                                {format(
+                                  new Date(task.completion_date),
+                                  "dd/MM/yyyy",
+                                )}
+                              </div>
+                            )}
                         </>
                       )}
                     </TableCell>

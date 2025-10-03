@@ -38,8 +38,8 @@ interface ProjectVisualizationProps {
   activeView?: "overview" | "workload" | "timeline";
 }
 
-const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({ 
-  activeView = "overview" 
+const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({
+  activeView = "overview",
 }) => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -215,9 +215,6 @@ const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-medium text-gray-900">
-          {activeView ? activeView.charAt(0).toUpperCase() + activeView.slice(1) : "Overview"} View
-        </h3>
         <div className="flex items-center space-x-2">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -231,7 +228,6 @@ const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({
           <DatePickerWithRange onDateChange={setDateRange} />
         </div>
       </div>
-
       {activeView === "overview" && (
         <div className="space-y-6">
           {/* Charts */}
@@ -287,7 +283,6 @@ const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({
           </div>
         </div>
       )}
-
       {activeView === "workload" && (
         <div className="space-y-6">
           <Card>
@@ -315,7 +310,6 @@ const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({
           </Card>
         </div>
       )}
-
       {activeView === "timeline" && (
         <div className="space-y-6">
           <Card>

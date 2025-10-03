@@ -84,18 +84,20 @@ const HomePage = () => {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      
+
       // Check if workspace is selected before loading data
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
         setLoading(false);
         return;
       }
 
       const { data: profile } = await supabase
-        .from('users')
-        .select('current_workspace_id')
-        .eq('id', user.id)
+        .from("users")
+        .select("current_workspace_id")
+        .eq("id", user.id)
         .single();
 
       if (!profile?.current_workspace_id) {
@@ -292,13 +294,14 @@ const HomePage = () => {
           </div>
         )}
       </div>
-      
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         <div className={`flex-1 overflow-auto p-6 ${isMobile ? "pb-20" : ""}`}>
           {/* Workspace Invitations - Show at top if there are pending invitations */}
           <div className="mb-6">
-            <WorkspaceInvitations onInvitationAccepted={handleInvitationAccepted} />
+            <WorkspaceInvitations
+              onInvitationAccepted={handleInvitationAccepted}
+            />
           </div>
 
           {/* Workspace Manager */}
@@ -384,7 +387,9 @@ const HomePage = () => {
                     onTaskAssigned={() => setDataVersion((v) => v + 1)}
                   />
                 </div>
-                <div className={`${summaryCollapsed ? "w-12" : "w-80"} transition-all duration-300 relative`}>
+                <div
+                  className={`${summaryCollapsed ? "w-12" : "w-80"} transition-all duration-300 relative`}
+                >
                   <Button
                     variant="ghost"
                     size="sm"
@@ -412,7 +417,7 @@ const HomePage = () => {
           {activeTab === "employees" && (
             <div>
               <h2 className="text-3xl font-bold mb-6">Employee Management</h2>
-              <EmployeeList />
+              <EmployeeList className="h-[233.6666717529297px]" />
             </div>
           )}
 

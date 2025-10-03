@@ -399,20 +399,6 @@ const WorkloadSummary = ({
   return (
     <Card className="h-full bg-background">
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-medium">
-            Workload Summary
-          </CardTitle>
-          <Select defaultValue={period} onValueChange={onPeriodChange}>
-            <SelectContent>
-              <SelectItem value="Today">Today</SelectItem>
-              <SelectItem value="This Week">This Week</SelectItem>
-              <SelectItem value="This Month">This Month</SelectItem>
-              <SelectItem value="This Quarter">This Quarter</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
         {/* Advanced Text Filter */}
         <div className="relative mt-3">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -423,7 +409,6 @@ const WorkloadSummary = ({
             className="pl-8 h-9"
           />
         </div>
-
         <Tabs
           value={activeTab}
           onValueChange={setActiveTab}

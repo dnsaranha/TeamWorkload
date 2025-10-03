@@ -224,7 +224,13 @@ const EmployeeList = () => {
       role: "",
       weekly_hours: 40,
       skills: "",
-      dias_de_trabalho: ["monday", "tuesday", "wednesday", "thursday", "friday"],
+      dias_de_trabalho: [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+      ],
     });
     setCurrentEmployee(null);
   };
@@ -242,9 +248,7 @@ const EmployeeList = () => {
       Role: employee.role,
       "Weekly Hours": employee.weekly_hours,
       "Working Days": (employee.dias_de_trabalho || []).join(", "),
-      Skills: Array.isArray(employee.skills)
-        ? employee.skills.join(", ")
-        : "",
+      Skills: Array.isArray(employee.skills) ? employee.skills.join(", ") : "",
     }));
 
     const ws = XLSX.utils.json_to_sheet(exportData);
@@ -298,10 +302,13 @@ const EmployeeList = () => {
                 employeeData.id = row["Employee ID"];
               }
 
-              const upsertedEmployee = await employeeService.upsert(employeeData);
+              const upsertedEmployee =
+                await employeeService.upsert(employeeData);
 
               setEmployees((prev) => {
-                const existingEmployeeIndex = prev.findIndex(e => e.id === upsertedEmployee.id);
+                const existingEmployeeIndex = prev.findIndex(
+                  (e) => e.id === upsertedEmployee.id,
+                );
                 if (existingEmployeeIndex > -1) {
                   const newEmployees = [...prev];
                   newEmployees[existingEmployeeIndex] = upsertedEmployee;
@@ -310,7 +317,6 @@ const EmployeeList = () => {
                   return [...prev, upsertedEmployee];
                 }
               });
-
             } catch (error) {
               console.error("Error importing employee:", error);
             }
@@ -329,9 +335,8 @@ const EmployeeList = () => {
   return (
     <div className="bg-background p-6 w-full">
       <Card className="w-full">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Employee Management</CardTitle>
-          <div className="flex items-center space-x-2">
+        <CardHeader className="flex items-center justify-between h-[48px] flex-row-reverse">
+          <div className="flex items-center space-x-2 flex-wrap flex-row-reverse">
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -446,9 +451,7 @@ const EmployeeList = () => {
                             type="checkbox"
                             id={`add-${day.id}`}
                             value={day.id}
-                            checked={formData.dias_de_trabalho.includes(
-                              day.id,
-                            )}
+                            checked={formData.dias_de_trabalho.includes(day.id)}
                             onChange={(e) =>
                               handleDayChange(day.id, e.target.checked)
                             }
@@ -507,9 +510,7 @@ const EmployeeList = () => {
                       <div className="flex flex-wrap gap-1">
                         {(employee.dias_de_trabalho || []).map((day) => (
                           <Badge key={day} variant="outline">
-                            {
-                              daysOfWeek.find((d) => d.id === day)?.label || day
-                            }
+                            {daysOfWeek.find((d) => d.id === day)?.label || day}
                           </Badge>
                         ))}
                       </div>
@@ -586,7 +587,6 @@ const EmployeeList = () => {
           </Table>
         </CardContent>
       </Card>
-
       {/* Edit Employee Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
