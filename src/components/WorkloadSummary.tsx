@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   BarChart,
   Bar,
@@ -37,7 +38,7 @@ import {
   type Employee,
   type Project,
 } from "@/lib/supabaseClient";
-import { Clock, Briefcase } from "lucide-react";
+import { Clock, Briefcase, Search } from "lucide-react";
 import { useDrag } from "react-dnd";
 import { ItemTypes } from "../lib/dnd";
 
@@ -98,9 +99,9 @@ const WorkloadSummary = ({
   const [dbEmployees, setDbEmployees] = useState<EmployeeWithWorkload[]>([]);
   const [dbProjects, setDbProjects] = useState<ProjectWithWorkload[]>([]);
   const [tasks, setTasks] = useState<TaskWithRelations[]>([]);
-  const [unallocatedTasks, setUnallocatedTasks] = useState<
-    TaskWithRelations[]
-  >([]);
+  const [unallocatedTasks, setUnallocatedTasks] = useState<TaskWithRelations[]>(
+    [],
+  );
   const [loading, setLoading] = useState(true);
   const [chartConfig, setChartConfig] = useState<ChartConfig>({
     employeeWorkload: true,
@@ -108,6 +109,7 @@ const WorkloadSummary = ({
     taskDistribution: true,
     timelineProgress: false,
   });
+  const [searchFilter, setSearchFilter] = useState("");
 
   // Load data from database
   useEffect(() => {
@@ -131,8 +133,7 @@ const WorkloadSummary = ({
       ).map((task) => ({
         ...task,
         project: projectsMap.get(task.project_id) || null,
-        assigned_employee:
-          employeesMap.get(task.assigned_employee_id) || null,
+        assigned_employee: employeesMap.get(task.assigned_employee_id) || null,
       }));
 
       setTasks(allTasksWithRelations);
@@ -316,6 +317,23 @@ const WorkloadSummary = ({
   const displayEmployees = employees.length > 0 ? employees : dbEmployees;
   const displayProjects = projects.length > 0 ? projects : dbProjects;
 
+  // Filter employees and projects based on search
+  const filteredEmployees = displayEmployees.filter(
+    (emp) =>
+      emp.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      emp.role.toLowerCase().includes(searchFilter.toLowerCase()),
+  );
+
+  const filteredProjects = displayProjects.filter((proj) =>
+    proj.name.toLowerCase().includes(searchFilter.toLowerCase()),
+  );
+
+  const filteredUnallocatedTasks = unallocatedTasks.filter(
+    (task) =>
+      task.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      task.project?.name.toLowerCase().includes(searchFilter.toLowerCase()),
+  );
+
   const getWorkloadColor = (workload: number) => {
     if (workload > 100) return "bg-red-500";
     if (workload >= 50) return "bg-amber-500";
@@ -329,20 +347,20 @@ const WorkloadSummary = ({
   };
 
   // Prepare chart data
-  const employeeChartData = displayEmployees.map((emp) => ({
+  const employeeChartData = filteredEmployees.map((emp) => ({
     name: emp.name.split(" ")[0], // First name only for chart
     workload: emp.workload,
     capacity: 100,
   }));
 
-  const projectChartData = displayProjects.map((proj) => ({
+  const projectChartData = filteredProjects.map((proj) => ({
     name:
       proj.name.length > 15 ? proj.name.substring(0, 15) + "..." : proj.name,
     progress: proj.progress,
     workload: proj.workload,
   }));
 
-  const taskDistributionData = displayEmployees
+  const taskDistributionData = filteredEmployees
     .map((emp) => {
       const employeeTasks = tasks.filter(
         (task) => task.assigned_employee_id === emp.id,
@@ -361,19 +379,19 @@ const WorkloadSummary = ({
   const workloadStatusData = [
     {
       name: "Overloaded (>100%)",
-      value: displayEmployees.filter((emp) => emp.workload > 100).length,
+      value: filteredEmployees.filter((emp) => emp.workload > 100).length,
       color: "#FF8042",
     },
     {
       name: "Optimal (50-100%)",
-      value: displayEmployees.filter(
+      value: filteredEmployees.filter(
         (emp) => emp.workload >= 50 && emp.workload <= 100,
       ).length,
       color: "#FFBB28",
     },
     {
       name: "Underutilized (<50%)",
-      value: displayEmployees.filter((emp) => emp.workload < 50).length,
+      value: filteredEmployees.filter((emp) => emp.workload < 50).length,
       color: "#00C49F",
     },
   ].filter((item) => item.value > 0);
@@ -386,9 +404,6 @@ const WorkloadSummary = ({
             Workload Summary
           </CardTitle>
           <Select defaultValue={period} onValueChange={onPeriodChange}>
-            <SelectTrigger className="w-[140px] h-8 text-xs">
-              <SelectValue placeholder="Select period" />
-            </SelectTrigger>
             <SelectContent>
               <SelectItem value="Today">Today</SelectItem>
               <SelectItem value="This Week">This Week</SelectItem>
@@ -397,7 +412,23 @@ const WorkloadSummary = ({
             </SelectContent>
           </Select>
         </div>
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+
+        {/* Advanced Text Filter */}
+        <div className="relative mt-3">
+          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search employees, projects, tasks..."
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            className="pl-8 h-9"
+          />
+        </div>
+
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="w-full mt-3"
+        >
           <TabsList
             className={`grid w-full ${showCharts ? "grid-cols-4" : "grid-cols-3"}`}
           >
@@ -424,10 +455,14 @@ const WorkloadSummary = ({
                 )}
                 {loading ? (
                   <div className="text-center py-6">Loading employees...</div>
-                ) : displayEmployees.length === 0 ? (
-                  <div className="text-center py-6">No employees found</div>
+                ) : filteredEmployees.length === 0 ? (
+                  <div className="text-center py-6">
+                    {searchFilter
+                      ? "No employees match your search"
+                      : "No employees found"}
+                  </div>
                 ) : (
-                  displayEmployees.map((employee) => (
+                  filteredEmployees.map((employee) => (
                     <div
                       key={employee.id}
                       className={`p-3 rounded-lg border cursor-pointer transition-colors ${
@@ -496,10 +531,14 @@ const WorkloadSummary = ({
               <div className="space-y-4">
                 {loading ? (
                   <div className="text-center py-6">Loading projects...</div>
-                ) : displayProjects.length === 0 ? (
-                  <div className="text-center py-6">No projects found</div>
+                ) : filteredProjects.length === 0 ? (
+                  <div className="text-center py-6">
+                    {searchFilter
+                      ? "No projects match your search"
+                      : "No projects found"}
+                  </div>
                 ) : (
-                  displayProjects.map((project) => (
+                  filteredProjects.map((project) => (
                     <div key={project.id} className="p-3 rounded-lg border">
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="font-medium text-sm">{project.name}</h4>
@@ -549,12 +588,14 @@ const WorkloadSummary = ({
                   <div className="text-center py-6 text-muted-foreground">
                     Loading tasks...
                   </div>
-                ) : unallocatedTasks.length === 0 ? (
+                ) : filteredUnallocatedTasks.length === 0 ? (
                   <div className="text-center py-6 text-muted-foreground">
-                    No unallocated tasks
+                    {searchFilter
+                      ? "No tasks match your search"
+                      : "No unallocated tasks"}
                   </div>
                 ) : (
-                  unallocatedTasks.map((task) => (
+                  filteredUnallocatedTasks.map((task) => (
                     <DraggableTask key={task.id} task={task} />
                   ))
                 )}

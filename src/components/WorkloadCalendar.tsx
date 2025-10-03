@@ -1248,7 +1248,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                 {/* Main Task Details - Collapsible for recurring tasks */}
                 <Collapsible
                   open={!currentTask.repeats_weekly || !isMainTaskCollapsed}
-                  onOpenChange={setIsMainTaskCollapsed}
+                  onOpenChange={(open) => setIsMainTaskCollapsed(!open)}
                 >
                   <CollapsibleTrigger asChild>
                     {currentTask.repeats_weekly ? (

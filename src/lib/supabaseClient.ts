@@ -587,17 +587,17 @@ export const taskService = {
   },
 
   async update(id: string, updates: TaskUpdate): Promise<Task> {
-    let query = supabase
+    const workspaceId = await getCurrentWorkspace();
+    if (!workspaceId) throw new Error('No workspace selected');
+
+    const { data, error } = await supabase
       .from('workload_tasks')
       .update({
         ...updates,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', id);
-    
-    query = await addWorkspaceFilter(query);
-    
-    const { data, error } = await query
+      .eq('id', id)
+      .eq('workspace_id', workspaceId)
       .select(`
         *,
         project:workload_projects(*),

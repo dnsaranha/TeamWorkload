@@ -44,6 +44,8 @@ import {
   X,
   Grid3X3,
   Info,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
@@ -56,6 +58,14 @@ import {
   type Project,
   type Employee,
 } from "@/lib/supabaseClient";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "./ui/command";
 
 type TaskWithRelations = Task & {
   project: Project | null;
@@ -77,6 +87,11 @@ const TaskManagement = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [projectSearchTerm, setProjectSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [projectComboboxOpen, setProjectComboboxOpen] = useState(false);
+  const [editingCell, setEditingCell] = useState<{
+    taskId: string;
+    field: string;
+  } | null>(null);
 
   const [isNewTaskDialogOpen, setIsNewTaskDialogOpen] = useState(false);
   const [isEditTaskDialogOpen, setIsEditTaskDialogOpen] = useState(false);
@@ -266,6 +281,9 @@ const TaskManagement = () => {
           currentTask.special_marker === "none"
             ? null
             : currentTask.special_marker,
+        exceptions: currentTask.repeats_weekly
+          ? currentTask.exceptions || null
+          : null,
       };
 
       const updatedTask = await taskService.update(currentTask.id, updateData);
@@ -280,6 +298,36 @@ const TaskManagement = () => {
     } catch (error) {
       console.error("Error updating task:", error);
       alert("Erro ao atualizar tarefa. Verifique os dados e tente novamente.");
+    }
+  };
+
+  const handleInlineUpdate = async (
+    taskId: string,
+    field: string,
+    value: any,
+  ) => {
+    try {
+      const updateData: any = { [field]: value };
+
+      // Handle special cases
+      if (field === "project_id" && value === "none") {
+        updateData.project_id = null;
+      }
+      if (field === "assigned_employee_id" && value === "none") {
+        updateData.assigned_employee_id = null;
+      }
+
+      const updatedTask = await taskService.update(taskId, updateData);
+
+      const updatedTasks = tasks.map((task) =>
+        task.id === taskId ? (updatedTask as TaskWithRelations) : task,
+      );
+
+      setTasks(updatedTasks);
+      setEditingCell(null);
+    } catch (error) {
+      console.error("Error updating task:", error);
+      alert("Erro ao atualizar tarefa.");
     }
   };
 
@@ -1174,24 +1222,62 @@ const TaskManagement = () => {
                     <Label htmlFor="project" className="text-right">
                       Project
                     </Label>
-                    <Select
-                      onValueChange={(value) =>
-                        setNewTask({ ...newTask, project_id: value })
-                      }
-                      value={newTask.project_id}
-                    >
-                      <SelectTrigger className="col-span-3">
-                        <SelectValue placeholder="Select a project" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">No project</SelectItem>
-                        {projects.map((project) => (
-                          <SelectItem key={project.id} value={project.id}>
-                            {project.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={projectComboboxOpen} onOpenChange={setProjectComboboxOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={projectComboboxOpen}
+                          className="col-span-3 justify-between"
+                        >
+                          {newTask.project_id && newTask.project_id !== "none"
+                            ? projects.find((p) => p.id === newTask.project_id)?.name
+                            : "Selecione um projeto"}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[400px] p-0">
+                        <Command>
+                          <CommandInput placeholder="Pesquisar projeto..." />
+                          <CommandList>
+                            <CommandEmpty>Nenhum projeto encontrado.</CommandEmpty>
+                            <CommandGroup>
+                              <CommandItem
+                                value="none"
+                                onSelect={() => {
+                                  setNewTask({ ...newTask, project_id: "none" });
+                                  setProjectComboboxOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={`mr-2 h-4 w-4 ${
+                                    newTask.project_id === "none" ? "opacity-100" : "opacity-0"
+                                  }`}
+                                />
+                                Sem projeto
+                              </CommandItem>
+                              {projects.map((project) => (
+                                <CommandItem
+                                  key={project.id}
+                                  value={project.name}
+                                  onSelect={() => {
+                                    setNewTask({ ...newTask, project_id: project.id });
+                                    setProjectComboboxOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={`mr-2 h-4 w-4 ${
+                                      newTask.project_id === project.id ? "opacity-100" : "opacity-0"
+                                    }`}
+                                  />
+                                  {project.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="assigned_employee" className="text-right">
@@ -1571,45 +1657,201 @@ const TaskManagement = () => {
                 filteredTasks.map((task) => (
                   <TableRow key={task.id}>
                     <TableCell className="font-medium">{task.name}</TableCell>
-                    <TableCell>{task.project?.name || "No project"}</TableCell>
+                    <TableCell
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() =>
+                        setEditingCell({ taskId: task.id, field: "project_id" })
+                      }
+                    >
+                      {editingCell?.taskId === task.id &&
+                      editingCell?.field === "project_id" ? (
+                        <Select
+                          value={task.project_id || "none"}
+                          onValueChange={(value) => {
+                            handleInlineUpdate(task.id, "project_id", value);
+                          }}
+                          open={true}
+                          onOpenChange={(open) => {
+                            if (!open) setEditingCell(null);
+                          }}
+                        >
+                          <SelectTrigger className="h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Sem projeto</SelectItem>
+                            {projects.map((project) => (
+                              <SelectItem key={project.id} value={project.id}>
+                                {project.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        task.project?.name || "No project"
+                      )}
+                    </TableCell>
                     <TableCell>{task.estimated_time}h</TableCell>
-                    <TableCell>
-                      {format(new Date(task.start_date + "T00:00:00"), "MMM d")}{" "}
-                      -{" "}
-                      {format(
-                        new Date(task.end_date + "T00:00:00"),
-                        "MMM d, yyyy",
+                    <TableCell
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() =>
+                        setEditingCell({
+                          taskId: task.id,
+                          field: "start_date",
+                        })
+                      }
+                    >
+                      {editingCell?.taskId === task.id &&
+                      editingCell?.field === "start_date" ? (
+                        <Popover
+                          open={true}
+                          onOpenChange={(open) => {
+                            if (!open) setEditingCell(null);
+                          }}
+                        >
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="h-8 text-xs w-full justify-start"
+                            >
+                              <CalendarIcon className="mr-2 h-3 w-3" />
+                              {format(
+                                new Date(task.start_date + "T00:00:00"),
+                                "dd/MM/yyyy",
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={
+                                new Date(task.start_date + "T00:00:00")
+                              }
+                              onSelect={(date) => {
+                                if (date) {
+                                  handleInlineUpdate(
+                                    task.id,
+                                    "start_date",
+                                    date.toISOString().split("T")[0],
+                                  );
+                                }
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      ) : (
+                        <>
+                          {format(new Date(task.start_date + "T00:00:00"), "MMM d")} -{" "}
+                          {format(
+                            new Date(task.end_date + "T00:00:00"),
+                            "MMM d, yyyy",
+                          )}
+                        </>
                       )}
                     </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          task.status === "completed"
-                            ? "default"
-                            : task.status === "in_progress"
-                              ? "secondary"
-                              : "outline"
-                        }
-                      >
-                        {task.status === "pending"
-                          ? "Pendente"
-                          : task.status === "in_progress"
-                            ? "Em Andamento"
-                            : "Concluída"}
-                      </Badge>
-                      {task.status === "completed" && task.completion_date && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Concluída em{" "}
-                          {format(new Date(task.completion_date), "dd/MM/yyyy")}
-                        </div>
+                    <TableCell
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() =>
+                        setEditingCell({ taskId: task.id, field: "status" })
+                      }
+                    >
+                      {editingCell?.taskId === task.id &&
+                      editingCell?.field === "status" ? (
+                        <Select
+                          value={task.status}
+                          onValueChange={(value: "pending" | "in_progress" | "completed") => {
+                            handleInlineUpdate(task.id, "status", value);
+                          }}
+                          open={true}
+                          onOpenChange={(open) => {
+                            if (!open) setEditingCell(null);
+                          }}
+                        >
+                          <SelectTrigger className="h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">Pendente</SelectItem>
+                            <SelectItem value="in_progress">
+                              Em Andamento
+                            </SelectItem>
+                            <SelectItem value="completed">Concluída</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <>
+                          <Badge
+                            variant={
+                              task.status === "completed"
+                                ? "default"
+                                : task.status === "in_progress"
+                                  ? "secondary"
+                                  : "outline"
+                            }
+                          >
+                            {task.status === "pending"
+                              ? "Pendente"
+                              : task.status === "in_progress"
+                                ? "Em Andamento"
+                                : "Concluída"}
+                          </Badge>
+                          {task.status === "completed" && task.completion_date && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              Concluída em{" "}
+                              {format(new Date(task.completion_date), "dd/MM/yyyy")}
+                            </div>
+                          )}
+                        </>
                       )}
                     </TableCell>
-                    <TableCell>
-                      {task.assigned_employee?.name || (
+                    <TableCell
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() =>
+                        setEditingCell({
+                          taskId: task.id,
+                          field: "assigned_employee_id",
+                        })
+                      }
+                    >
+                      {editingCell?.taskId === task.id &&
+                      editingCell?.field === "assigned_employee_id" ? (
+                        <Select
+                          value={task.assigned_employee_id || "none"}
+                          onValueChange={(value) => {
+                            handleInlineUpdate(
+                              task.id,
+                              "assigned_employee_id",
+                              value,
+                            );
+                          }}
+                          open={true}
+                          onOpenChange={(open) => {
+                            if (!open) setEditingCell(null);
+                          }}
+                        >
+                          <SelectTrigger className="h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Não atribuído</SelectItem>
+                            {employees.map((employee) => (
+                              <SelectItem key={employee.id} value={employee.id}>
+                                {employee.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : task.assigned_employee?.name ? (
+                        task.assigned_employee.name
+                      ) : (
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => openAssignDialog(task)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openAssignDialog(task);
+                          }}
                         >
                           Assign
                         </Button>

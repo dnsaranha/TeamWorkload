@@ -12,6 +12,8 @@ import {
   X,
   FolderOpen,
   Target,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import WorkloadCalendar from "./WorkloadCalendar";
 import EmployeeList from "./EmployeeList";
@@ -27,6 +29,7 @@ import {
   employeeService,
   taskService,
   projectService,
+  supabase,
 } from "@/lib/supabaseClient";
 
 const HomePage = () => {
@@ -43,6 +46,7 @@ const HomePage = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState(false);
+  const [summaryCollapsed, setSummaryCollapsed] = useState(false);
 
   const handleWorkspaceChange = () => {
     // Reload all data when workspace changes
@@ -80,6 +84,30 @@ const HomePage = () => {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
+      
+      // Check if workspace is selected before loading data
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from('users')
+        .select('current_workspace_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!profile?.current_workspace_id) {
+        // No workspace selected, reset counts
+        setTotalEmployees(0);
+        setTotalProjects(0);
+        setActiveTasks(0);
+        setAvgWorkload(0);
+        setLoading(false);
+        return;
+      }
+
       const [employees, tasks, projects] = await Promise.all([
         employeeService.getAll(),
         taskService.getAll(),
@@ -120,6 +148,11 @@ const HomePage = () => {
       }
     } catch (error) {
       console.error("Error loading dashboard data:", error);
+      // Reset counts on error
+      setTotalEmployees(0);
+      setTotalProjects(0);
+      setActiveTasks(0);
+      setAvgWorkload(0);
     } finally {
       setLoading(false);
     }
@@ -351,12 +384,26 @@ const HomePage = () => {
                     onTaskAssigned={() => setDataVersion((v) => v + 1)}
                   />
                 </div>
-                <div className="w-80">
-                  <WorkloadSummary
-                    selectedEmployeeId={selectedEmployeeId}
-                    onEmployeeSelect={setSelectedEmployeeId}
-                    dataVersion={dataVersion}
-                  />
+                <div className={`${summaryCollapsed ? "w-12" : "w-80"} transition-all duration-300 relative`}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSummaryCollapsed(!summaryCollapsed)}
+                    className="absolute top-2 -left-3 z-10 h-8 w-8 p-0 rounded-full bg-card border shadow-sm hover:bg-accent"
+                  >
+                    {summaryCollapsed ? (
+                      <ChevronLeft className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </Button>
+                  {!summaryCollapsed && (
+                    <WorkloadSummary
+                      selectedEmployeeId={selectedEmployeeId}
+                      onEmployeeSelect={setSelectedEmployeeId}
+                      dataVersion={dataVersion}
+                    />
+                  )}
                 </div>
               </div>
             </div>
