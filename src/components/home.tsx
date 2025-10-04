@@ -25,6 +25,7 @@ import UserProfile from "./UserProfile";
 import Roadmap from "./Roadmap";
 import WorkspaceManager from "./WorkspaceManager";
 import WorkspaceInvitations from "./WorkspaceInvitations";
+import GanttChart from "./GanttChart";
 import {
   employeeService,
   taskService,
@@ -240,6 +241,17 @@ const HomePage = () => {
             {isMobile && <span className="text-xs">Tasks</span>}
           </Button>
           <Button
+            variant={activeTab === "gantt" ? "default" : "ghost"}
+            className={`${isMobile ? "flex-col p-2 h-12" : sidebarCollapsed ? "w-8 h-8 p-0" : "w-full justify-start"}`}
+            onClick={() => setActiveTab("gantt")}
+          >
+            <BarChart3
+              className={`${isMobile ? "mb-1" : sidebarCollapsed ? "" : "mr-2"} h-4 w-4`}
+            />
+            {!sidebarCollapsed && !isMobile && "Gantt"}
+            {isMobile && <span className="text-xs">Gantt</span>}
+          </Button>
+          <Button
             variant={activeTab === "projects" ? "default" : "ghost"}
             className={`${isMobile ? "flex-col p-2 h-12" : sidebarCollapsed ? "w-8 h-8 p-0" : "w-full justify-start"}`}
             onClick={() => setActiveTab("projects")}
@@ -425,6 +437,13 @@ const HomePage = () => {
             <div>
               <h2 className="text-3xl font-bold mb-6">Task Management</h2>
               <TaskManagement />
+            </div>
+          )}
+
+          {activeTab === "gantt" && (
+            <div>
+              <h2 className="text-3xl font-bold mb-6">Gráfico de Gantt</h2>
+              <GanttChart />
             </div>
           )}
 

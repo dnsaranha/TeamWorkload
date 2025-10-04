@@ -46,6 +46,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
     "date-fns": "^3.6.0",
+    "dhtmlx-gantt": "^9.0.15",
     "embla-carousel-react": "^8.1.5",
     "framer-motion": "^11.18.0",
     "googleapis": "^154.1.0",
