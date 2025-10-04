@@ -1,5 +1,5 @@
 export interface GanttTask {
-  id: string;
+  id: string | number;
   text: string;
   start_date: Date;
   duration: number;
@@ -19,7 +19,7 @@ export interface GanttTask {
 }
 
 export interface GanttLink {
-  id: string;
+  id: string | number;
   source: string;
   target: string;
   type: string;

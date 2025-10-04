@@ -1,17 +1,13 @@
-import { Suspense, useEffect, useState } from "react";
-import { useRoutes, Routes, Route } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Routes, Route } from "react-router-dom";
 import Home from "./components/home";
 import Auth from "./components/Auth";
 import { supabase } from "./lib/supabaseClient";
 import { User } from "@supabase/supabase-js";
-import routes from "tempo-routes";
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // Always call useRoutes at the top level
-  const tempoRoutes = useRoutes(routes);
 
   useEffect(() => {
     // Get initial session
@@ -50,9 +46,6 @@ function App() {
 
   return (
     <div className="App">
-      {/* Tempo routes */}
-      {import.meta.env.VITE_TEMPO && tempoRoutes}
-
       <Routes>
         <Route path="/" element={<Home />} />
         {/* Removed Google Calendar callback route */}

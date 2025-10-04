@@ -1,12 +1,31 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { gantt } from 'dhtmlx-gantt';
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
-import { Plus, Save, Download, Upload, Settings } from 'lucide-react';
-import { GanttTask, GanttLink, GanttData } from '@/types/gantt';
-import { taskService, projectService, employeeService } from '@/lib/supabaseClient';
+import { Input } from './ui/input';
+import { Plus, Download, Upload, Search } from 'lucide-react';
+import { GanttTask } from '@/types/gantt';
+import { taskService, projectService, employeeService, Project } from '@/lib/supabaseClient';
 import GanttTaskModal from './GanttTaskModal';
+import { MultiSelect } from './ui/MultiSelect';
+
+// Custom debounce hook
+const useDebounce = <T,>(value: T, delay: number): T => {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+};
 
 interface GanttChartProps {
   className?: string;
@@ -20,22 +39,52 @@ const GanttChart: React.FC<GanttChartProps> = ({ className = '' }) => {
   const [selectedTask, setSelectedTask] = useState<GanttTask | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [employees, setEmployees] = useState<any[]>([]);
-  const [projects, setProjects] = useState<any[]>([]);
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
 
-  // Initialize Gantt chart
+  // State for filters
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
+  // Memoize project options for the multi-select filter
+  const projectOptions = useMemo(() =>
+    allProjects.map(p => ({ label: p.name, value: p.id }))
+  , [allProjects]);
+
+  // Effect to initialize Gantt and load initial data
   useEffect(() => {
     if (ganttContainer.current && !isInitialized) {
       initializeGantt();
       setIsInitialized(true);
-      loadData();
     }
-
+    // Cleanup on unmount
     return () => {
       if (isInitialized) {
         gantt.clearAll();
       }
     };
   }, [isInitialized]);
+
+  // Effect to load all projects for the filter dropdown
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const projectsData = await projectService.getAll();
+        setAllProjects(projectsData);
+      } catch (err) {
+        console.error("Failed to load projects for filter:", err);
+      }
+    };
+    fetchProjects();
+  }, []);
+
+  // Effect to reload data when filters change
+  useEffect(() => {
+    if (isInitialized) {
+      loadData(selectedProjectIds, debouncedSearchTerm);
+    }
+  }, [selectedProjectIds, debouncedSearchTerm, isInitialized]);
+
 
   const initializeGantt = () => {
     // Configure Gantt chart
@@ -155,27 +204,18 @@ const GanttChart: React.FC<GanttChartProps> = ({ className = '' }) => {
     gantt.init(ganttContainer.current!);
   };
 
-  const loadData = async () => {
+  const loadData = useCallback(async (projectIds: string[], searchTerm: string) => {
     try {
       setLoading(true);
       setError(null);
+      gantt.clearAll();
       
-      console.log('Loading Gantt data...');
-      
-      // Load employees and projects for reference
+      console.log('Loading Gantt data with filters:', { projectIds, searchTerm });
+
       const [employeesData, projectsData, tasksData] = await Promise.all([
-        employeeService.getAll().catch(err => {
-          console.warn('Failed to load employees:', err);
-          return [];
-        }),
-        projectService.getAll().catch(err => {
-          console.warn('Failed to load projects:', err);
-          return [];
-        }),
-        taskService.getAll().catch(err => {
-          console.warn('Failed to load tasks:', err);
-          return [];
-        })
+        employeeService.getAll(),
+        projectService.getAll({ projectIds }),
+        taskService.getAll({ projectIds, searchTerm }),
       ]);
 
       console.log('Loaded data:', { 
@@ -185,59 +225,13 @@ const GanttChart: React.FC<GanttChartProps> = ({ className = '' }) => {
       });
 
       setEmployees(employeesData);
-      setProjects(projectsData);
 
-      // If no data exists, create some sample data
       if (tasksData.length === 0 && projectsData.length === 0) {
-        console.log('No data found, creating sample tasks...');
-        
-        const sampleTasks: GanttTask[] = [
-          {
-            id: 'sample_1',
-            text: 'Tarefa de Exemplo 1',
-            start_date: new Date(),
-            duration: 3,
-            progress: 0.3,
-            type: 'task',
-            assignee_name: 'Não atribuído',
-            project_name: 'Projeto Exemplo',
-            description: 'Esta é uma tarefa de exemplo para demonstrar o Gantt Chart'
-          },
-          {
-            id: 'sample_2',
-            text: 'Tarefa de Exemplo 2',
-            start_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-            duration: 5,
-            progress: 0.6,
-            type: 'task',
-            assignee_name: 'Não atribuído',
-            project_name: 'Projeto Exemplo',
-            description: 'Segunda tarefa de exemplo'
-          },
-          {
-            id: 'sample_3',
-            text: 'Tarefa de Exemplo 3',
-            start_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            duration: 2,
-            progress: 0,
-            type: 'task',
-            assignee_name: 'Não atribuído',
-            project_name: 'Projeto Exemplo',
-            description: 'Terceira tarefa de exemplo'
-          }
-        ];
-
-        // Load sample data into Gantt
-        gantt.parse({
-          data: sampleTasks,
-          links: []
-        });
-
-        console.log('Sample data loaded');
+        console.log('No data found for the selected filters.');
+        gantt.parse({ data: [], links: [] });
         return;
       }
 
-      // Convert tasks to Gantt format
       const ganttTasks: GanttTask[] = tasksData.map(task => {
         const employee = employeesData.find(emp => emp.id === task.assigned_employee_id);
         const project = projectsData.find(proj => proj.id === task.project_id);
@@ -261,7 +255,6 @@ const GanttChart: React.FC<GanttChartProps> = ({ className = '' }) => {
         };
       });
 
-      // Add projects as parent tasks
       const ganttProjects: GanttTask[] = projectsData.map(project => {
         const projectTasks = ganttTasks.filter(task => task.project_id === project.id);
         const startDate = projectTasks.length > 0 
@@ -286,7 +279,6 @@ const GanttChart: React.FC<GanttChartProps> = ({ className = '' }) => {
         };
       });
 
-      // Set parent relationships
       ganttTasks.forEach(task => {
         if (task.project_id) {
           task.parent = `project_${task.project_id}`;
@@ -294,47 +286,25 @@ const GanttChart: React.FC<GanttChartProps> = ({ className = '' }) => {
       });
 
       const allTasks = [...ganttProjects, ...ganttTasks];
-
       console.log('Parsed tasks for Gantt:', allTasks.length);
 
-      // Load data into Gantt
       gantt.parse({
         data: allTasks,
-        links: [] // We'll implement links later if needed
+        links: []
       });
 
     } catch (error) {
       console.error('Error loading Gantt data:', error);
       setError(`Erro ao carregar dados: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
-      
-      // Load sample data as fallback
-      const sampleTasks: GanttTask[] = [
-        {
-          id: 'fallback_1',
-          text: 'Tarefa de Demonstração',
-          start_date: new Date(),
-          duration: 5,
-          progress: 0.4,
-          type: 'task',
-          assignee_name: 'Demo User',
-          project_name: 'Projeto Demo',
-          description: 'Tarefa de demonstração - dados não puderam ser carregados'
-        }
-      ];
-
-      gantt.parse({
-        data: sampleTasks,
-        links: []
-      });
     } finally {
       setLoading(false);
     }
-  };
+  }, [allProjects]);
 
   const handleTaskCreate = async (task: any) => {
     try {
       // Don't create if it's a project task
-      if (task.id.startsWith('project_')) return;
+      if (String(task.id).startsWith('project_')) return;
 
       const taskData = {
         name: task.text,
@@ -350,7 +320,7 @@ const GanttChart: React.FC<GanttChartProps> = ({ className = '' }) => {
       const createdTask = await taskService.create(taskData);
       
       // Update the Gantt task with the real ID
-      gantt.changeTaskId(task.id, createdTask.id);
+      gantt.changeTaskId(task.id, String(createdTask.id));
       
     } catch (error) {
       console.error('Error creating task:', error);
@@ -361,7 +331,7 @@ const GanttChart: React.FC<GanttChartProps> = ({ className = '' }) => {
   const handleTaskUpdate = async (id: string, task: any) => {
     try {
       // Don't update if it's a project task
-      if (id.startsWith('project_')) return;
+      if (String(id).startsWith('project_')) return;
 
       const taskData = {
         name: task.text,
@@ -384,7 +354,7 @@ const GanttChart: React.FC<GanttChartProps> = ({ className = '' }) => {
   const handleTaskDelete = async (id: string) => {
     try {
       // Don't delete if it's a project task
-      if (id.startsWith('project_')) return;
+      if (String(id).startsWith('project_')) return;
 
       await taskService.delete(id);
       
@@ -419,29 +389,21 @@ const GanttChart: React.FC<GanttChartProps> = ({ className = '' }) => {
 
   const handleSaveTask = async (taskData: Partial<GanttTask>) => {
     try {
-      if (selectedTask?.id && gantt.isTaskExists(selectedTask.id)) {
-        // Update existing task
-        const updatedTask = { ...selectedTask, ...taskData };
-        gantt.updateTask(selectedTask.id, updatedTask);
-      } else {
-        // Create new task
-        const newTask: GanttTask = {
-          id: gantt.uid(),
-          text: taskData.text || 'Nova Tarefa',
-          start_date: taskData.start_date || new Date(),
-          duration: taskData.duration || 1,
-          progress: taskData.progress || 0,
-          assignee: taskData.assignee,
-          assignee_name: taskData.assignee_name,
-          project_id: taskData.project_id,
-          project_name: taskData.project_name,
-          description: taskData.description,
-          estimated_time: taskData.estimated_time,
-          status: taskData.status || 'pending',
-          type: 'task'
-        };
+      const taskToSave = {
+        ...selectedTask,
+        ...taskData,
+        id: selectedTask?.id && gantt.isTaskExists(selectedTask.id) ? String(selectedTask.id) : gantt.uid(),
+        text: taskData.text || 'Nova Tarefa',
+        start_date: taskData.start_date || new Date(),
+        duration: taskData.duration || 1,
+        progress: taskData.progress || 0,
+        type: 'task',
+      };
 
-        gantt.addTask(newTask);
+      if (gantt.isTaskExists(taskToSave.id)) {
+        gantt.updateTask(String(taskToSave.id), taskToSave);
+      } else {
+        gantt.addTask(taskToSave);
       }
 
       setIsTaskModalOpen(false);
@@ -483,12 +445,12 @@ const GanttChart: React.FC<GanttChartProps> = ({ className = '' }) => {
     <div className={`bg-white ${className}`}>
       <Card className="h-full">
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <CardTitle className="flex items-center gap-2">
               Gráfico de Gantt
               {error && (
                 <span className="text-sm text-orange-600 font-normal">
-                  (Modo demonstração)
+                  (Dados podem estar incompletos)
                 </span>
               )}
             </CardTitle>
@@ -531,15 +493,38 @@ const GanttChart: React.FC<GanttChartProps> = ({ className = '' }) => {
               </div>
             </div>
           </div>
+
+          {/* Filters */}
+          <div className="flex items-center gap-4">
+            <div className="flex-grow">
+              <MultiSelect
+                options={projectOptions}
+                onValueChange={setSelectedProjectIds}
+                defaultValue={selectedProjectIds}
+                placeholder="Filtrar por projetos..."
+                className="w-full"
+              />
+            </div>
+            <div className="relative flex-grow">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por tarefa, responsável..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 w-full"
+              />
+            </div>
+          </div>
+
           {error && (
-            <div className="text-sm text-orange-600 bg-orange-50 p-2 rounded">
-              {error}. Exibindo dados de demonstração.
+            <div className="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
+              {error}.
             </div>
           )}
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
-            <div className="flex items-center justify-center h-96">
+            <div className="flex items-center justify-center h-[600px]">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
                 <p>Carregando dados do Gantt...</p>
@@ -564,7 +549,7 @@ const GanttChart: React.FC<GanttChartProps> = ({ className = '' }) => {
         }}
         task={selectedTask}
         employees={employees}
-        projects={projects}
+        projects={allProjects}
         onSave={handleSaveTask}
       />
     </div>

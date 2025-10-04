@@ -53,7 +53,11 @@ const daysOfWeek = [
   { id: "saturday", label: "Sat" },
 ];
 
-const EmployeeList = () => {
+interface EmployeeListProps {
+  className?: string;
+}
+
+const EmployeeList: React.FC<EmployeeListProps> = ({ className = "" }) => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -333,7 +337,7 @@ const EmployeeList = () => {
   };
 
   return (
-    <div className="bg-background p-6 w-full">
+    <div className={`bg-background p-6 w-full ${className}`}>
       <Card className="w-full">
         <CardHeader className="flex items-center justify-between h-[48px] flex-row-reverse">
           <div className="flex items-center space-x-2 flex-wrap flex-row-reverse">

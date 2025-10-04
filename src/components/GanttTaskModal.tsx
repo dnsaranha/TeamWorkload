@@ -354,9 +354,9 @@ const GanttTaskModal: React.FC<GanttTaskModalProps> = ({
                   </SelectTrigger>
                   <SelectContent>
                     {availableTasks
-                      .filter(t => t.id !== task?.id && !dependencies.includes(t.id))
+                      .filter(t => t.id !== task?.id && !dependencies.includes(String(t.id)))
                       .map((availableTask) => (
-                        <SelectItem key={availableTask.id} value={availableTask.id}>
+                        <SelectItem key={availableTask.id} value={String(availableTask.id)}>
                           {availableTask.text}
                         </SelectItem>
                       ))}

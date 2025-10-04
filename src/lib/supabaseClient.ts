@@ -70,7 +70,7 @@ export type Task = {
   repeat_days?: string[] | null; // Days of the week for repetition
   hours_per_day?: number | null; // Hours per day for repeated tasks
   special_marker?: string | null;
-  exceptions?: TaskException[] | null; // Adicionado para exceções
+  exceptions?: any; // Adicionado para exceções
   created_at: string | null;
   updated_at: string | null;
 };
@@ -117,11 +117,11 @@ export interface WorkspaceMember {
   id: string;
   workspace_id: string;
   user_id: string;
-  role: 'owner' | 'admin' | 'member' | 'guest';
+  role: string;
   invited_by?: string;
   invited_at: string;
   joined_at?: string;
-  status: 'pending' | 'active' | 'inactive';
+  status: string;
   created_at: string;
   updated_at: string;
 }
@@ -452,9 +452,14 @@ export const employeeService = {
 
 // Project service with workspace filtering - update to use workload_projects
 export const projectService = {
-  async getAll(): Promise<Project[]> {
+  async getAll(filters: { projectIds?: string[] } = {}): Promise<Project[]> {
     let query = supabase.from('workload_projects').select('*').order('name');
+
     query = await addWorkspaceFilter(query);
+
+    if (filters.projectIds && filters.projectIds.length > 0) {
+      query = query.in('id', filters.projectIds);
+    }
     
     const { data, error } = await query;
     if (error) throw error;
@@ -531,20 +536,40 @@ export const projectService = {
 
 // Task service with workspace filtering and proper exception handling
 export const taskService = {
-  async getAll(): Promise<Task[]> {
+  async getAll(filters: { projectIds?: string[]; searchTerm?: string } = {}): Promise<Task[]> {
     let query = supabase
       .from('workload_tasks')
       .select(`
         *,
         project:workload_projects(*),
-        assigned_employee:employees(*)
+        assigned_employee:employees(name)
       `)
       .order('created_at', { ascending: false });
     
     query = await addWorkspaceFilter(query);
+
+    if (filters.projectIds && filters.projectIds.length > 0) {
+      query = query.in('project_id', filters.projectIds);
+    }
+
+    if (filters.searchTerm) {
+      const searchTerm = `%${filters.searchTerm}%`;
+      query = query.or(
+        `name.ilike.${searchTerm},description.ilike.${searchTerm},assigned_employee.name.ilike.${searchTerm}`
+      );
+    }
     
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+      // It's possible the text search on a related table fails if the relationship is complex
+      // or the structure is not as expected. Log this specific error.
+      if (error.message.includes("could not find path")) {
+        console.error("Failed to apply text search on related table 'employees'. Check RLS and view/table definitions.", error);
+        // Optionally, retry without the text search
+        // For now, we'll just let it fail to be noticeable.
+      }
+      throw error;
+    }
     return data || [];
   },
 
