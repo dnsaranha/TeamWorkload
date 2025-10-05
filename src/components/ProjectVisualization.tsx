@@ -1,52 +1,45 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { Button } from "./ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Search, Filter, X } from "lucide-react";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
-} from "recharts";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+import { Badge } from "./ui/badge";
+import GanttChart from "./GanttChart";
+import GanttTaskModal from "./GanttTaskModal";
 import {
-  Users,
-  Clock,
-  TrendingUp,
-  CheckCircle,
-  Search,
-  Calendar as CalendarIcon,
-} from "lucide-react";
-import {
-  projectService,
   taskService,
+  projectService,
   employeeService,
+  type Task as DBTask,
   type Project,
-  type Task,
   type Employee,
 } from "@/lib/supabaseClient";
-import { Input } from "./ui/input";
-import { DatePickerWithRange } from "./ui/date-picker-with-range";
-import { DateRange } from "react-day-picker";
-import { Card } from "./ui/card";
+import type { Task as GanttTask } from "../types";
+import { useToast } from "./ui/use-toast";
+import { MultiSelect } from "./ui/MultiSelect";
 
-interface ProjectVisualizationProps {
-  activeView?: "overview" | "workload" | "timeline";
-}
-
-const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({
-  activeView = "overview",
-}) => {
+const ProjectVisualization: React.FC = () => {
+  const { toast } = useToast();
+  const [tasks, setTasks] = useState<DBTask[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Filtros
   const [searchTerm, setSearchTerm] = useState("");
-  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
+  
+  // Modal de edição
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -55,24 +48,31 @@ const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({
   const loadData = async () => {
     try {
       setLoading(true);
-      const [projectsData, tasksData, employeesData] = await Promise.all([
-        projectService.getAll(),
+      const [tasksData, projectsData, employeesData] = await Promise.all([
         taskService.getAll(),
+        projectService.getAll(),
         employeeService.getAll(),
       ]);
 
+      setTasks(tasksData);
       setProjects(projectsData);
-      setTasks(tasksData as Task[]);
       setEmployees(employeesData);
     } catch (error) {
       console.error("Error loading data:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os dados.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
 
+  // Filtrar tarefas
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
+      // Filtro de busca por texto
       const searchMatch =
         !searchTerm ||
         searchTerm
@@ -84,123 +84,112 @@ const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({
               (e) => e.id === task.assigned_employee_id,
             );
             const taskText = `
-            ${task.name}
-            ${task.description || ""}
-            ${project?.name || ""}
-            ${employee?.name || ""}
-          `.toLowerCase();
+              ${task.name}
+              ${task.description || ""}
+              ${project?.name || ""}
+              ${employee?.name || ""}
+            `.toLowerCase();
             return taskText.includes(word);
           });
 
-      const dateMatch =
-        !dateRange ||
-        !dateRange.from ||
-        (new Date(task.start_date) >= dateRange.from &&
-          (!dateRange.to || new Date(task.end_date) <= dateRange.to));
+      // Filtro de projetos
+      const projectMatch =
+        selectedProjects.length === 0 ||
+        (task.project_id && selectedProjects.includes(task.project_id));
 
-      return searchMatch && dateMatch;
+      return searchMatch && projectMatch;
     });
-  }, [tasks, searchTerm, dateRange, projects, employees]);
+  }, [tasks, searchTerm, selectedProjects, projects, employees]);
 
-  const getProjectStats = () => {
-    const stats = projects.map((project) => {
-      const projectTasks = filteredTasks.filter(
-        (task) => task.project_id === project.id,
+  // Converter tarefas do banco para formato do Gantt
+  const ganttTasks: GanttTask[] = useMemo(() => {
+    return filteredTasks.map((task) => {
+      const employee = employees.find(
+        (emp) => emp.id === task.assigned_employee_id,
       );
-      const totalHours = projectTasks.reduce(
-        (sum, task) => sum + task.estimated_time,
-        0,
-      );
-      return {
-        name: project.name,
-        totalHours,
-      };
-    });
-    return stats;
-  };
-
-  const getWorkloadData = () => {
-    const workloadData = employees.map((employee) => {
-      const employeeTasks = filteredTasks.filter(
-        (task) => task.assigned_employee_id === employee.id,
-      );
-      const totalHours = employeeTasks.reduce(
-        (sum, task) => sum + task.estimated_time,
-        0,
-      );
-      const weeklyCapacity = employee.weekly_hours;
-      const utilization =
-        weeklyCapacity > 0 ? (totalHours / weeklyCapacity) * 100 : 0;
 
       return {
-        name: employee.name,
-        totalHours,
-        weeklyCapacity,
-        utilization,
-        taskCount: employeeTasks.length,
+        id: task.id,
+        name: task.name,
+        startDate: task.start_date,
+        endDate: task.end_date,
+        progress: task.progress || (task.status === "completed" ? 100 : task.status === "in_progress" ? 50 : 0),
+        dependencies: task.dependencies || [],
+        status:
+          task.status === "completed"
+            ? "Concluído"
+            : task.status === "in_progress"
+              ? "Em Progresso"
+              : "A Fazer",
+        responsible: employee?.name || "Não atribuído",
       };
     });
-    return workloadData;
-  };
+  }, [filteredTasks, employees]);
 
-  const getStatusDistribution = () => {
-    const statusCounts = filteredTasks.reduce(
-      (acc, task) => {
-        const status = task.status || "unknown";
-        acc[status] = (acc[status] || 0) + 1;
-        return acc;
-      },
-      {} as Record<string, number>,
-    );
+  // Atualizar tarefa quando houver mudanças no Gantt
+  const handleGanttTaskUpdate = async (
+    taskId: string,
+    updates: Partial<GanttTask>,
+  ) => {
+    try {
+      // Check if taskId is a valid UUID
+      const isValidUUID =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          taskId,
+        );
 
-    return Object.entries(statusCounts).map(([status, count]) => ({
-      name: status.replace("_", " ").toUpperCase(),
-      value: count,
-      color: getStatusColor(status),
-    }));
-  };
+      if (!isValidUUID) {
+        console.log("Skipping update for non-database task:", taskId);
+        return;
+      }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "#10B981";
-      case "in_progress":
-        return "#3B82F6";
-      case "pending":
-        return "#F59E0B";
-      case "cancelled":
-        return "#EF4444";
-      default:
-        return "#6B7280";
+      // Preparar dados para atualizar no banco
+      const updateData: any = {};
+      if (updates.name) updateData.name = updates.name;
+      if (updates.startDate) updateData.start_date = updates.startDate;
+      if (updates.endDate) updateData.end_date = updates.endDate;
+      if (updates.progress !== undefined) updateData.progress = updates.progress;
+      if (updates.dependencies) updateData.dependencies = updates.dependencies;
+      if (updates.status) {
+        updateData.status =
+          updates.status === "Concluído"
+            ? "completed"
+            : updates.status === "Em Progresso"
+              ? "in_progress"
+              : "pending";
+      }
+
+      // Atualizar no banco de dados
+      await taskService.update(taskId, updateData);
+
+      // Recarregar dados
+      await loadData();
+
+      toast({
+        title: "Tarefa atualizada",
+        description: "As alterações foram salvas com sucesso.",
+      });
+    } catch (error) {
+      console.error("Erro ao atualizar tarefa:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível atualizar a tarefa.",
+        variant: "destructive",
+      });
     }
   };
 
-  const getTimelineData = () => {
-    const monthlyData = filteredTasks.reduce(
-      (acc, task) => {
-        const month = new Date(task.start_date).toLocaleDateString("en-US", {
-          month: "short",
-          year: "numeric",
-        });
-        if (!acc[month]) {
-          acc[month] = { month, tasks: 0, hours: 0 };
-        }
-        acc[month].tasks += 1;
-        acc[month].hours += task.estimated_time;
-        return acc;
-      },
-      {} as Record<string, { month: string; tasks: number; hours: number }>,
-    );
-
-    return Object.values(monthlyData).sort(
-      (a, b) => new Date(a.month).getTime() - new Date(b.month).getTime(),
-    );
+  // Abrir modal de edição
+  const handleEditTask = (taskId: string) => {
+    setEditingTaskId(taskId);
+    setIsModalOpen(true);
   };
 
-  const projectStats = getProjectStats();
-  const workloadData = getWorkloadData();
-  const statusDistribution = getStatusDistribution();
-  const timelineData = getTimelineData();
+  // Adicionar nova tarefa
+  const handleAddTask = (parentId: string) => {
+    console.log("Adicionar nova tarefa com parent:", parentId);
+    // Implementar lógica de criação de tarefa
+  };
 
   if (loading) {
     return (
@@ -214,132 +203,63 @@ const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <div className="relative">
+      {/* Barra de filtros */}
+      <div className="mb-6 space-y-4">
+        <div className="flex items-center gap-4">
+          <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Search..."
+              placeholder="Buscar tarefas..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-10"
+              className="pl-10"
             />
           </div>
-          <DatePickerWithRange onDateChange={setDateRange} />
-        </div>
-      </div>
-      {activeView === "overview" && (
-        <div className="space-y-6">
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Project Hours Chart */}
-            <Card>
-              <h3 className="text-lg font-medium text-gray-900 mb-4 p-4">
-                Project Hours Distribution
-              </h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={projectStats}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="name"
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                  />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="totalHours" fill="#3B82F6" />
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-
-            {/* Task Status Distribution */}
-            <Card>
-              <h3 className="text-lg font-medium text-gray-900 mb-4 p-4">
-                Task Status Distribution
-              </h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={statusDistribution}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) =>
-                      `${name} ${(percent * 100).toFixed(0)}%`
-                    }
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {statusDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </Card>
+          
+          <div className="w-64">
+            <MultiSelect
+              options={projects.map((p) => ({
+                label: p.name,
+                value: p.id,
+              }))}
+              defaultValue={selectedProjects}
+              onValueChange={setSelectedProjects}
+              placeholder="Selecione projetos..."
+            />
           </div>
         </div>
-      )}
-      {activeView === "workload" && (
-        <div className="space-y-6">
-          <Card>
-            <h3 className="text-lg font-medium text-gray-900 p-4">
-              Employee Workload Analysis
-            </h3>
-            <ResponsiveContainer width="100%" height={400}>
-              <BarChart data={workloadData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="name"
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                />
-                <YAxis />
-                <Tooltip />
-                <Bar
-                  dataKey="utilization"
-                  fill="#10B981"
-                  name="Utilization %"
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>
-        </div>
-      )}
-      {activeView === "timeline" && (
-        <div className="space-y-6">
-          <Card>
-            <h3 className="text-lg font-medium text-gray-900 p-4">
-              Project Timeline
-            </h3>
-            <ResponsiveContainer width="100%" height={400}>
-              <LineChart data={timelineData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis yAxisId="left" />
-                <YAxis yAxisId="right" orientation="right" />
-                <Tooltip />
-                <Bar
-                  yAxisId="left"
-                  dataKey="tasks"
-                  fill="#3B82F6"
-                  name="Tasks"
-                />
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="hours"
-                  stroke="#10B981"
-                  name="Hours"
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </Card>
-        </div>
+      </div>
+
+      {/* Gráfico de Gantt */}
+      <div className="bg-white rounded-lg border">
+        <GanttChart
+          tasks={ganttTasks}
+          theme="light"
+          editingTaskId={editingTaskId}
+          onTasksUpdated={handleGanttTaskUpdate}
+          onEditTask={handleEditTask}
+          onAddTask={handleAddTask}
+        />
+      </div>
+
+      {/* Modal de edição de tarefa */}
+      {editingTaskId && (
+        <GanttTaskModal
+          isOpen={isModalOpen}
+          onClose={() => {
+            setIsModalOpen(false);
+            setEditingTaskId(null);
+          }}
+          taskId={editingTaskId}
+          task={tasks.find(t => t.id === editingTaskId) || null}
+          employees={employees}
+          projects={projects}
+          onSave={async (updates) => {
+            await handleGanttTaskUpdate(editingTaskId, updates);
+            setIsModalOpen(false);
+            setEditingTaskId(null);
+          }}
+        />
       )}
     </div>
   );

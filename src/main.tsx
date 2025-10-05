@@ -9,6 +9,25 @@ import { HTML5Backend } from "react-dnd-html5-backend";
 /* import { TempoDevtools } from 'tempo-devtools'; [deprecated] */
 /* TempoDevtools.init() [deprecated] */;
 
+// Suppress cross-origin errors from third-party libraries (like dhtmlxGantt)
+window.addEventListener('error', (event) => {
+  if (event.message === 'Script error.' || 
+      event.message.includes('cross-origin') ||
+      event.filename === '') {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return true;
+  }
+}, true);
+
+// Suppress unhandled promise rejections from third-party libraries
+window.addEventListener('unhandledrejection', (event) => {
+  if (event.reason?.message?.includes('cross-origin')) {
+    event.preventDefault();
+    return true;
+  }
+});
+
 const basename = import.meta.env.BASE_URL;
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

@@ -749,6 +749,7 @@ export type Database = {
           category: string | null
           created_at: string
           created_by: string | null
+          dependencies: string[] | null
           description: string | null
           duration: number
           id: string
@@ -768,6 +769,7 @@ export type Database = {
           category?: string | null
           created_at?: string
           created_by?: string | null
+          dependencies?: string[] | null
           description?: string | null
           duration: number
           id?: string
@@ -787,6 +789,7 @@ export type Database = {
           category?: string | null
           created_at?: string
           created_by?: string | null
+          dependencies?: string[] | null
           description?: string | null
           duration?: number
           id?: string
@@ -949,6 +952,7 @@ export type Database = {
           category: string | null
           completion_date: string | null
           created_at: string | null
+          dependencies: string[] | null
           description: string | null
           end_date: string
           estimated_time: number
@@ -956,6 +960,7 @@ export type Database = {
           hours_per_day: number | null
           id: string
           name: string
+          progress: number | null
           project_id: string | null
           repeat_days: string[] | null
           repeats_weekly: boolean | null
@@ -971,6 +976,7 @@ export type Database = {
           category?: string | null
           completion_date?: string | null
           created_at?: string | null
+          dependencies?: string[] | null
           description?: string | null
           end_date: string
           estimated_time?: number
@@ -978,6 +984,7 @@ export type Database = {
           hours_per_day?: number | null
           id?: string
           name: string
+          progress?: number | null
           project_id?: string | null
           repeat_days?: string[] | null
           repeats_weekly?: boolean | null
@@ -993,6 +1000,7 @@ export type Database = {
           category?: string | null
           completion_date?: string | null
           created_at?: string | null
+          dependencies?: string[] | null
           description?: string | null
           end_date?: string
           estimated_time?: number
@@ -1000,6 +1008,7 @@ export type Database = {
           hours_per_day?: number | null
           id?: string
           name?: string
+          progress?: number | null
           project_id?: string | null
           repeat_days?: string[] | null
           repeats_weekly?: boolean | null

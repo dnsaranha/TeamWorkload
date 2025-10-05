@@ -162,14 +162,13 @@ const GanttTaskModal: React.FC<GanttTaskModalProps> = ({
                 Projeto
               </Label>
               <Select
-                value={formData.project_id || ''}
+                value={formData.project_id || undefined}
                 onValueChange={(value) => setFormData(prev => ({ ...prev, project_id: value }))}
               >
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Selecione um projeto" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sem projeto</SelectItem>
                   {projects.map((project) => (
                     <SelectItem key={project.id} value={project.id}>
                       {project.name}
@@ -185,14 +184,20 @@ const GanttTaskModal: React.FC<GanttTaskModalProps> = ({
                 Responsável
               </Label>
               <Select
-                value={formData.assignee || ''}
-                onValueChange={(value) => setFormData(prev => ({ ...prev, assignee: value }))}
+                value={formData.assignee || undefined}
+                onValueChange={(value) => {
+                  const employee = employees.find(emp => emp.id === value);
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    assignee: value,
+                    responsible: employee?.name || ''
+                  }));
+                }}
               >
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Selecione um responsável" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Não atribuído</SelectItem>
                   {employees.map((employee) => (
                     <SelectItem key={employee.id} value={employee.id}>
                       {employee.name}
@@ -317,14 +322,13 @@ const GanttTaskModal: React.FC<GanttTaskModalProps> = ({
                 Marcador Especial
               </Label>
               <Select
-                value={formData.special_marker || ''}
+                value={formData.special_marker || undefined}
                 onValueChange={(value) => setFormData(prev => ({ ...prev, special_marker: value }))}
               >
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Selecione um marcador" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhum</SelectItem>
                   <SelectItem value="major_release">Major Release</SelectItem>
                   <SelectItem value="major_deployment">Major Deployment</SelectItem>
                   <SelectItem value="major_theme">Major Theme</SelectItem>

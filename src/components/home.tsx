@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/use-toast";
 import {
   Calendar,
   Users,
@@ -26,6 +27,7 @@ import Roadmap from "./Roadmap";
 import WorkspaceManager from "./WorkspaceManager";
 import WorkspaceInvitations from "./WorkspaceInvitations";
 import GanttChart from "./GanttChart";
+import type { Task } from "../types";
 import {
   employeeService,
   taskService,
@@ -34,6 +36,7 @@ import {
 } from "@/lib/supabaseClient";
 
 const HomePage = () => {
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [totalEmployees, setTotalEmployees] = useState(0);
   const [activeTasks, setActiveTasks] = useState(0);
@@ -443,7 +446,7 @@ const HomePage = () => {
           {activeTab === "gantt" && (
             <div>
               <h2 className="text-3xl font-bold mb-6">Gráfico de Gantt</h2>
-              <GanttChart />
+              <ProjectVisualization />
             </div>
           )}
 

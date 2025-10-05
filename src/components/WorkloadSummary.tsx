@@ -412,7 +412,7 @@ const WorkloadSummary = ({
         <Tabs
           value={activeTab}
           onValueChange={setActiveTab}
-          className="w-full mt-3"
+          className="w-full mt-3 flex"
         >
           <TabsList
             className={`grid w-full ${showCharts ? "grid-cols-4" : "grid-cols-3"}`}
