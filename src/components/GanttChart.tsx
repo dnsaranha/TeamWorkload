@@ -248,10 +248,9 @@ const GanttChart: React.FC<GanttChartProps> = ({
         }
       }));
 
-      gantt.attachEvent("onBeforeTaskAdd", safeEventHandler((id: string, item: any) => {
-        const { onAddTask } = latestProps.current;
-        if (onAddTask && item.parent) {
-          onAddTask(item.parent);
+      gantt.attachEvent("onBeforeTaskAdd", safeEventHandler(() => {
+        if (latestProps.current.onEditTask) {
+          latestProps.current.onEditTask("new");
         }
         return false;
       }));

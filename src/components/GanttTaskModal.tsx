@@ -28,6 +28,7 @@ import { ScrollArea } from './ui/scroll-area';
 interface GanttTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
+  taskId: string;
   task: GanttTask | null;
   employees: any[];
   projects: any[];
@@ -37,6 +38,7 @@ interface GanttTaskModalProps {
 const GanttTaskModal: React.FC<GanttTaskModalProps> = ({
   isOpen,
   onClose,
+  taskId,
   task,
   employees,
   projects,
@@ -118,7 +120,7 @@ const GanttTaskModal: React.FC<GanttTaskModalProps> = ({
       <DialogContent className="sm:max-w-[600px] max-h-[90vh]">
         <DialogHeader>
           <DialogTitle>
-            {task?.id ? 'Editar Tarefa' : 'Nova Tarefa'}
+            {taskId === 'new' ? 'Nova Tarefa' : 'Editar Tarefa'}
           </DialogTitle>
           <DialogDescription>
             Configure os detalhes da tarefa, incluindo nome, responsável, datas, progresso e dependências.
@@ -396,7 +398,7 @@ const GanttTaskModal: React.FC<GanttTaskModalProps> = ({
             Cancelar
           </Button>
           <Button onClick={handleSave}>
-            {task?.id ? 'Atualizar' : 'Criar'} Tarefa
+            {taskId === 'new' ? 'Criar Tarefa' : 'Atualizar'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -126,69 +126,63 @@ const ProjectVisualization: React.FC = () => {
     });
   }, [filteredTasks, employees]);
 
-  // Atualizar tarefa quando houver mudanças no Gantt
-  const handleGanttTaskUpdate = async (
-    taskId: string,
-    updates: Partial<GanttTask>,
-  ) => {
-    try {
-      // Check if taskId is a valid UUID
-      const isValidUUID =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          taskId,
-        );
+  // Atualizar ou criar tarefa
+const handleGanttTaskUpdate = async (
+  taskId: string,
+  updates: Partial<GanttTask>,
+) => {
+  try {
+    const isNewTask = taskId === "new";
 
-      if (!isValidUUID) {
-        console.log("Skipping update for non-database task:", taskId);
-        return;
-      }
+    // Preparar dados para o banco
+    const taskData: any = {
+      name: updates.name,
+      start_date: updates.startDate,
+      end_date: updates.endDate,
+      progress: updates.progress,
+      dependencies: updates.dependencies,
+      project_id: updates.project_id,
+      assigned_employee_id: updates.assignee,
+      status:
+        updates.status === "Concluído"
+          ? "completed"
+          : updates.status === "Em Progresso"
+            ? "in_progress"
+            : "pending",
+    };
 
-      // Preparar dados para atualizar no banco
-      const updateData: any = {};
-      if (updates.name) updateData.name = updates.name;
-      if (updates.startDate) updateData.start_date = updates.startDate;
-      if (updates.endDate) updateData.end_date = updates.endDate;
-      if (updates.progress !== undefined) updateData.progress = updates.progress;
-      if (updates.dependencies) updateData.dependencies = updates.dependencies;
-      if (updates.status) {
-        updateData.status =
-          updates.status === "Concluído"
-            ? "completed"
-            : updates.status === "Em Progresso"
-              ? "in_progress"
-              : "pending";
-      }
-
-      // Atualizar no banco de dados
-      await taskService.update(taskId, updateData);
-
-      // Recarregar dados
-      await loadData();
-
+    if (isNewTask) {
+      // Criar nova tarefa
+      await taskService.create(taskData);
+      toast({
+        title: "Tarefa criada",
+        description: "A nova tarefa foi adicionada com sucesso.",
+      });
+    } else {
+      // Atualizar tarefa existente
+      await taskService.update(taskId, taskData);
       toast({
         title: "Tarefa atualizada",
         description: "As alterações foram salvas com sucesso.",
       });
-    } catch (error) {
-      console.error("Erro ao atualizar tarefa:", error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível atualizar a tarefa.",
-        variant: "destructive",
-      });
     }
-  };
 
-  // Abrir modal de edição
+    // Recarregar dados para refletir a mudança
+    await loadData();
+  } catch (error) {
+    console.error("Erro ao salvar tarefa:", error);
+    toast({
+      title: "Erro",
+      description: "Não foi possível salvar a tarefa.",
+      variant: "destructive",
+    });
+  }
+};
+
+  // Abrir modal de edição/criação
   const handleEditTask = (taskId: string) => {
     setEditingTaskId(taskId);
     setIsModalOpen(true);
-  };
-
-  // Adicionar nova tarefa
-  const handleAddTask = (parentId: string) => {
-    console.log("Adicionar nova tarefa com parent:", parentId);
-    // Implementar lógica de criação de tarefa
   };
 
   if (loading) {
@@ -238,7 +232,6 @@ const ProjectVisualization: React.FC = () => {
           editingTaskId={editingTaskId}
           onTasksUpdated={handleGanttTaskUpdate}
           onEditTask={handleEditTask}
-          onAddTask={handleAddTask}
         />
       </div>
 
