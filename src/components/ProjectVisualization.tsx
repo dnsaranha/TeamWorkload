@@ -129,38 +129,39 @@ const ProjectVisualization: React.FC = () => {
   // Atualizar ou criar tarefa
 const handleGanttTaskUpdate = async (
   taskId: string,
-  updates: Partial<GanttTask>,
+  formData: Partial<GanttTask>,
+  dependencies: string[],
 ) => {
   try {
     const isNewTask = taskId === "new";
 
-    // Preparar dados para o banco
-    const taskData: any = {
-      name: updates.name,
-      start_date: updates.startDate,
-      end_date: updates.endDate,
-      progress: updates.progress,
-      dependencies: updates.dependencies,
-      project_id: updates.project_id,
-      assigned_employee_id: updates.assignee,
-      status:
-        updates.status === "Concluído"
-          ? "completed"
-          : updates.status === "Em Progresso"
-            ? "in_progress"
-            : "pending",
+    // Centralized data processing and formatting
+    const startDate = formData.start_date ? new Date(formData.start_date) : new Date();
+    const duration = formData.duration || 1;
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + duration);
+
+    const taskPayload = {
+      name: formData.text || "Nova Tarefa",
+      description: formData.description,
+      start_date: startDate.toISOString().split("T")[0],
+      end_date: endDate.toISOString().split("T")[0],
+      estimated_time: formData.estimated_time || 0,
+      dependencies: dependencies,
+      project_id: formData.project_id,
+      assigned_employee_id: formData.assignee,
+      status: formData.status,
+      special_marker: formData.special_marker,
     };
 
     if (isNewTask) {
-      // Criar nova tarefa
-      await taskService.create(taskData);
+      await taskService.create(taskPayload);
       toast({
         title: "Tarefa criada",
         description: "A nova tarefa foi adicionada com sucesso.",
       });
     } else {
-      // Atualizar tarefa existente
-      await taskService.update(taskId, taskData);
+      await taskService.update(taskId, taskPayload);
       toast({
         title: "Tarefa atualizada",
         description: "As alterações foram salvas com sucesso.",
@@ -169,11 +170,11 @@ const handleGanttTaskUpdate = async (
 
     // Recarregar dados para refletir a mudança
     await loadData();
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro ao salvar tarefa:", error);
     toast({
-      title: "Erro",
-      description: "Não foi possível salvar a tarefa.",
+      title: "Erro ao salvar tarefa",
+      description: `Não foi possível salvar a tarefa: ${error.message}`,
       variant: "destructive",
     });
   }
@@ -247,8 +248,8 @@ const handleGanttTaskUpdate = async (
           task={tasks.find(t => t.id === editingTaskId) || null}
           employees={employees}
           projects={projects}
-          onSave={async (updates) => {
-            await handleGanttTaskUpdate(editingTaskId, updates);
+          onSave={async (formData, dependencies) => {
+            await handleGanttTaskUpdate(editingTaskId, formData, dependencies);
             setIsModalOpen(false);
             setEditingTaskId(null);
           }}

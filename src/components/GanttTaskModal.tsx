@@ -32,7 +32,10 @@ interface GanttTaskModalProps {
   task: GanttTask | null;
   employees: any[];
   projects: any[];
-  onSave: (taskData: Partial<GanttTask>) => void;
+  onSave: (
+    formData: Partial<GanttTask>,
+    dependencies: string[]
+  ) => void;
 }
 
 const GanttTaskModal: React.FC<GanttTaskModalProps> = ({
@@ -91,13 +94,7 @@ const GanttTaskModal: React.FC<GanttTaskModalProps> = ({
   }, [task]);
 
   const handleSave = () => {
-    const taskData: Partial<GanttTask> = {
-      ...formData,
-      assignee_name: employees.find(emp => emp.id === formData.assignee)?.name || '',
-      project_name: projects.find(proj => proj.id === formData.project_id)?.name || '',
-    };
-
-    onSave(taskData);
+    onSave(formData, dependencies);
   };
 
   const handleDateChange = (date: Date | undefined) => {

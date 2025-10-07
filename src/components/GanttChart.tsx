@@ -1,7 +1,21 @@
 import React, { useEffect, useRef, useState } from "react";
 import type { Task } from "../types";
 import { Button } from "./ui/button";
-import { ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  ZoomIn,
+  ZoomOut,
+  ChevronLeft,
+  ChevronRight,
+  Columns,
+  Download,
+} from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 interface GanttChartProps {
   tasks: Task[];
@@ -54,6 +68,12 @@ const GanttChart: React.FC<GanttChartProps> = ({
   const ganttContainerRef = useRef<HTMLDivElement>(null);
   const isGanttInitialized = useRef(false);
   const styleElementRef = useRef<HTMLStyleElement | null>(null);
+  const [columnVisibility, setColumnVisibility] = useState({
+    text: true,
+    start_date: true,
+    duration: true,
+    responsible: true,
+  });
 
   // Ref para guardar as props mais recentes e evitar closures velhas nos event handlers do Gantt
   const latestProps = useRef({
@@ -110,11 +130,11 @@ const GanttChart: React.FC<GanttChartProps> = ({
       // Permite redimensionar a área da grelha arrastando a borda
       gantt.config.grid_resize = true;
 
-      // Disable inline editors to prevent cross-origin errors
-      gantt.config.readonly = false;
+      // Disable inline editors and the default lightbox
+      gantt.config.readonly = true;
+      gantt.showLightbox = () => {};
 
-      gantt.config.columns = [
-        { name: "add", label: "", width: 44, align: "center" },
+      const allColumns = [
         {
           name: "text",
           label: "Nome da Tarefa",
@@ -142,10 +162,19 @@ const GanttChart: React.FC<GanttChartProps> = ({
           align: "center",
           width: 120,
           resize: true,
-          template: function(task: any) {
+          template: function (task: any) {
             return task.responsible || "";
-          }
+          },
         },
+      ];
+
+      const visibleColumns = allColumns.filter(
+        (col) => columnVisibility[col.name as keyof typeof columnVisibility]
+      );
+
+      gantt.config.columns = [
+        { name: "add", label: "", width: 44, align: "center" },
+        ...visibleColumns,
       ];
       
       gantt.config.scales = [
@@ -255,6 +284,13 @@ const GanttChart: React.FC<GanttChartProps> = ({
         return false;
       }));
 
+      gantt.templates.task_class = (start, end, task) => {
+        if (task.parent) {
+          return "gantt_subtask";
+        }
+        return "";
+      };
+
       gantt.init(ganttContainerRef.current!);
       isGanttInitialized.current = true;
     };
@@ -286,6 +322,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
           .gantt_task_progress { background-color: hsl(var(--primary)) !important; }
           .gantt_task_content { color: hsl(var(--primary-foreground)) !important; }
           .gantt_grid_data { background-color: hsl(var(--background)) !important; }
+          .gantt_task_line.gantt_subtask { background-color: hsl(var(--secondary)) !important; border-color: hsl(var(--secondary-foreground)) !important; }
         `;
         document.head.appendChild(style);
         styleElementRef.current = style;
@@ -375,6 +412,16 @@ const GanttChart: React.FC<GanttChartProps> = ({
     }
   };
 
+  const handleExport = () => {
+    if (window.gantt) {
+      window.gantt.exportToPNG({
+        name: "gantt-chart.png",
+        header: "<h1>My Gantt Chart</h1>",
+        footer: `<h4>Exported on ${new Date().toLocaleDateString()}</h4>`,
+      });
+    }
+  };
+
   return (
     <GanttErrorBoundary>
       <div className="flex flex-col h-full bg-background">
@@ -391,6 +438,53 @@ const GanttChart: React.FC<GanttChartProps> = ({
           </Button>
           <Button variant="outline" size="sm" onClick={handleZoomIn}>
             <ZoomIn className="h-4 w-4" />
+          </Button>
+          <div className="w-px h-6 bg-border mx-2" />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Columns className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-56">
+              <div className="grid gap-4">
+                <div className="space-y-2">
+                  <h4 className="font-medium leading-none">Exibir Colunas</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Selecione as colunas para exibir no gráfico.
+                  </p>
+                </div>
+                <div className="grid gap-2">
+                  {Object.keys(columnVisibility).map((colName) => (
+                    <div
+                      key={colName}
+                      className="flex items-center space-x-2"
+                    >
+                      <Checkbox
+                        id={colName}
+                        checked={
+                          columnVisibility[
+                            colName as keyof typeof columnVisibility
+                          ]
+                        }
+                        onCheckedChange={(checked) => {
+                          setColumnVisibility((prev) => ({
+                            ...prev,
+                            [colName]: checked,
+                          }));
+                        }}
+                      />
+                      <Label htmlFor={colName} className="capitalize">
+                        {colName.replace("_", " ")}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+          <Button variant="outline" size="sm" onClick={handleExport}>
+            <Download className="h-4 w-4" />
           </Button>
         </div>
         <div
