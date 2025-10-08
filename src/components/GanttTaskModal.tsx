@@ -65,31 +65,43 @@ const GanttTaskModal: React.FC<GanttTaskModalProps> = ({
 
   useEffect(() => {
     if (task) {
+      const startDate = task.startDate ? new Date(task.startDate) : new Date();
+      const endDate = task.endDate ? new Date(task.endDate) : new Date();
+      const duration =
+        task.startDate && task.endDate
+          ? Math.round(
+              (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
+            ) + 1
+          : 1;
+
       setFormData({
-        text: task.text || '',
-        description: task.description || '',
-        start_date: task.start_date || new Date(),
-        duration: task.duration || 1,
-        progress: task.progress || 0,
-        assignee: task.assignee || '',
-        project_id: task.project_id || '',
+        text: task.name || "",
+        description: task.description || "",
+        start_date: startDate,
+        duration: duration,
+        progress: (task.progress || 0) / 100, // Assuming DB is 0-100
+        assignee: task.assigned_employee_id || "",
+        project_id: task.project_id || "",
         estimated_time: task.estimated_time || 8,
-        status: task.status || 'pending',
-        special_marker: task.special_marker || '',
+        status: task.status || "pending",
+        special_marker: task.special_marker || "",
       });
+      setDependencies(task.dependencies || []);
     } else {
+      // Reset form for a new task
       setFormData({
-        text: '',
-        description: '',
+        text: "",
+        description: "",
         start_date: new Date(),
         duration: 1,
         progress: 0,
-        assignee: '',
-        project_id: '',
+        assignee: "",
+        project_id: "",
         estimated_time: 8,
-        status: 'pending',
-        special_marker: '',
+        status: "pending",
+        special_marker: "",
       });
+      setDependencies([]);
     }
   }, [task]);
 

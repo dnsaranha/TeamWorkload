@@ -117,6 +117,11 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
     // Função de setup, executada apenas uma vez.
     const setupGantt = () => {
+      // Enable plugins
+      gantt.plugins({
+        zoom: true,
+      });
+
       // Configuração base do Gantt
       gantt.config.date_format = "%Y-%m-%d";
       gantt.config.scale_height = 50;
@@ -133,49 +138,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
       // Disable inline editors and the default lightbox
       gantt.config.readonly = true;
       gantt.showLightbox = () => {};
-
-      const allColumns = [
-        {
-          name: "text",
-          label: "Nome da Tarefa",
-          tree: true,
-          width: "*",
-          resize: true,
-        },
-        {
-          name: "start_date",
-          label: "Início",
-          align: "center",
-          width: 90,
-          resize: true,
-        },
-        {
-          name: "duration",
-          label: "Duração",
-          align: "center",
-          width: 70,
-          resize: true,
-        },
-        {
-          name: "responsible",
-          label: "Responsável",
-          align: "center",
-          width: 120,
-          resize: true,
-          template: function (task: any) {
-            return task.responsible || "";
-          },
-        },
-      ];
-
-      const visibleColumns = allColumns.filter(
-        (col) => columnVisibility[col.name as keyof typeof columnVisibility]
-      );
-
-      gantt.config.columns = [
-        { name: "add", label: "", width: 44, align: "center" },
-        ...visibleColumns,
-      ];
       
       gantt.config.scales = [
         { unit: "month", step: 1, format: "%F, %Y" },
@@ -343,6 +305,50 @@ const GanttChart: React.FC<GanttChartProps> = ({
       }
     }
 
+    // Update columns based on visibility state
+    const allColumns = [
+      {
+        name: "text",
+        label: "Nome da Tarefa",
+        tree: true,
+        width: "*",
+        resize: true,
+      },
+      {
+        name: "start_date",
+        label: "Início",
+        align: "center",
+        width: 90,
+        resize: true,
+      },
+      {
+        name: "duration",
+        label: "Duração",
+        align: "center",
+        width: 70,
+        resize: true,
+      },
+      {
+        name: "responsible",
+        label: "Responsável",
+        align: "center",
+        width: 120,
+        resize: true,
+        template: function (task: any) {
+          return task.responsible || "";
+        },
+      },
+    ];
+
+    const visibleColumns = allColumns.filter(
+      (col) => columnVisibility[col.name as keyof typeof columnVisibility]
+    );
+
+    gantt.config.columns = [
+      { name: "add", label: "", width: 44, align: "center" },
+      ...visibleColumns,
+    ];
+
     // Carregar/Atualizar dados
     const formattedTasks = tasks.map((task) => {
       const startDate = new Date(task.startDate);
@@ -384,7 +390,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
         styleElementRef.current = null;
       }
     };
-  }, [tasks, theme]);
+  }, [tasks, theme, columnVisibility]);
 
   const handleZoomIn = () => {
     if (window.gantt) {
