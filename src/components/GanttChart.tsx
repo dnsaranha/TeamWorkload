@@ -285,6 +285,13 @@ const GanttChart: React.FC<GanttChartProps> = ({
           .gantt_task_content { color: hsl(var(--primary-foreground)) !important; }
           .gantt_grid_data { background-color: hsl(var(--background)) !important; }
           .gantt_task_line.gantt_subtask { background-color: hsl(var(--secondary)) !important; border-color: hsl(var(--secondary-foreground)) !important; }
+          .gantt_resizer {
+            background-color: hsl(var(--border)) !important;
+            cursor: col-resize !important;
+          }
+          .gantt_resizer:hover {
+            background-color: hsl(var(--primary)) !important;
+          }
         `;
         document.head.appendChild(style);
         styleElementRef.current = style;

@@ -32,6 +32,8 @@ interface GanttTaskModalProps {
   task: GanttTask | null;
   employees: any[];
   projects: any[];
+  allTasks: GanttTask[];
+  successors: { id: string; name: string }[];
   onSave: (
     formData: Partial<GanttTask>,
     dependencies: string[]
@@ -45,6 +47,8 @@ const GanttTaskModal: React.FC<GanttTaskModalProps> = ({
   task,
   employees,
   projects,
+  allTasks,
+  successors,
   onSave,
 }) => {
   const [formData, setFormData] = useState<Partial<GanttTask>>({
@@ -61,7 +65,6 @@ const GanttTaskModal: React.FC<GanttTaskModalProps> = ({
   });
 
   const [dependencies, setDependencies] = useState<string[]>([]);
-  const [availableTasks, setAvailableTasks] = useState<GanttTask[]>([]);
 
   useEffect(() => {
     if (task) {
@@ -347,48 +350,60 @@ const GanttTaskModal: React.FC<GanttTaskModalProps> = ({
               </Select>
             </div>
 
-            {/* Dependencies Section */}
+            {/* Predecessors Section */}
             <div className="grid grid-cols-4 items-start gap-4">
-              <Label className="text-right pt-2">
-                Dependências
-              </Label>
+              <Label className="text-right pt-2">Predecessoras</Label>
               <div className="col-span-3">
                 <div className="text-sm text-muted-foreground mb-2">
-                  Selecione as tarefas que devem ser concluídas antes desta tarefa começar.
+                  Tarefas que devem ser concluídas antes desta.
                 </div>
                 <Select
                   value=""
                   onValueChange={(value) => {
                     if (value && !dependencies.includes(value)) {
-                      setDependencies(prev => [...prev, value]);
+                      setDependencies((prev) => [...prev, value]);
                     }
                   }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Adicionar dependência" />
+                    <SelectValue placeholder="Adicionar predecessora" />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableTasks
-                      .filter(t => t.id !== task?.id && !dependencies.includes(String(t.id)))
+                    {allTasks
+                      .filter(
+                        (t) =>
+                          t.id !== task?.id && !dependencies.includes(String(t.id))
+                      )
                       .map((availableTask) => (
-                        <SelectItem key={availableTask.id} value={String(availableTask.id)}>
-                          {availableTask.text}
+                        <SelectItem
+                          key={availableTask.id}
+                          value={String(availableTask.id)}
+                        >
+                          {availableTask.name}
                         </SelectItem>
                       ))}
                   </SelectContent>
                 </Select>
-                
                 {dependencies.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {dependencies.map((depId) => {
-                      const depTask = availableTasks.find(t => t.id === depId);
+                      const depTask = allTasks.find((t) => t.id === depId);
                       return (
-                        <div key={depId} className="flex items-center justify-between bg-muted p-2 rounded">
-                          <span className="text-sm">{depTask?.text || depId}</span>
+                        <div
+                          key={depId}
+                          className="flex items-center justify-between bg-muted p-2 rounded"
+                        >
+                          <span className="text-sm">
+                            {depTask?.name || depId}
+                          </span>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setDependencies(prev => prev.filter(id => id !== depId))}
+                            onClick={() =>
+                              setDependencies((prev) =>
+                                prev.filter((id) => id !== depId)
+                              )
+                            }
                           >
                             ×
                           </Button>
@@ -396,6 +411,32 @@ const GanttTaskModal: React.FC<GanttTaskModalProps> = ({
                       );
                     })}
                   </div>
+                )}
+              </div>
+            </div>
+
+            {/* Successors Section */}
+            <div className="grid grid-cols-4 items-start gap-4">
+              <Label className="text-right pt-2">Sucessoras</Label>
+              <div className="col-span-3">
+                <div className="text-sm text-muted-foreground mb-2">
+                  Tarefas que dependem desta (somente leitura).
+                </div>
+                {successors.length > 0 ? (
+                  <div className="mt-2 space-y-1">
+                    {successors.map((successor) => (
+                      <div
+                        key={successor.id}
+                        className="flex items-center justify-between bg-muted p-2 rounded"
+                      >
+                        <span className="text-sm">{successor.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Nenhuma tarefa depende desta.
+                  </p>
                 )}
               </div>
             </div>

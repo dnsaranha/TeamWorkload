@@ -186,6 +186,15 @@ const handleGanttTaskUpdate = async (
     setIsModalOpen(true);
   };
 
+  const successors = useMemo(() => {
+    if (!editingTaskId || editingTaskId === "new") return [];
+    return (
+      tasks
+        .filter((task) => task.dependencies?.includes(editingTaskId))
+        .map((task) => ({ id: task.id, name: task.name })) || []
+    );
+  }, [editingTaskId, tasks]);
+
   if (loading) {
     return (
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -245,9 +254,11 @@ const handleGanttTaskUpdate = async (
             setEditingTaskId(null);
           }}
           taskId={editingTaskId}
-          task={tasks.find(t => t.id === editingTaskId) || null}
+          task={tasks.find((t) => t.id === editingTaskId) || null}
           employees={employees}
           projects={projects}
+          allTasks={ganttTasks}
+          successors={successors}
           onSave={async (formData, dependencies) => {
             await handleGanttTaskUpdate(editingTaskId, formData, dependencies);
             setIsModalOpen(false);
