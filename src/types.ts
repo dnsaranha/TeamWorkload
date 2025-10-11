@@ -1,12 +1,22 @@
-export type TaskStatus = 'A Fazer' | 'Em Progresso' | 'Concluído';
-
 export interface Task {
+  id: number;
+  name: string;
+  assignee: string;
+  effort: number;
+  startDate: string;
+  dueDate: string;
+  progress: number;
+  dependencies: number[];
+  color: string;
+}
+
+export interface Phase {
   id: string;
   name: string;
-  startDate: string; // Formato: "AAAA-MM-DD"
-  endDate: string;   // Formato: "AAAA-MM-DD"
-  progress: number;  // Um número de 0 a 100
-  dependencies: string[]; // Um array de IDs de outras tarefas
-  status: TaskStatus;     // 'A Fazer', 'Em Progresso', 'Concluído'
-  responsible: string;
+  startDate: string;
+  dueDate: string;
+  progress: number;
+  totalEffort: number;
+  isCollapsed: boolean;
+  tasks: Task[];
 }

@@ -20,13 +20,12 @@ import WorkloadCalendar from "./WorkloadCalendar";
 import EmployeeList from "./EmployeeList";
 import TaskManagement from "./TaskManagement";
 import WorkloadSummary from "./WorkloadSummary";
-import ProjectVisualization from "./ProjectVisualization";
 import ProjectList from "./ProjectList";
 import UserProfile from "./UserProfile";
 import Roadmap from "./Roadmap";
 import WorkspaceManager from "./WorkspaceManager";
 import WorkspaceInvitations from "./WorkspaceInvitations";
-import GanttChart from "./GanttChart";
+import { GanttContainer } from "./gantt/GanttContainer";
 import type { Task } from "../types";
 import {
   employeeService,
@@ -444,9 +443,8 @@ const HomePage = () => {
           )}
 
           {activeTab === "gantt" && (
-            <div>
-              <h2 className="text-3xl font-bold mb-6">Gráfico de Gantt</h2>
-              <ProjectVisualization />
+            <div className="h-full">
+              <GanttContainer />
             </div>
           )}
 
