@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Header } from './Header';
 import { TaskList } from './TaskList';
 import { GanttChart } from './GanttChart';
@@ -6,6 +6,7 @@ import type { Phase, Task } from '../../types';
 import { addDays, differenceInDays, format, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { ROW_HEIGHT, CELL_WIDTH } from '../../constants';
 import { AddTaskModal } from './AddTaskModal';
+import { EditTaskModal } from './EditTaskModal';
 
 import { taskService, projectService, employeeService, type Task as DBTask, type Project as DBProject, type Employee as DBEmployee } from '../../lib/supabaseClient';
 
@@ -14,7 +15,12 @@ export const GanttContainer: React.FC = () => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(null);
+    const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+    const [listWidth, setListWidth] = useState(33); // percentage
+    const dividerRef = useRef<HTMLDivElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     const loadData = async () => {
         setLoading(true);
@@ -68,6 +74,29 @@ export const GanttContainer: React.FC = () => {
     useEffect(() => {
         loadData();
     }, []);
+
+    const handleDividerMouseDown = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const startX = e.clientX;
+        const startWidth = listWidth;
+
+        const handleMouseMove = (moveEvent: MouseEvent) => {
+            if (!containerRef.current) return;
+            const containerWidth = containerRef.current.offsetWidth;
+            const deltaX = moveEvent.clientX - startX;
+            const deltaPercent = (deltaX / containerWidth) * 100;
+            const newWidth = Math.min(Math.max(startWidth + deltaPercent, 20), 60); // Min 20%, Max 60%
+            setListWidth(newWidth);
+        };
+
+        const handleMouseUp = () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+    };
 
     const { dateRange, totalWidth } = useMemo(() => {
         const start = startOfMonth(currentDate);
@@ -160,6 +189,50 @@ export const GanttContainer: React.FC = () => {
         await loadData();
     };
 
+    const handleTaskDateChange = useCallback(async (taskId: number, newStartDate: string, newDueDate: string) => {
+        setData(prevData => {
+            const newData = [...prevData];
+            for (const phase of newData) {
+                const task = phase.tasks.find(t => t.id === taskId);
+                if (task) {
+                    task.startDate = newStartDate;
+                    task.dueDate = newDueDate;
+                    break;
+                }
+            }
+            return newData;
+        });
+    }, []);
+
+    const handleTaskDoubleClickFromChart = useCallback((task: Task & { phaseId: string }) => {
+        setSelectedTask(task);
+        setIsEditModalOpen(true);
+    }, []);
+
+    const handleTaskDoubleClickFromList = useCallback((taskId: number, phaseId: string) => {
+        const phase = data.find(p => p.id === phaseId);
+        const task = phase?.tasks.find(t => t.id === taskId);
+        if (task) {
+            setSelectedTask(task);
+            setIsEditModalOpen(true);
+        }
+    }, [data]);
+
+    const handleEditTask = useCallback(async (taskId: number, updates: Partial<Task>) => {
+        setData(prevData => {
+            const newData = [...prevData];
+            for (const phase of newData) {
+                const task = phase.tasks.find(t => t.id === taskId);
+                if (task) {
+                    Object.assign(task, updates);
+                    break;
+                }
+            }
+            return newData;
+        });
+        setIsEditModalOpen(false);
+    }, []);
+
     return (
         <div className="flex flex-col h-full w-full bg-white">
             <Header
@@ -167,13 +240,21 @@ export const GanttContainer: React.FC = () => {
                 onNavigate={handleNavigate}
                 visibleMonthYear={format(currentDate, 'MMMM yyyy')}
             />
-            <div className="flex flex-1 overflow-hidden">
-                <div className="w-1/3 border-r overflow-y-auto">
+            <div ref={containerRef} className="flex flex-1 overflow-hidden relative">
+                <div className="overflow-y-auto" style={{ width: `${listWidth}%` }}>
                     <TaskList
                         data={data}
                         onTogglePhase={handleTogglePhase}
                         onAddTask={handleAddTask}
+                        onTaskDoubleClick={handleTaskDoubleClickFromList}
                     />
+                </div>
+                <div 
+                    ref={dividerRef}
+                    className="w-1 bg-gray-300 hover:bg-blue-500 cursor-col-resize flex-shrink-0 relative group"
+                    onMouseDown={handleDividerMouseDown}
+                >
+                    <div className="absolute inset-y-0 -left-1 -right-1" />
                 </div>
                 <div className="flex-1 overflow-x-auto">
                      <GanttChart
@@ -185,6 +266,8 @@ export const GanttContainer: React.FC = () => {
                         taskPositions={taskPositions}
                         totalHeight={totalHeight}
                         onAddDependency={handleAddDependency}
+                        onTaskDateChange={handleTaskDateChange}
+                        onTaskDoubleClick={handleTaskDoubleClickFromChart}
                     />
                 </div>
             </div>
@@ -194,6 +277,14 @@ export const GanttContainer: React.FC = () => {
                     onClose={() => setIsModalOpen(false)}
                     onSave={handleSaveTask}
                     phaseId={selectedPhaseId}
+                />
+            )}
+            {isEditModalOpen && selectedTask && (
+                <EditTaskModal
+                    isOpen={isEditModalOpen}
+                    onClose={() => setIsEditModalOpen(false)}
+                    onSave={handleEditTask}
+                    task={selectedTask}
                 />
             )}
         </div>

@@ -8,6 +8,7 @@ interface TaskListProps {
   onTaskDragStart?: (taskId: number, phaseId: string) => void;
   onTaskDrop?: (taskId: number, newPhaseId: string, newIndex: number) => void;
   onAddTask: (phaseId: string) => void;
+  onTaskDoubleClick: (taskId: number, phaseId: string) => void;
 }
 
 const TaskListHeader: React.FC = () => (
@@ -26,6 +27,8 @@ export const TaskList: React.FC<TaskListProps> = ({
   onTogglePhase,
   onTaskDragStart,
   onTaskDrop,
+  onAddTask,
+  onTaskDoubleClick,
 }) => {
   const [draggedTask, setDraggedTask] = React.useState<{
     taskId: number;
@@ -112,6 +115,7 @@ export const TaskList: React.FC<TaskListProps> = ({
                     onDragStart={(e) => handleDragStart(e, task.id, phase.id)}
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, phase.id, taskIndex)}
+                    onDoubleClick={() => onTaskDoubleClick(task.id, phase.id)}
                   >
                     <div className="col-span-5 flex items-center space-x-2">
                       <CheckCircleIcon className="text-green-500 w-4 h-4" />

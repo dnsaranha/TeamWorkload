@@ -14,9 +14,22 @@ interface GanttChartProps {
   taskPositions: Map<number, { left: number; width: number; y: number; }>;
   totalHeight: number;
   onAddDependency: (fromTaskId: number, toTaskId: number) => void;
+  onTaskDateChange: (taskId: number, newStartDate: string, newDueDate: string) => void;
+  onTaskDoubleClick: (task: FullTask) => void;
 }
 
-export const GanttChart: React.FC<GanttChartProps> = ({ data, allTasks, startDate, dateRange, totalWidth, taskPositions, totalHeight, onAddDependency }) => {
+export const GanttChart: React.FC<GanttChartProps> = ({ 
+  data, 
+  allTasks, 
+  startDate, 
+  dateRange, 
+  totalWidth, 
+  taskPositions, 
+  totalHeight, 
+  onAddDependency,
+  onTaskDateChange,
+  onTaskDoubleClick
+}) => {
 
     const today = new Date();
     const todayOffset = differenceInDays(today, startDate) * CELL_WIDTH;
@@ -28,13 +41,32 @@ export const GanttChart: React.FC<GanttChartProps> = ({ data, allTasks, startDat
         sourceTaskId: number | null;
     }>({ isDrawing: false, startPos: null, endPos: null, sourceTaskId: null });
 
+    const [dragState, setDragState] = useState<{
+        isDragging: boolean;
+        taskId: number | null;
+        dragType: 'move' | 'resize-start' | 'resize-end' | null;
+        startX: number;
+        originalLeft: number;
+        originalWidth: number;
+    }>({ isDragging: false, taskId: null, dragType: null, startX: 0, originalLeft: 0, originalWidth: 0 });
+
     // Calculate phase positions for project lines
     const getPhasePosition = (phase: Phase) => {
-        const phaseStartDate = new Date(phase.tasks[0]?.startDate || phase.startDate);
-        const phaseEndDate = new Date(phase.tasks[phase.tasks.length - 1]?.dueDate || phase.dueDate);
+        if (phase.tasks.length === 0) {
+            const left = differenceInDays(new Date(phase.startDate), startDate) * CELL_WIDTH;
+            const width = (differenceInDays(new Date(phase.dueDate), new Date(phase.startDate)) + 1) * CELL_WIDTH;
+            return { left: Math.max(0, left), width: Math.max(CELL_WIDTH, width) };
+        }
 
-        const left = differenceInDays(phaseStartDate, startDate) * CELL_WIDTH;
-        const width = (differenceInDays(phaseEndDate, phaseStartDate) + 1) * CELL_WIDTH;
+        // Find earliest start date and latest due date from tasks
+        const taskStartDates = phase.tasks.map(t => new Date(t.startDate));
+        const taskDueDates = phase.tasks.map(t => new Date(t.dueDate));
+        
+        const earliestStart = new Date(Math.min(...taskStartDates.map(d => d.getTime())));
+        const latestEnd = new Date(Math.max(...taskDueDates.map(d => d.getTime())));
+
+        const left = differenceInDays(earliestStart, startDate) * CELL_WIDTH;
+        const width = (differenceInDays(latestEnd, earliestStart) + 1) * CELL_WIDTH;
 
         return { left: Math.max(0, left), width: Math.max(CELL_WIDTH, width) };
     };
@@ -57,20 +89,71 @@ export const GanttChart: React.FC<GanttChartProps> = ({ data, allTasks, startDat
     };
 
     const handleMouseMove = (e: React.MouseEvent) => {
-        if (!dependencyDrawingState.isDrawing || !chartRef.current) return;
-        const rect = chartRef.current.getBoundingClientRect();
-        setDependencyDrawingState(prev => ({
-            ...prev,
-            endPos: {
-                x: e.clientX - rect.left + chartRef.current.scrollLeft,
-                y: e.clientY - rect.top + chartRef.current.scrollTop
+        if (dependencyDrawingState.isDrawing && chartRef.current) {
+            const rect = chartRef.current.getBoundingClientRect();
+            setDependencyDrawingState(prev => ({
+                ...prev,
+                endPos: {
+                    x: e.clientX - rect.left + chartRef.current!.scrollLeft,
+                    y: e.clientY - rect.top + chartRef.current!.scrollTop
+                }
+            }));
+        }
+
+        if (dragState.isDragging && dragState.taskId && chartRef.current) {
+            const rect = chartRef.current.getBoundingClientRect();
+            const currentX = e.clientX - rect.left + chartRef.current.scrollLeft;
+            const deltaX = currentX - dragState.startX;
+            
+            const task = allTasks.find(t => t.id === dragState.taskId);
+            if (!task) return;
+
+            const pos = taskPositions.get(dragState.taskId);
+            if (!pos) return;
+
+            if (dragState.dragType === 'move') {
+                const newLeft = Math.max(0, dragState.originalLeft + deltaX);
+                const daysOffset = Math.round(newLeft / CELL_WIDTH);
+                const newStartDate = addDays(dateRange[0], daysOffset);
+                const duration = differenceInDays(new Date(task.dueDate), new Date(task.startDate));
+                const newDueDate = addDays(newStartDate, duration);
+                
+                taskPositions.set(dragState.taskId, { ...pos, left: newLeft });
+            } else if (dragState.dragType === 'resize-start') {
+                const newLeft = Math.max(0, Math.min(dragState.originalLeft + deltaX, dragState.originalLeft + dragState.originalWidth - CELL_WIDTH));
+                const newWidth = dragState.originalWidth - (newLeft - dragState.originalLeft);
+                taskPositions.set(dragState.taskId, { ...pos, left: newLeft, width: newWidth });
+            } else if (dragState.dragType === 'resize-end') {
+                const newWidth = Math.max(CELL_WIDTH, dragState.originalWidth + deltaX);
+                taskPositions.set(dragState.taskId, { ...pos, width: newWidth });
             }
-        }));
+        }
     };
 
     const handleGlobalMouseUp = () => {
         if (dependencyDrawingState.isDrawing) {
             setDependencyDrawingState({ isDrawing: false, startPos: null, endPos: null, sourceTaskId: null });
+        }
+
+        if (dragState.isDragging && dragState.taskId) {
+            const task = allTasks.find(t => t.id === dragState.taskId);
+            const pos = taskPositions.get(dragState.taskId);
+            
+            if (task && pos) {
+                const daysFromStart = Math.round(pos.left / CELL_WIDTH);
+                const durationDays = Math.round(pos.width / CELL_WIDTH);
+                
+                const newStartDate = addDays(dateRange[0], daysFromStart);
+                const newDueDate = addDays(newStartDate, durationDays - 1);
+                
+                onTaskDateChange(
+                    dragState.taskId,
+                    format(newStartDate, 'yyyy-MM-dd'),
+                    format(newDueDate, 'yyyy-MM-dd')
+                );
+            }
+            
+            setDragState({ isDragging: false, taskId: null, dragType: null, startX: 0, originalLeft: 0, originalWidth: 0 });
         }
     };
 
@@ -81,11 +164,34 @@ export const GanttChart: React.FC<GanttChartProps> = ({ data, allTasks, startDat
         setDependencyDrawingState({ isDrawing: false, startPos: null, endPos: null, sourceTaskId: null });
     };
 
+    const handleTaskBarMouseDown = (e: React.MouseEvent, task: FullTask, dragType: 'move' | 'resize-start' | 'resize-end') => {
+        e.stopPropagation();
+        if (!chartRef.current) return;
+
+        const rect = chartRef.current.getBoundingClientRect();
+        const pos = taskPositions.get(task.id);
+        if (!pos) return;
+
+        setDragState({
+            isDragging: true,
+            taskId: task.id,
+            dragType,
+            startX: e.clientX - rect.left + chartRef.current.scrollLeft,
+            originalLeft: pos.left,
+            originalWidth: pos.width,
+        });
+    };
+
+    const handleTaskDoubleClick = (e: React.MouseEvent, task: FullTask) => {
+        e.stopPropagation();
+        onTaskDoubleClick(task);
+    };
+
     return (
         <div
             ref={chartRef}
             className="relative"
-            style={{ width: totalWidth, cursor: dependencyDrawingState.isDrawing ? 'crosshair' : 'default' }}
+            style={{ width: totalWidth, cursor: dependencyDrawingState.isDrawing ? 'crosshair' : dragState.isDragging ? 'grabbing' : 'default' }}
             onMouseMove={handleMouseMove}
             onMouseUp={handleGlobalMouseUp}
         >
@@ -140,7 +246,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({ data, allTasks, startDat
                     if (phase.isCollapsed) return null;
 
                     const phasePosition = getPhasePosition(phase);
-                    const phaseRowY = phaseIndex * (ROW_HEIGHT * (phase.tasks.length + 2)) + 6; // Position at phase header level
+                    const phaseRowY = phaseIndex * (ROW_HEIGHT * (phase.tasks.length + 2)) + 6;
 
                     return (
                         <div
@@ -175,6 +281,17 @@ export const GanttChart: React.FC<GanttChartProps> = ({ data, allTasks, startDat
                  {allTasks.map(task => {
                     const pos = taskPositions.get(task.id);
                     if (!pos) return null;
+                    
+                    // Only render if task is within visible date range
+                    const taskStart = new Date(task.startDate);
+                    const taskEnd = new Date(task.dueDate);
+                    const rangeStart = dateRange[0];
+                    const rangeEnd = dateRange[dateRange.length - 1];
+                    
+                    if (taskEnd < rangeStart || taskStart > rangeEnd) {
+                        return null;
+                    }
+                    
                     return (
                         <div
                             key={task.id}
@@ -184,11 +301,30 @@ export const GanttChart: React.FC<GanttChartProps> = ({ data, allTasks, startDat
                                 e.stopPropagation();
                                 handleTaskMouseUp(task.id);
                             }}
+                            onDoubleClick={(e) => handleTaskDoubleClick(e, task)}
                         >
-                            <div className={`relative flex items-center h-full bg-${task.color} rounded-md px-2 text-white text-xs font-semibold shadow-sm`} style={{ width: pos.width }}>
-                                <span className="truncate">{task.name}</span>
+                            <div 
+                                className={`relative flex items-center h-full bg-${task.color} rounded-md px-2 text-white text-xs font-semibold shadow-sm cursor-grab active:cursor-grabbing`} 
+                                style={{ width: pos.width }}
+                                onMouseDown={(e) => handleTaskBarMouseDown(e, task, 'move')}
+                            >
                                 <div
-                                    className={`absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 bg-white border-2 border-${task.color} rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity`}
+                                    className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100"
+                                    onMouseDown={(e) => {
+                                        e.stopPropagation();
+                                        handleTaskBarMouseDown(e, task, 'resize-start');
+                                    }}
+                                />
+                                <span className="truncate pointer-events-none">{task.name}</span>
+                                <div
+                                    className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100"
+                                    onMouseDown={(e) => {
+                                        e.stopPropagation();
+                                        handleTaskBarMouseDown(e, task, 'resize-end');
+                                    }}
+                                />
+                                <div
+                                    className={`absolute -right-3 top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-${task.color} rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity z-20`}
                                     onMouseDown={(e) => handleStartDrawing(e, task)}
                                 ></div>
                             </div>

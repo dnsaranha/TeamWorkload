@@ -42,9 +42,55 @@ export const Header: React.FC<HeaderProps> = ({ onGoToToday, onNavigate, visible
         setOpenMenu(null);
     };
 
-    const handlePlaceholderClick = () => {
+    const handleExportPNG = () => {
+        alert('Export as PNG - Feature coming soon!');
         setOpenMenu(null);
-    }
+    };
+
+    const handleExportPDF = () => {
+        alert('Export as PDF - Feature coming soon!');
+        setOpenMenu(null);
+    };
+
+    const handleShareLink = () => {
+        alert('Share Link - Feature coming soon!');
+        setOpenMenu(null);
+    };
+
+    const handleSetBaseline = () => {
+        alert('Set Baseline - Feature coming soon!');
+        setOpenMenu(null);
+    };
+
+    const handleShowBaselines = () => {
+        alert('Show Baselines - Feature coming soon!');
+        setOpenMenu(null);
+    };
+
+    const handleToggleDependencies = () => {
+        alert('Toggle Dependencies - Feature coming soon!');
+        setOpenMenu(null);
+    };
+
+    const handleToggleProgressBar = () => {
+        alert('Toggle Progress Bar - Feature coming soon!');
+        setOpenMenu(null);
+    };
+
+    const handleHighlightWeekends = () => {
+        alert('Highlight Weekends - Feature coming soon!');
+        setOpenMenu(null);
+    };
+
+    const handleColumnToggle = (column: string) => {
+        alert(`Toggle ${column} column - Feature coming soon!`);
+        setOpenMenu(null);
+    };
+
+    const handleSegmentFilter = (filter: string) => {
+        alert(`${filter} - Feature coming soon!`);
+        setOpenMenu(null);
+    };
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -67,9 +113,9 @@ export const Header: React.FC<HeaderProps> = ({ onGoToToday, onNavigate, visible
                         <NavButton onClick={() => handleMenuToggle('export')}>Export & Share</NavButton>
                         {openMenu === 'export' && (
                             <DropdownMenu>
-                                <MenuItem onClick={handlePlaceholderClick}>Export as PNG</MenuItem>
-                                <MenuItem onClick={handlePlaceholderClick}>Export as PDF</MenuItem>
-                                <MenuItem onClick={handlePlaceholderClick}>Share Link</MenuItem>
+                                <MenuItem onClick={handleExportPNG}>Export as PNG</MenuItem>
+                                <MenuItem onClick={handleExportPDF}>Export as PDF</MenuItem>
+                                <MenuItem onClick={handleShareLink}>Share Link</MenuItem>
                             </DropdownMenu>
                         )}
                     </div>
@@ -77,8 +123,8 @@ export const Header: React.FC<HeaderProps> = ({ onGoToToday, onNavigate, visible
                         <NavButton onClick={() => handleMenuToggle('baselines')}>Baselines</NavButton>
                         {openMenu === 'baselines' && (
                             <DropdownMenu>
-                                <MenuItem onClick={handlePlaceholderClick}>Set Baseline</MenuItem>
-                                <MenuItem onClick={handlePlaceholderClick}>Show Baselines</MenuItem>
+                                <MenuItem onClick={handleSetBaseline}>Set Baseline</MenuItem>
+                                <MenuItem onClick={handleShowBaselines}>Show Baselines</MenuItem>
                             </DropdownMenu>
                         )}
                     </div>
@@ -86,9 +132,9 @@ export const Header: React.FC<HeaderProps> = ({ onGoToToday, onNavigate, visible
                         <NavButton onClick={() => handleMenuToggle('options')}>Options</NavButton>
                         {openMenu === 'options' && (
                             <DropdownMenu>
-                                <MenuItem onClick={handlePlaceholderClick}>Show Dependencies</MenuItem>
-                                <MenuItem onClick={handlePlaceholderClick}>Show Progress Bar</MenuItem>
-                                <MenuItem onClick={handlePlaceholderClick}>Highlight Weekends</MenuItem>
+                                <MenuItem onClick={handleToggleDependencies}>Show Dependencies</MenuItem>
+                                <MenuItem onClick={handleToggleProgressBar}>Show Progress Bar</MenuItem>
+                                <MenuItem onClick={handleHighlightWeekends}>Highlight Weekends</MenuItem>
                             </DropdownMenu>
                         )}
                     </div>
@@ -96,11 +142,11 @@ export const Header: React.FC<HeaderProps> = ({ onGoToToday, onNavigate, visible
                         <NavButton onClick={() => handleMenuToggle('columns')}>Columns</NavButton>
                          {openMenu === 'columns' && (
                             <DropdownMenu>
-                                <MenuItem onClick={handlePlaceholderClick}>Assignee</MenuItem>
-                                <MenuItem onClick={handlePlaceholderClick}>Effort (EH)</MenuItem>
-                                <MenuItem onClick={handlePlaceholderClick}>Start Date</MenuItem>
-                                <MenuItem onClick={handlePlaceholderClick}>Due Date</MenuItem>
-                                <MenuItem onClick={handlePlaceholderClick}>Progress (%)</MenuItem>
+                                <MenuItem onClick={() => handleColumnToggle('Assignee')}>Assignee</MenuItem>
+                                <MenuItem onClick={() => handleColumnToggle('Effort (EH)')}>Effort (EH)</MenuItem>
+                                <MenuItem onClick={() => handleColumnToggle('Start Date')}>Start Date</MenuItem>
+                                <MenuItem onClick={() => handleColumnToggle('Due Date')}>Due Date</MenuItem>
+                                <MenuItem onClick={() => handleColumnToggle('Progress (%)')}>Progress (%)</MenuItem>
                             </DropdownMenu>
                         )}
                     </div>
@@ -108,21 +154,21 @@ export const Header: React.FC<HeaderProps> = ({ onGoToToday, onNavigate, visible
                         <NavButton onClick={() => handleMenuToggle('segments')}>Segments</NavButton>
                         {openMenu === 'segments' && (
                             <DropdownMenu>
-                                <MenuItem onClick={handlePlaceholderClick}>Filter tasks...</MenuItem>
-                                <MenuItem onClick={handlePlaceholderClick}>Group by assignee</MenuItem>
-                                <MenuItem onClick={handlePlaceholderClick}>Group by status</MenuItem>
+                                <MenuItem onClick={() => handleSegmentFilter('Filter tasks...')}>Filter tasks...</MenuItem>
+                                <MenuItem onClick={() => handleSegmentFilter('Group by assignee')}>Group by assignee</MenuItem>
+                                <MenuItem onClick={() => handleSegmentFilter('Group by status')}>Group by status</MenuItem>
                             </DropdownMenu>
                         )}
                     </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                    <button className="p-2 rounded hover:bg-gray-200">
+                    <button className="p-2 rounded hover:bg-gray-200" onClick={() => alert('Zoom in - Feature coming soon!')}>
                         <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8" /></svg>
                     </button>
-                    <button className="p-2 rounded hover:bg-gray-200">
+                    <button className="p-2 rounded hover:bg-gray-200" onClick={() => alert('Undo - Feature coming soon!')}>
                         <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                     </button>
-                     <button className="p-2 rounded hover:bg-gray-200">
+                     <button className="p-2 rounded hover:bg-gray-200" onClick={() => alert('Redo - Feature coming soon!')}>
                         <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                     </button>
                 </div>
@@ -135,9 +181,9 @@ export const Header: React.FC<HeaderProps> = ({ onGoToToday, onNavigate, visible
                         </div>
                         <input type="text" placeholder="Search tasks..." className="py-1 focus:outline-none" />
                     </div>
-                    <HeaderButton>Assignee</HeaderButton>
-                    <HeaderButton>Start</HeaderButton>
-                    <HeaderButton>Due</HeaderButton>
+                    <HeaderButton onClick={() => alert('Filter by Assignee - Feature coming soon!')}>Assignee</HeaderButton>
+                    <HeaderButton onClick={() => alert('Filter by Start Date - Feature coming soon!')}>Start</HeaderButton>
+                    <HeaderButton onClick={() => alert('Filter by Due Date - Feature coming soon!')}>Due</HeaderButton>
                 </div>
                 <div className="flex items-center space-x-4">
                      <div className="flex items-center space-x-1">
