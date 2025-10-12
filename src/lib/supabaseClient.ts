@@ -73,6 +73,8 @@ export type Task = {
   exceptions?: any; // Adicionado para exceções
   created_at: string | null;
   updated_at: string | null;
+  dependencies: string[] | null;
+  progress: number | null;
 };
 
 // Novo tipo para exceções de tarefa
@@ -99,6 +101,8 @@ export type TaskInsert = {
   hours_per_day?: number | null;
   special_marker?: string | null;
   exceptions?: TaskException[] | null;
+  dependencies?: string[] | null;
+  progress?: number | null;
 };
 
 export type TaskUpdate = Partial<TaskInsert>;

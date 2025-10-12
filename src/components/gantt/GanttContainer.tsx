@@ -57,12 +57,22 @@ export const GanttContainer: React.FC = () => {
         const taskIdMap = new Map<string, number>();
         let taskCounter = 1;
 
+        const taskIdMap = new Map<string, number>();
+        const idTaskMap = new Map<number, string>();
+        let taskCounter = 1;
+
         const getNumericId = (taskId: string) => {
             if (!taskIdMap.has(taskId)) {
-                taskIdMap.set(taskId, taskCounter++);
+                const numericId = taskCounter++;
+                taskIdMap.set(taskId, numericId);
+                idTaskMap.set(numericId, taskId);
             }
             return taskIdMap.get(taskId)!;
         };
+
+        const getStringId = (numericId: number) => {
+            return idTaskMap.get(numericId);
+        }
 
         const phases = projects.map((project, index) => {
             const projectTasks = tasks
@@ -74,7 +84,7 @@ export const GanttContainer: React.FC = () => {
                     effort: t.estimated_time,
                     startDate: t.start_date,
                     dueDate: t.end_date,
-                    progress: t.status === 'completed' ? 100 : (t.status === 'in_progress' ? 50 : 0),
+                    progress: t.progress || 0,
                     dependencies: (t.dependencies || []).map(depId => getNumericId(depId)),
                     color: index % 2 === 0 ? 'green-500' : 'purple-500',
                 }));
@@ -296,16 +306,20 @@ export const GanttContainer: React.FC = () => {
         }
     }, [data]);
 
-    const handleEditTask = useCallback((taskId: number, updates: Partial<Task>) => {
-        const newData = JSON.parse(JSON.stringify(data));
-        const phase = newData.find((p: Phase) => p.tasks.some((t: Task) => t.id === taskId));
-        if (phase) {
-            const task = phase.tasks.find((t: Task) => t.id === taskId);
-            if (task) {
-                Object.assign(task, updates);
-            }
-        }
-        setDataWithHistory(newData);
+    const handleEditTask = useCallback(async (taskId: number, updates: Partial<Task>) => {
+        const stringId = getStringId(taskId);
+        if (!stringId) return;
+
+        const dbUpdates: any = {
+            name: updates.name,
+            start_date: updates.startDate,
+            end_date: updates.dueDate,
+            progress: updates.progress,
+            dependencies: updates.dependencies?.map(getStringId).filter(Boolean) as string[],
+        };
+
+        await taskService.update(stringId, dbUpdates);
+        await loadData();
         setIsEditModalOpen(false);
     }, [data, history, historyIndex]);
 
