@@ -230,17 +230,16 @@ export const GanttContainer: React.FC = () => {
     }, [data]);
 
     const handleAddDependency = useCallback((fromTaskId: number, toTaskId: number) => {
-        const newData = [...data];
-        const toTaskPhase = newData.find(p => p.tasks.some(t => t.id === toTaskId));
-            if (toTaskPhase) {
-                const toTask = toTaskPhase.tasks.find(t => t.id === toTaskId);
-                if (toTask && !toTask.dependencies.includes(fromTaskId)) {
-                    toTask.dependencies.push(fromTaskId);
-                }
+        const newData = JSON.parse(JSON.stringify(data));
+        const toTaskPhase = newData.find((p: Phase) => p.tasks.some((t: Task) => t.id === toTaskId));
+        if (toTaskPhase) {
+            const toTask = toTaskPhase.tasks.find((t: Task) => t.id === toTaskId);
+            if (toTask && !toTask.dependencies.includes(fromTaskId)) {
+                toTask.dependencies.push(fromTaskId);
             }
-            setDataWithHistory(newData);
-        });
-    }, [data]);
+        }
+        setDataWithHistory(newData);
+    }, [data, history, historyIndex]);
 
     const handleNavigate = (direction: 'prev' | 'next') => {
         setCurrentDate(prev => addDays(prev, direction === 'prev' ? -30 : 30));
@@ -270,19 +269,18 @@ export const GanttContainer: React.FC = () => {
         await loadData();
     };
 
-    const handleTaskDateChange = useCallback(async (taskId: number, newStartDate: string, newDueDate: string) => {
-        const newData = [...data];
+    const handleTaskDateChange = useCallback((taskId: number, newStartDate: string, newDueDate: string) => {
+        const newData = JSON.parse(JSON.stringify(data));
         for (const phase of newData) {
-            const task = phase.tasks.find(t => t.id === taskId);
-                if (task) {
-                    task.startDate = newStartDate;
-                    task.dueDate = newDueDate;
-                    break;
-                }
+            const task = phase.tasks.find((t: Task) => t.id === taskId);
+            if (task) {
+                task.startDate = newStartDate;
+                task.dueDate = newDueDate;
+                break;
             }
-            setDataWithHistory(newData);
-        });
-    }, [data]);
+        }
+        setDataWithHistory(newData);
+    }, [data, history, historyIndex]);
 
     const handleTaskDoubleClickFromChart = useCallback((task: Task & { phaseId: string }) => {
         setSelectedTask(task);
@@ -298,19 +296,18 @@ export const GanttContainer: React.FC = () => {
         }
     }, [data]);
 
-    const handleEditTask = useCallback(async (taskId: number, updates: Partial<Task>) => {
-        const newData = [...data];
-        for (const phase of newData) {
-            const task = newData.find(p => p.id === selectedTask?.phaseId)?.tasks.find(t => t.id === taskId);
-                if (task) {
-                    Object.assign(task, updates);
-                    break;
-                }
+    const handleEditTask = useCallback((taskId: number, updates: Partial<Task>) => {
+        const newData = JSON.parse(JSON.stringify(data));
+        const phase = newData.find((p: Phase) => p.tasks.some((t: Task) => t.id === taskId));
+        if (phase) {
+            const task = phase.tasks.find((t: Task) => t.id === taskId);
+            if (task) {
+                Object.assign(task, updates);
             }
-            setDataWithHistory(newData);
-        });
+        }
+        setDataWithHistory(newData);
         setIsEditModalOpen(false);
-    }, [data]);
+    }, [data, history, historyIndex]);
 
     const handleToggleColumn = (column: keyof typeof visibleColumns) => {
         setVisibleColumns(prev => ({ ...prev, [column]: !prev[column] }));
