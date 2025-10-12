@@ -488,6 +488,7 @@ export const GanttContainer: React.FC = () => {
                     onClose={() => setIsEditModalOpen(false)}
                     onSave={handleEditTask}
                     task={selectedTask}
+                    allTasks={allTasks}
                 />
             )}
         </div>
