@@ -14,6 +14,22 @@ import { taskService, projectService, employeeService, type Task as DBTask, type
 export const GanttContainer: React.FC = () => {
     const [data, setData] = useState<Phase[]>([]);
     const [currentDate, setCurrentDate] = useState(new Date());
+    const taskIdMap = useRef(new Map<string, number>()).current;
+    const idTaskMap = useRef(new Map<number, string>()).current;
+    const taskCounter = useRef(1);
+
+    const getNumericId = (taskId: string) => {
+        if (!taskIdMap.has(taskId)) {
+            const numericId = taskCounter.current++;
+            taskIdMap.set(taskId, numericId);
+            idTaskMap.set(numericId, taskId);
+        }
+        return taskIdMap.get(taskId)!;
+    };
+
+    const getStringId = (numericId: number) => {
+        return idTaskMap.get(numericId);
+    }
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -53,26 +69,6 @@ export const GanttContainer: React.FC = () => {
             projectService.getAll(),
             employeeService.getAll(),
         ]);
-
-        const taskIdMap = new Map<string, number>();
-        let taskCounter = 1;
-
-        const taskIdMap = new Map<string, number>();
-        const idTaskMap = new Map<number, string>();
-        let taskCounter = 1;
-
-        const getNumericId = (taskId: string) => {
-            if (!taskIdMap.has(taskId)) {
-                const numericId = taskCounter++;
-                taskIdMap.set(taskId, numericId);
-                idTaskMap.set(numericId, taskId);
-            }
-            return taskIdMap.get(taskId)!;
-        };
-
-        const getStringId = (numericId: number) => {
-            return idTaskMap.get(numericId);
-        }
 
         const phases = projects.map((project, index) => {
             const projectTasks = tasks
