@@ -7,7 +7,8 @@ import { addDays, differenceInDays, format, startOfMonth, endOfMonth, eachDayOfI
 import { ROW_HEIGHT, CELL_WIDTH } from '../../constants';
 import { AddTaskModal } from './AddTaskModal';
 import { EditTaskModal } from './EditTaskModal';
-
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import { taskService, projectService, employeeService, type Task as DBTask, type Project as DBProject, type Employee as DBEmployee } from '../../lib/supabaseClient';
 
 export const GanttContainer: React.FC = () => {
@@ -21,6 +22,29 @@ export const GanttContainer: React.FC = () => {
     const [listWidth, setListWidth] = useState(33); // percentage
     const dividerRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const ganttChartRef = useRef<HTMLDivElement>(null);
+    const [cellWidth, setCellWidth] = useState(CELL_WIDTH);
+    const [baselines, setBaselines] = useState<any[]>([]);
+    const [showBaselines, setShowBaselines] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
+    const [startDateFilter, setStartDateFilter] = useState<Date | null>(null);
+    const [dueDateFilter, setDueDateFilter] = useState<Date | null>(null);
+    const [groupBy, setGroupBy] = useState<string | null>(null);
+    const [history, setHistory] = useState<Phase[][]>([]);
+    const [historyIndex, setHistoryIndex] = useState(0);
+
+    // New states for options
+    const [showDependencies, setShowDependencies] = useState(true);
+    const [showProgress, setShowProgress] = useState(true);
+    const [highlightWeekends, setHighlightWeekends] = useState(false);
+    const [visibleColumns, setVisibleColumns] = useState({
+        assignee: true,
+        effort: true,
+        startDate: true,
+        dueDate: true,
+        progress: true,
+    });
 
     const loadData = async () => {
         setLoading(true);
@@ -67,8 +91,30 @@ export const GanttContainer: React.FC = () => {
             };
         });
 
-        setData(phases);
+        setDataWithHistory(phases);
         setLoading(false);
+    };
+
+    const setDataWithHistory = (newData: Phase[]) => {
+        const newHistory = history.slice(0, historyIndex + 1);
+        newHistory.push(newData);
+        setHistory(newHistory);
+        setHistoryIndex(newHistory.length - 1);
+        setData(newData);
+    };
+
+    const undo = () => {
+        if (historyIndex > 0) {
+            setHistoryIndex(prev => prev - 1);
+            setData(history[historyIndex - 1]);
+        }
+    };
+
+    const redo = () => {
+        if (historyIndex < history.length - 1) {
+            setHistoryIndex(prev => prev + 1);
+            setData(history[historyIndex + 1]);
+        }
     };
 
     useEffect(() => {
@@ -104,13 +150,50 @@ export const GanttContainer: React.FC = () => {
         const range = eachDayOfInterval({ start, end });
         return {
             dateRange: range,
-            totalWidth: range.length * CELL_WIDTH,
+            totalWidth: range.length * cellWidth,
         };
-    }, [currentDate]);
+    }, [currentDate, cellWidth]);
 
     const allTasks = useMemo(() => {
         let rowIndex = 0;
-        return data.flatMap(phase => {
+        let processedData = data.map(phase => {
+            const filteredTasks = phase.tasks.filter(task => {
+                const taskStartDate = new Date(task.startDate);
+                const taskDueDate = new Date(task.dueDate);
+
+                return (
+                    task.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+                    (!assigneeFilter || task.assignee === assigneeFilter) &&
+                    (!startDateFilter || taskStartDate >= startDateFilter) &&
+                    (!dueDateFilter || taskDueDate <= dueDateFilter)
+                );
+            });
+            return { ...phase, tasks: filteredTasks };
+        });
+
+        if (groupBy) {
+            const grouped = processedData.flatMap(p => p.tasks).reduce((acc, task) => {
+                const key = (task as any)[groupBy] || 'Unassigned';
+                if (!acc[key]) {
+                    acc[key] = [];
+                }
+                acc[key].push(task);
+                return acc;
+            }, {} as { [key: string]: Task[] });
+
+            processedData = Object.entries(grouped).map(([name, tasks]) => ({
+                id: name,
+                name,
+                startDate: '',
+                dueDate: '',
+                progress: 0,
+                totalEffort: 0,
+                isCollapsed: false,
+                tasks,
+            }));
+        }
+
+        return processedData.flatMap(phase => {
             const phaseRowIndex = rowIndex;
             rowIndex++;
             if (phase.isCollapsed) {
@@ -122,7 +205,7 @@ export const GanttContainer: React.FC = () => {
                 return { ...task, phaseId: phase.id, rowIndex: taskRowIndex };
             });
         });
-    }, [data]);
+    }, [data, searchTerm, assigneeFilter, startDateFilter, dueDateFilter, groupBy]);
 
     const totalHeight = useMemo(() => {
         return data.reduce((acc, phase) => acc + (phase.isCollapsed ? 1 : phase.tasks.length + 1) + 1, 0) * ROW_HEIGHT;
@@ -131,35 +214,33 @@ export const GanttContainer: React.FC = () => {
     const taskPositions = useMemo(() => {
         const positions = new Map<number, { left: number; width: number; y: number }>();
         allTasks.forEach(task => {
-            const left = differenceInDays(new Date(task.startDate), dateRange[0]) * CELL_WIDTH;
-            const width = (differenceInDays(new Date(task.dueDate), new Date(task.startDate)) + 1) * CELL_WIDTH;
+            const left = differenceInDays(new Date(task.startDate), dateRange[0]) * cellWidth;
+            const width = (differenceInDays(new Date(task.dueDate), new Date(task.startDate)) + 1) * cellWidth;
             const y = task.rowIndex * ROW_HEIGHT + (ROW_HEIGHT / 2);
-            positions.set(task.id, { left: Math.max(0, left), width: Math.max(CELL_WIDTH, width), y });
+            positions.set(task.id, { left: Math.max(0, left), width: Math.max(cellWidth, width), y });
         });
         return positions;
-    }, [allTasks, dateRange]);
+    }, [allTasks, dateRange, cellWidth]);
 
     const handleTogglePhase = useCallback((phaseId: string) => {
-        setData(prevData =>
-            prevData.map(phase =>
-                phase.id === phaseId ? { ...phase, isCollapsed: !phase.isCollapsed } : phase
-            )
+        const newData = data.map(phase =>
+            phase.id === phaseId ? { ...phase, isCollapsed: !phase.isCollapsed } : phase
         );
-    }, []);
+        setDataWithHistory(newData);
+    }, [data]);
 
     const handleAddDependency = useCallback((fromTaskId: number, toTaskId: number) => {
-        setData(prevData => {
-            const newData = [...prevData];
-            const toTaskPhase = newData.find(p => p.tasks.some(t => t.id === toTaskId));
+        const newData = [...data];
+        const toTaskPhase = newData.find(p => p.tasks.some(t => t.id === toTaskId));
             if (toTaskPhase) {
                 const toTask = toTaskPhase.tasks.find(t => t.id === toTaskId);
                 if (toTask && !toTask.dependencies.includes(fromTaskId)) {
                     toTask.dependencies.push(fromTaskId);
                 }
             }
-            return newData;
+            setDataWithHistory(newData);
         });
-    }, []);
+    }, [data]);
 
     const handleNavigate = (direction: 'prev' | 'next') => {
         setCurrentDate(prev => addDays(prev, direction === 'prev' ? -30 : 30));
@@ -190,19 +271,18 @@ export const GanttContainer: React.FC = () => {
     };
 
     const handleTaskDateChange = useCallback(async (taskId: number, newStartDate: string, newDueDate: string) => {
-        setData(prevData => {
-            const newData = [...prevData];
-            for (const phase of newData) {
-                const task = phase.tasks.find(t => t.id === taskId);
+        const newData = [...data];
+        for (const phase of newData) {
+            const task = phase.tasks.find(t => t.id === taskId);
                 if (task) {
                     task.startDate = newStartDate;
                     task.dueDate = newDueDate;
                     break;
                 }
             }
-            return newData;
+            setDataWithHistory(newData);
         });
-    }, []);
+    }, [data]);
 
     const handleTaskDoubleClickFromChart = useCallback((task: Task & { phaseId: string }) => {
         setSelectedTask(task);
@@ -219,19 +299,114 @@ export const GanttContainer: React.FC = () => {
     }, [data]);
 
     const handleEditTask = useCallback(async (taskId: number, updates: Partial<Task>) => {
-        setData(prevData => {
-            const newData = [...prevData];
-            for (const phase of newData) {
-                const task = phase.tasks.find(t => t.id === taskId);
+        const newData = [...data];
+        for (const phase of newData) {
+            const task = newData.find(p => p.id === selectedTask?.phaseId)?.tasks.find(t => t.id === taskId);
                 if (task) {
                     Object.assign(task, updates);
                     break;
                 }
             }
-            return newData;
+            setDataWithHistory(newData);
         });
         setIsEditModalOpen(false);
-    }, []);
+    }, [data]);
+
+    const handleToggleColumn = (column: keyof typeof visibleColumns) => {
+        setVisibleColumns(prev => ({ ...prev, [column]: !prev[column] }));
+    };
+
+    const handleExportPNG = () => {
+        if (ganttChartRef.current) {
+            html2canvas(ganttChartRef.current).then(canvas => {
+                const link = document.createElement('a');
+                link.download = 'gantt-chart.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
+        }
+    };
+
+    const handleExportPDF = () => {
+        if (ganttChartRef.current) {
+            html2canvas(ganttChartRef.current).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('l', 'px', [canvas.width, canvas.height]);
+                pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+                pdf.save('gantt-chart.pdf');
+            });
+        }
+    };
+
+    const handleShareLink = () => {
+        navigator.clipboard.writeText(window.location.href);
+        alert('Link copied to clipboard!');
+    };
+
+    const handleZoomIn = () => {
+        setCellWidth(prev => Math.min(prev + 20, 200));
+    };
+
+    const handleZoomOut = () => {
+        setCellWidth(prev => Math.max(prev - 20, 20));
+    };
+
+    const handleSearchChange = (term: string) => {
+        setSearchTerm(term);
+    };
+
+    const handleAssigneeChange = (assignee: string | null) => {
+        setAssigneeFilter(assignee);
+    };
+
+    const handleStartDateChange = (date: Date | null) => {
+        setStartDateFilter(date);
+    };
+
+    const handleDueDateChange = (date: Date | null) => {
+        setDueDateFilter(date);
+    };
+
+    const handleGroupBy = (field: string | null) => {
+        setGroupBy(field);
+    };
+
+    const handleSetBaseline = () => {
+        const newBaseline = {
+            date: new Date(),
+            tasks: data.flatMap(p => p.tasks.map(t => ({ id: t.id, startDate: t.startDate, dueDate: t.dueDate })))
+        };
+        setBaselines(prev => [...prev, newBaseline]);
+        alert('Baseline set!');
+    };
+
+    const handleShowBaselines = () => {
+        setShowBaselines(prev => !prev);
+    };
+
+    const assignees = useMemo(() => {
+        const allAssignees = data.flatMap(p => p.tasks.map(t => t.assignee));
+        return [...new Set(allAssignees)];
+    }, [data]);
+
+    const handleTaskDragStart = (taskId: number, phaseId: string) => {
+        // console.log("drag start", taskId, phaseId);
+    };
+
+    const handleTaskDrop = (taskId: number, newPhaseId: string, newIndex: number) => {
+        const newData = [...data];
+        const oldPhase = newData.find(p => p.tasks.some(t => t.id === taskId));
+        if (!oldPhase) return;
+
+        const taskIndex = oldPhase.tasks.findIndex(t => t.id === taskId);
+        const [task] = oldPhase.tasks.splice(taskIndex, 1);
+
+        const newPhase = newData.find(p => p.id === newPhaseId);
+        if (!newPhase) return;
+
+        newPhase.tasks.splice(newIndex, 0, task);
+        setDataWithHistory(newData);
+    };
 
     return (
         <div className="flex flex-col h-full w-full bg-white">
@@ -239,6 +414,28 @@ export const GanttContainer: React.FC = () => {
                 onGoToToday={handleGoToToday}
                 onNavigate={handleNavigate}
                 visibleMonthYear={format(currentDate, 'MMMM yyyy')}
+                options={{ showDependencies, showProgress, highlightWeekends }}
+                onToggleDependencies={() => setShowDependencies(prev => !prev)}
+                onToggleProgress={() => setShowProgress(prev => !prev)}
+                onToggleWeekends={() => setHighlightWeekends(prev => !prev)}
+                visibleColumns={visibleColumns}
+                onToggleColumn={handleToggleColumn}
+                onExportPNG={handleExportPNG}
+                onExportPDF={handleExportPDF}
+                onShareLink={handleShareLink}
+                onZoomIn={handleZoomIn}
+                onZoomOut={handleZoomOut}
+                onUndo={undo}
+                onRedo={redo}
+                onSetBaseline={handleSetBaseline}
+                onShowBaselines={handleShowBaselines}
+                showBaselines={showBaselines}
+                onSearchChange={handleSearchChange}
+                onAssigneeChange={handleAssigneeChange}
+                onStartDateChange={handleStartDateChange}
+                onDueDateChange={handleDueDateChange}
+                onGroupBy={handleGroupBy}
+                assignees={assignees}
             />
             <div ref={containerRef} className="flex flex-1 overflow-hidden relative">
                 <div className="overflow-y-auto" style={{ width: `${listWidth}%` }}>
@@ -247,9 +444,12 @@ export const GanttContainer: React.FC = () => {
                         onTogglePhase={handleTogglePhase}
                         onAddTask={handleAddTask}
                         onTaskDoubleClick={handleTaskDoubleClickFromList}
+                        visibleColumns={visibleColumns}
+                        onTaskDragStart={handleTaskDragStart}
+                        onTaskDrop={handleTaskDrop}
                     />
                 </div>
-                <div 
+                <div
                     ref={dividerRef}
                     className="w-1 bg-gray-300 hover:bg-blue-500 cursor-col-resize flex-shrink-0 relative group"
                     onMouseDown={handleDividerMouseDown}
@@ -268,6 +468,12 @@ export const GanttContainer: React.FC = () => {
                         onAddDependency={handleAddDependency}
                         onTaskDateChange={handleTaskDateChange}
                         onTaskDoubleClick={handleTaskDoubleClickFromChart}
+                        showDependencies={showDependencies}
+                        highlightWeekends={highlightWeekends}
+                        showProgress={showProgress}
+                        cellWidth={cellWidth}
+                        baselines={baselines}
+                        showBaselines={showBaselines}
                     />
                 </div>
             </div>

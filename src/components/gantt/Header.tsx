@@ -1,15 +1,50 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDownIcon, SearchIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from './Icons';
+import { AssigneeFilter } from './AssigneeFilter';
+import { DateFilter } from './DateFilter';
 
 interface HeaderProps {
     onGoToToday: () => void;
     onNavigate: (direction: 'prev' | 'next') => void;
     visibleMonthYear: string;
+    options: {
+        showDependencies: boolean;
+        showProgress: boolean;
+        highlightWeekends: boolean;
+    };
+    onToggleDependencies: () => void;
+    onToggleProgress: () => void;
+    onToggleWeekends: () => void;
+    visibleColumns: {
+        assignee: boolean;
+        effort: boolean;
+        startDate: boolean;
+        dueDate: boolean;
+        progress: boolean;
+    };
+    onToggleColumn: (column: keyof HeaderProps['visibleColumns']) => void;
+    onExportPNG: () => void;
+    onExportPDF: () => void;
+    onShareLink: () => void;
+    onZoomIn: () => void;
+    onZoomOut: () => void;
+    onUndo: () => void;
+    onRedo: () => void;
+    onSetBaseline: () => void;
+    onShowBaselines: () => void;
+    showBaselines: boolean;
+    onSearchChange: (term: string) => void;
+    onAssigneeChange: (assignee: string | null) => void;
+    onStartDateChange: (date: Date | null) => void;
+    onDueDateChange: (date: Date | null) => void;
+    onGroupBy: (field: string | null) => void;
+    assignees: string[];
 }
 
-const MenuItem: React.FC<{ onClick?: () => void; children: React.ReactNode }> = ({ onClick, children }) => (
-    <li onClick={onClick} className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer whitespace-nowrap">
+const MenuItem: React.FC<{ onClick?: () => void; children: React.ReactNode; active?: boolean }> = ({ onClick, children, active }) => (
+    <li onClick={onClick} className={`px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer whitespace-nowrap flex items-center justify-between ${active ? 'bg-gray-200' : ''}`}>
         {children}
+        {active && <span className="text-green-500">✓</span>}
     </li>
 );
 
@@ -28,7 +63,33 @@ const NavButton: React.FC<{ children: React.ReactNode, onClick: () => void }> = 
     </button>
 );
 
-export const Header: React.FC<HeaderProps> = ({ onGoToToday, onNavigate, visibleMonthYear }) => {
+export const Header: React.FC<HeaderProps> = ({
+    onGoToToday,
+    onNavigate,
+    visibleMonthYear,
+    options,
+    onToggleDependencies,
+    onToggleProgress,
+    onToggleWeekends,
+    visibleColumns,
+    onToggleColumn,
+    onExportPNG,
+    onExportPDF,
+    onShareLink,
+    onZoomIn,
+    onZoomOut,
+    onUndo,
+    onRedo,
+    onSetBaseline,
+    onShowBaselines,
+    showBaselines,
+    onSearchChange,
+    onAssigneeChange,
+    onStartDateChange,
+    onDueDateChange,
+    onGroupBy,
+    assignees
+}) => {
     const [openMenu, setOpenMenu] = useState<string | null>(null);
     const [scale, setScale] = useState<string>('Days');
     const headerRef = useRef<HTMLElement>(null);
@@ -43,43 +104,42 @@ export const Header: React.FC<HeaderProps> = ({ onGoToToday, onNavigate, visible
     };
 
     const handleExportPNG = () => {
-        alert('Export as PNG - Feature coming soon!');
+        onExportPNG();
         setOpenMenu(null);
     };
 
     const handleExportPDF = () => {
-        alert('Export as PDF - Feature coming soon!');
+        onExportPDF();
         setOpenMenu(null);
     };
 
     const handleShareLink = () => {
-        alert('Share Link - Feature coming soon!');
+        onShareLink();
         setOpenMenu(null);
     };
 
     const handleSetBaseline = () => {
-        alert('Set Baseline - Feature coming soon!');
+        onSetBaseline();
         setOpenMenu(null);
     };
 
     const handleShowBaselines = () => {
-        alert('Show Baselines - Feature coming soon!');
-        setOpenMenu(null);
+        onShowBaselines();
     };
 
     const handleToggleDependencies = () => {
-        alert('Toggle Dependencies - Feature coming soon!');
-        setOpenMenu(null);
+        onToggleDependencies();
+        // setOpenMenu(null); // Keep menu open to show status
     };
 
     const handleToggleProgressBar = () => {
-        alert('Toggle Progress Bar - Feature coming soon!');
-        setOpenMenu(null);
+        onToggleProgress();
+        // setOpenMenu(null);
     };
 
     const handleHighlightWeekends = () => {
-        alert('Highlight Weekends - Feature coming soon!');
-        setOpenMenu(null);
+        onToggleWeekends();
+        // setOpenMenu(null);
     };
 
     const handleColumnToggle = (column: string) => {
@@ -124,7 +184,7 @@ export const Header: React.FC<HeaderProps> = ({ onGoToToday, onNavigate, visible
                         {openMenu === 'baselines' && (
                             <DropdownMenu>
                                 <MenuItem onClick={handleSetBaseline}>Set Baseline</MenuItem>
-                                <MenuItem onClick={handleShowBaselines}>Show Baselines</MenuItem>
+                                <MenuItem onClick={handleShowBaselines} active={showBaselines}>Show Baselines</MenuItem>
                             </DropdownMenu>
                         )}
                     </div>
@@ -132,9 +192,9 @@ export const Header: React.FC<HeaderProps> = ({ onGoToToday, onNavigate, visible
                         <NavButton onClick={() => handleMenuToggle('options')}>Options</NavButton>
                         {openMenu === 'options' && (
                             <DropdownMenu>
-                                <MenuItem onClick={handleToggleDependencies}>Show Dependencies</MenuItem>
-                                <MenuItem onClick={handleToggleProgressBar}>Show Progress Bar</MenuItem>
-                                <MenuItem onClick={handleHighlightWeekends}>Highlight Weekends</MenuItem>
+                                <MenuItem onClick={handleToggleDependencies} active={options.showDependencies}>Show Dependencies</MenuItem>
+                                <MenuItem onClick={handleToggleProgressBar} active={options.showProgress}>Show Progress Bar</MenuItem>
+                                <MenuItem onClick={handleHighlightWeekends} active={options.highlightWeekends}>Highlight Weekends</MenuItem>
                             </DropdownMenu>
                         )}
                     </div>
@@ -142,11 +202,11 @@ export const Header: React.FC<HeaderProps> = ({ onGoToToday, onNavigate, visible
                         <NavButton onClick={() => handleMenuToggle('columns')}>Columns</NavButton>
                          {openMenu === 'columns' && (
                             <DropdownMenu>
-                                <MenuItem onClick={() => handleColumnToggle('Assignee')}>Assignee</MenuItem>
-                                <MenuItem onClick={() => handleColumnToggle('Effort (EH)')}>Effort (EH)</MenuItem>
-                                <MenuItem onClick={() => handleColumnToggle('Start Date')}>Start Date</MenuItem>
-                                <MenuItem onClick={() => handleColumnToggle('Due Date')}>Due Date</MenuItem>
-                                <MenuItem onClick={() => handleColumnToggle('Progress (%)')}>Progress (%)</MenuItem>
+                                <MenuItem onClick={() => onToggleColumn('assignee')} active={visibleColumns.assignee}>Assignee</MenuItem>
+                                <MenuItem onClick={() => onToggleColumn('effort')} active={visibleColumns.effort}>Effort (EH)</MenuItem>
+                                <MenuItem onClick={() => onToggleColumn('startDate')} active={visibleColumns.startDate}>Start Date</MenuItem>
+                                <MenuItem onClick={() => onToggleColumn('dueDate')} active={visibleColumns.dueDate}>Due Date</MenuItem>
+                                <MenuItem onClick={() => onToggleColumn('progress')} active={visibleColumns.progress}>Progress (%)</MenuItem>
                             </DropdownMenu>
                         )}
                     </div>
@@ -154,21 +214,24 @@ export const Header: React.FC<HeaderProps> = ({ onGoToToday, onNavigate, visible
                         <NavButton onClick={() => handleMenuToggle('segments')}>Segments</NavButton>
                         {openMenu === 'segments' && (
                             <DropdownMenu>
-                                <MenuItem onClick={() => handleSegmentFilter('Filter tasks...')}>Filter tasks...</MenuItem>
-                                <MenuItem onClick={() => handleSegmentFilter('Group by assignee')}>Group by assignee</MenuItem>
-                                <MenuItem onClick={() => handleSegmentFilter('Group by status')}>Group by status</MenuItem>
+                                <MenuItem onClick={() => onGroupBy(null)}>None</MenuItem>
+                                <MenuItem onClick={() => onGroupBy('assignee')}>Group by assignee</MenuItem>
+                                <MenuItem onClick={() => onGroupBy('status')}>Group by status</MenuItem>
                             </DropdownMenu>
                         )}
                     </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                    <button className="p-2 rounded hover:bg-gray-200" onClick={() => alert('Zoom in - Feature coming soon!')}>
-                        <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8" /></svg>
+                    <button className="p-2 rounded hover:bg-gray-200" onClick={onZoomOut}>
+                        <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" /></svg>
                     </button>
-                    <button className="p-2 rounded hover:bg-gray-200" onClick={() => alert('Undo - Feature coming soon!')}>
+                    <button className="p-2 rounded hover:bg-gray-200" onClick={onZoomIn}>
+                        <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m-3-3h6" /></svg>
+                    </button>
+                    <button className="p-2 rounded hover:bg-gray-200" onClick={onUndo}>
                         <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                     </button>
-                     <button className="p-2 rounded hover:bg-gray-200" onClick={() => alert('Redo - Feature coming soon!')}>
+                    <button className="p-2 rounded hover:bg-gray-200" onClick={onRedo}>
                         <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                     </button>
                 </div>
@@ -179,11 +242,11 @@ export const Header: React.FC<HeaderProps> = ({ onGoToToday, onNavigate, visible
                          <div className="p-2 text-gray-400">
                            <SearchIcon />
                         </div>
-                        <input type="text" placeholder="Search tasks..." className="py-1 focus:outline-none" />
+                        <input type="text" placeholder="Search tasks..." className="py-1 focus:outline-none" onChange={(e) => onSearchChange(e.target.value)} />
                     </div>
-                    <HeaderButton onClick={() => alert('Filter by Assignee - Feature coming soon!')}>Assignee</HeaderButton>
-                    <HeaderButton onClick={() => alert('Filter by Start Date - Feature coming soon!')}>Start</HeaderButton>
-                    <HeaderButton onClick={() => alert('Filter by Due Date - Feature coming soon!')}>Due</HeaderButton>
+                    <AssigneeFilter assignees={assignees} onAssigneeChange={onAssigneeChange} />
+                    <DateFilter date={null} setDate={onStartDateChange} placeholder="Start Date" />
+                    <DateFilter date={null} setDate={onDueDateChange} placeholder="Due Date" />
                 </div>
                 <div className="flex items-center space-x-4">
                      <div className="flex items-center space-x-1">

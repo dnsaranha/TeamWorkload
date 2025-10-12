@@ -15,25 +15,37 @@ interface GanttChartProps {
   totalHeight: number;
   onAddDependency: (fromTaskId: number, toTaskId: number) => void;
   onTaskDateChange: (taskId: number, newStartDate: string, newDueDate: string) => void;
-  onTaskDoubleClick: (task: FullTask) => void;
+    onTaskDoubleClick: (task: Task & { phaseId:string; rowIndex: number }) => void;
+    showDependencies: boolean;
+    highlightWeekends: boolean;
+    showProgress: boolean;
+    cellWidth: number;
+    baselines: any[];
+    showBaselines: boolean;
 }
 
-export const GanttChart: React.FC<GanttChartProps> = ({ 
-  data, 
-  allTasks, 
-  startDate, 
+export const GanttChart = React.forwardRef<HTMLDivElement, GanttChartProps>(({
+  data,
+  allTasks,
+  startDate,
   dateRange, 
   totalWidth, 
   taskPositions, 
   totalHeight, 
   onAddDependency,
   onTaskDateChange,
-  onTaskDoubleClick
-}) => {
+  onTaskDoubleClick,
+  showDependencies,
+  highlightWeekends,
+  showProgress,
+  cellWidth,
+  baselines,
+  showBaselines
+}, ref) => {
 
     const today = new Date();
-    const todayOffset = differenceInDays(today, startDate) * CELL_WIDTH;
-    const chartRef = useRef<HTMLDivElement>(null);
+    const todayOffset = differenceInDays(today, startDate) * cellWidth;
+    const chartRef = ref as React.RefObject<HTMLDivElement>;
     const [dependencyDrawingState, setDependencyDrawingState] = useState<{
         isDrawing: boolean;
         startPos: { x: number; y: number } | null;
@@ -53,9 +65,9 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     // Calculate phase positions for project lines
     const getPhasePosition = (phase: Phase) => {
         if (phase.tasks.length === 0) {
-            const left = differenceInDays(new Date(phase.startDate), startDate) * CELL_WIDTH;
-            const width = (differenceInDays(new Date(phase.dueDate), new Date(phase.startDate)) + 1) * CELL_WIDTH;
-            return { left: Math.max(0, left), width: Math.max(CELL_WIDTH, width) };
+            const left = differenceInDays(new Date(phase.startDate), startDate) * cellWidth;
+            const width = (differenceInDays(new Date(phase.dueDate), new Date(phase.startDate)) + 1) * cellWidth;
+            return { left: Math.max(0, left), width: Math.max(cellWidth, width) };
         }
 
         // Find earliest start date and latest due date from tasks
@@ -65,10 +77,10 @@ export const GanttChart: React.FC<GanttChartProps> = ({
         const earliestStart = new Date(Math.min(...taskStartDates.map(d => d.getTime())));
         const latestEnd = new Date(Math.max(...taskDueDates.map(d => d.getTime())));
 
-        const left = differenceInDays(earliestStart, startDate) * CELL_WIDTH;
-        const width = (differenceInDays(latestEnd, earliestStart) + 1) * CELL_WIDTH;
+        const left = differenceInDays(earliestStart, startDate) * cellWidth;
+        const width = (differenceInDays(latestEnd, earliestStart) + 1) * cellWidth;
 
-        return { left: Math.max(0, left), width: Math.max(CELL_WIDTH, width) };
+        return { left: Math.max(0, left), width: Math.max(cellWidth, width) };
     };
 
     const handleStartDrawing = (e: React.MouseEvent, sourceTask: FullTask) => {
@@ -113,18 +125,18 @@ export const GanttChart: React.FC<GanttChartProps> = ({
 
             if (dragState.dragType === 'move') {
                 const newLeft = Math.max(0, dragState.originalLeft + deltaX);
-                const daysOffset = Math.round(newLeft / CELL_WIDTH);
+                const daysOffset = Math.round(newLeft / cellWidth);
                 const newStartDate = addDays(dateRange[0], daysOffset);
                 const duration = differenceInDays(new Date(task.dueDate), new Date(task.startDate));
                 const newDueDate = addDays(newStartDate, duration);
                 
                 taskPositions.set(dragState.taskId, { ...pos, left: newLeft });
             } else if (dragState.dragType === 'resize-start') {
-                const newLeft = Math.max(0, Math.min(dragState.originalLeft + deltaX, dragState.originalLeft + dragState.originalWidth - CELL_WIDTH));
+                const newLeft = Math.max(0, Math.min(dragState.originalLeft + deltaX, dragState.originalLeft + dragState.originalWidth - cellWidth));
                 const newWidth = dragState.originalWidth - (newLeft - dragState.originalLeft);
                 taskPositions.set(dragState.taskId, { ...pos, left: newLeft, width: newWidth });
             } else if (dragState.dragType === 'resize-end') {
-                const newWidth = Math.max(CELL_WIDTH, dragState.originalWidth + deltaX);
+                const newWidth = Math.max(cellWidth, dragState.originalWidth + deltaX);
                 taskPositions.set(dragState.taskId, { ...pos, width: newWidth });
             }
         }
@@ -140,8 +152,8 @@ export const GanttChart: React.FC<GanttChartProps> = ({
             const pos = taskPositions.get(dragState.taskId);
             
             if (task && pos) {
-                const daysFromStart = Math.round(pos.left / CELL_WIDTH);
-                const durationDays = Math.round(pos.width / CELL_WIDTH);
+                const daysFromStart = Math.round(pos.left / cellWidth);
+                const durationDays = Math.round(pos.width / cellWidth);
                 
                 const newStartDate = addDays(dateRange[0], daysFromStart);
                 const newDueDate = addDays(newStartDate, durationDays - 1);
@@ -208,7 +220,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                                     count++;
                                 }
                              }
-                            acc.push({ week, width: count * CELL_WIDTH });
+                            acc.push({ week, width: count * cellWidth });
                         }
                         return acc;
                     }, [] as { week: string; width: number }[]).map(({ week, width }) => (
@@ -219,7 +231,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                 </div>
                 <div className="flex h-[41px]" style={{ width: totalWidth }}>
                     {dateRange.map((date, index) => (
-                        <div key={index} className={`flex-shrink-0 text-center border-r ${getDay(date) === 0 || getDay(date) === 6 ? 'bg-gray-200' : 'bg-white'}`} style={{ width: CELL_WIDTH }}>
+                        <div key={index} className={`flex-shrink-0 text-center border-r ${highlightWeekends && (getDay(date) === 0 || getDay(date) === 6) ? 'bg-gray-200' : 'bg-white'}`} style={{ width: cellWidth }}>
                             <div className="text-xs text-gray-500">{format(date, 'MMM')}</div>
                             <div className="text-sm font-medium text-gray-800">{format(date, 'd')}</div>
                         </div>
@@ -231,12 +243,12 @@ export const GanttChart: React.FC<GanttChartProps> = ({
             <div className="relative" style={{ height: totalHeight }}>
                  {/* Vertical Lines */}
                 {dateRange.map((_, index) => (
-                    <div key={index} className="absolute top-0 bottom-0 border-l border-gray-200" style={{ left: index * CELL_WIDTH, width: CELL_WIDTH }}></div>
+                    <div key={index} className="absolute top-0 bottom-0 border-l border-gray-200" style={{ left: index * cellWidth, width: cellWidth }}></div>
                 ))}
 
                  {/* Today Marker */}
                 {todayOffset >= 0 && todayOffset <= totalWidth && (
-                     <div className="absolute top-0 bottom-0 border-l-2 border-red-500 z-20" style={{ left: todayOffset + CELL_WIDTH / 2}}>
+                     <div className="absolute top-0 bottom-0 border-l-2 border-red-500 z-20" style={{ left: todayOffset + cellWidth / 2}}>
                         <div className="absolute -top-1 -left-1.5 w-3 h-3 bg-red-500 rounded-full"></div>
                      </div>
                 )}
@@ -316,6 +328,9 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                                     }}
                                 />
                                 <span className="truncate pointer-events-none">{task.name}</span>
+                                {showProgress && (
+                                    <div className="absolute top-0 left-0 h-full bg-black/20 rounded-md" style={{ width: `${task.progress}%` }}></div>
+                                )}
                                 <div
                                     className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100"
                                     onMouseDown={(e) => {
@@ -332,6 +347,34 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                     )
                  })}
 
+                {/* Baselines */}
+                {showBaselines && baselines.map((baseline, baselineIndex) => (
+                    baseline.tasks.map((baselineTask: any) => {
+                        const task = allTasks.find(t => t.id === baselineTask.id);
+                        if (!task) return null;
+
+                        const pos = taskPositions.get(task.id);
+                        if (!pos) return null;
+
+                        const baselineLeft = differenceInDays(new Date(baselineTask.startDate), dateRange[0]) * cellWidth;
+                        const baselineWidth = (differenceInDays(new Date(baselineTask.dueDate), new Date(baselineTask.startDate)) + 1) * cellWidth;
+
+                        return (
+                            <div
+                                key={`baseline-${baselineIndex}-${baselineTask.id}`}
+                                className="absolute h-2 bg-gray-400 rounded-full"
+                                style={{
+                                    top: pos.y + ROW_HEIGHT / 2 - 1,
+                                    left: baselineLeft,
+                                    width: baselineWidth,
+                                    zIndex: 5
+                                }}
+                                title={`Baseline from ${new Date(baseline.date).toLocaleString()}`}
+                            />
+                        );
+                    })
+                ))}
+
                  {/* Dependency Lines */}
                 <svg className="absolute top-0 left-0 w-full h-full pointer-events-none" style={{ width: totalWidth, height: totalHeight }}>
                     <defs>
@@ -339,7 +382,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                             <polygon points="0 0, 10 3.5, 0 7" fill="#6b7280" />
                         </marker>
                     </defs>
-                    {allTasks.flatMap(task => {
+                    {showDependencies && allTasks.flatMap(task => {
                         const toPos = taskPositions.get(task.id);
                         if (!toPos) return [];
 
@@ -373,4 +416,4 @@ export const GanttChart: React.FC<GanttChartProps> = ({
             </div>
         </div>
     );
-};
+});
