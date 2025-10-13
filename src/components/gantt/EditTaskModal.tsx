@@ -12,20 +12,24 @@ import {
 } from '../ui/dialog';
 import type { Task } from '../../types';
 
+import { MultiSelect } from '../ui/MultiSelect';
+
 interface EditTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (taskId: number, updates: Partial<Task>) => void;
   task: Task | null;
+  allTasks: Task[];
 }
 
-export const EditTaskModal: React.FC<EditTaskModalProps> = ({ isOpen, onClose, onSave, task }) => {
+export const EditTaskModal: React.FC<EditTaskModalProps> = ({ isOpen, onClose, onSave, task, allTasks }) => {
   const [taskName, setTaskName] = useState('');
   const [assignee, setAssignee] = useState('');
   const [effort, setEffort] = useState(0);
   const [startDate, setStartDate] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [progress, setProgress] = useState(0);
+  const [dependencies, setDependencies] = useState<number[]>([]);
 
   useEffect(() => {
     if (task) {
@@ -35,8 +39,9 @@ export const EditTaskModal: React.FC<EditTaskModalProps> = ({ isOpen, onClose, o
       setStartDate(task.startDate);
       setDueDate(task.dueDate);
       setProgress(task.progress);
+      setDependencies(task.dependencies || []);
     }
-  }, [task]);
+  }, [task, allTasks]);
 
   const handleSave = () => {
     if (task && taskName.trim()) {
@@ -47,6 +52,7 @@ export const EditTaskModal: React.FC<EditTaskModalProps> = ({ isOpen, onClose, o
         startDate,
         dueDate,
         progress,
+        dependencies,
       });
       onClose();
     }
@@ -64,6 +70,18 @@ export const EditTaskModal: React.FC<EditTaskModalProps> = ({ isOpen, onClose, o
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="dependencies" className="text-right">
+              Dependencies
+            </Label>
+            <MultiSelect
+              options={allTasks.filter(t => t.id !== task.id).map(t => ({ label: t.name, value: t.id.toString() }))}
+              onValueChange={(values) => setDependencies(values.map(Number))}
+              defaultValue={dependencies.map(String)}
+              placeholder="Select dependencies"
+              className="col-span-3"
+            />
+          </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="name" className="text-right">
               Task Name

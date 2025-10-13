@@ -13,8 +13,23 @@ import { taskService, projectService, employeeService, type Task as DBTask, type
 
 export const GanttContainer: React.FC = () => {
     const [data, setData] = useState<Phase[]>([]);
-    const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
-    const [dateRange, setDateRange] = useState<{ start: Date, end: Date }>({ start: new Date(), end: new Date() });
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const taskIdMap = useRef(new Map<string, number>()).current;
+    const idTaskMap = useRef(new Map<number, string>()).current;
+    const taskCounter = useRef(1);
+
+    const getNumericId = (taskId: string) => {
+        if (!taskIdMap.has(taskId)) {
+            const numericId = taskCounter.current++;
+            taskIdMap.set(taskId, numericId);
+            idTaskMap.set(numericId, taskId);
+        }
+        return taskIdMap.get(taskId)!;
+    };
+
+    const getStringId = (numericId: number) => {
+        return idTaskMap.get(numericId);
+    }
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -122,21 +137,6 @@ export const GanttContainer: React.FC = () => {
         loadData();
     }, []);
 
-    useEffect(() => {
-        if (data.length > 0) {
-            const allDates = data.flatMap(p => [new Date(p.startDate), new Date(p.dueDate), ...p.tasks.flatMap(t => [new Date(t.startDate), new Date(t.dueDate)])])
-                .filter(d => !isNaN(d.getTime()));
-
-            if (allDates.length > 0) {
-                const minDate = new Date(Math.min(...allDates.map(d => d.getTime())));
-                const maxDate = new Date(Math.max(...allDates.map(d => d.getTime())));
-                setDateRange({ start: startOfMonth(minDate), end: endOfMonth(maxDate) });
-            } else {
-                setDateRange({ start: startOfMonth(new Date()), end: endOfMonth(new Date()) });
-            }
-        }
-    }, [data]);
-
     const handleDividerMouseDown = (e: React.MouseEvent) => {
         e.preventDefault();
         const startX = e.clientX;
@@ -160,16 +160,15 @@ export const GanttContainer: React.FC = () => {
         document.addEventListener('mouseup', handleMouseUp);
     };
 
-    const { dateRange: memoizedDateRange, totalWidth } = useMemo(() => {
-        if (!dateRange.start || !dateRange.end) {
-            return { dateRange: [], totalWidth: 0 };
-        }
-        const range = eachDayOfInterval({ start: dateRange.start, end: dateRange.end });
+    const { dateRange, totalWidth } = useMemo(() => {
+        const start = startOfMonth(currentDate);
+        const end = endOfMonth(currentDate);
+        const range = eachDayOfInterval({ start, end });
         return {
             dateRange: range,
             totalWidth: range.length * cellWidth,
         };
-    }, [dateRange, cellWidth]);
+    }, [currentDate, cellWidth]);
 
     const allTasks = useMemo(() => {
         let rowIndex = 0;
@@ -258,21 +257,13 @@ export const GanttContainer: React.FC = () => {
         setDataWithHistory(newData);
     }, [data, history, historyIndex]);
 
-    const handleZoomIn = () => {
-        if (viewMode === 'month') setViewMode('week');
-        if (viewMode === 'week') setViewMode('day');
+    const handleNavigate = (direction: 'prev' | 'next') => {
+        setCurrentDate(prev => addDays(prev, direction === 'prev' ? -30 : 30));
     };
 
-    const handleZoomOut = () => {
-        if (viewMode === 'day') setViewMode('week');
-        if (viewMode === 'week') setViewMode('month');
+    const handleGoToToday = () => {
+        setCurrentDate(new Date());
     };
-
-    useEffect(() => {
-        if (viewMode === 'day') setCellWidth(50);
-        if (viewMode === 'week') setCellWidth(150);
-        if (viewMode === 'month') setCellWidth(300);
-    }, [viewMode]);
 
     const handleAddTask = (phaseId: string) => {
         setSelectedPhaseId(phaseId);
@@ -321,16 +312,20 @@ export const GanttContainer: React.FC = () => {
         }
     }, [data]);
 
-    const handleEditTask = useCallback((taskId: number, updates: Partial<Task>) => {
-        const newData = JSON.parse(JSON.stringify(data));
-        const phase = newData.find((p: Phase) => p.tasks.some((t: Task) => t.id === taskId));
-        if (phase) {
-            const task = phase.tasks.find((t: Task) => t.id === taskId);
-            if (task) {
-                Object.assign(task, updates);
-            }
-        }
-        setDataWithHistory(newData);
+    const handleEditTask = useCallback(async (taskId: number, updates: Partial<Task>) => {
+        const stringId = getStringId(taskId);
+        if (!stringId) return;
+
+        const dbUpdates: any = {
+            name: updates.name,
+            start_date: updates.startDate,
+            end_date: updates.dueDate,
+            progress: updates.progress,
+            dependencies: updates.dependencies?.map(getStringId).filter(Boolean) as string[],
+        };
+
+        await taskService.update(stringId, dbUpdates);
+        await loadData();
         setIsEditModalOpen(false);
     }, [data, history, historyIndex]);
 
@@ -433,8 +428,9 @@ export const GanttContainer: React.FC = () => {
     return (
         <div className="flex flex-col h-full w-full bg-white">
             <Header
-                onGoToToday={() => setDateRange({ start: startOfMonth(new Date()), end: endOfMonth(new Date()) })}
-                visibleMonthYear={`${format(dateRange.start, 'MMM yyyy')} - ${format(dateRange.end, 'MMM yyyy')}`}
+                onGoToToday={handleGoToToday}
+                onNavigate={handleNavigate}
+                visibleMonthYear={format(currentDate, 'MMMM yyyy')}
                 options={{ showDependencies, showProgress, highlightWeekends }}
                 onToggleDependencies={() => setShowDependencies(prev => !prev)}
                 onToggleProgress={() => setShowProgress(prev => !prev)}
@@ -481,8 +477,8 @@ export const GanttContainer: React.FC = () => {
                      <GanttChart
                         data={data}
                         allTasks={allTasks}
-                        startDate={memoizedDateRange[0]}
-                        dateRange={memoizedDateRange}
+                        startDate={dateRange[0]}
+                        dateRange={dateRange}
                         totalWidth={totalWidth}
                         taskPositions={taskPositions}
                         totalHeight={totalHeight}
@@ -512,6 +508,7 @@ export const GanttContainer: React.FC = () => {
                     onClose={() => setIsEditModalOpen(false)}
                     onSave={handleEditTask}
                     task={selectedTask}
+                    allTasks={allTasks}
                 />
             )}
         </div>
