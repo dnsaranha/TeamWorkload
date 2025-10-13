@@ -22,7 +22,6 @@ interface GanttChartProps {
     cellWidth: number;
     baselines: any[];
     showBaselines: boolean;
-    viewMode: 'day' | 'week' | 'month';
 }
 
 export const GanttChart = React.forwardRef<HTMLDivElement, GanttChartProps>(({
@@ -41,8 +40,7 @@ export const GanttChart = React.forwardRef<HTMLDivElement, GanttChartProps>(({
   showProgress,
   cellWidth,
   baselines,
-  showBaselines,
-  viewMode
+  showBaselines
 }, ref) => {
 
     const today = new Date();
@@ -210,70 +208,35 @@ export const GanttChart = React.forwardRef<HTMLDivElement, GanttChartProps>(({
             onMouseUp={handleGlobalMouseUp}
         >
             {/* Timeline Header */}
-            <div className="sticky top-0 z-20 bg-gray-100 border-b-2 border-gray-200">
-                {viewMode === 'day' && (
-                    <>
-                        <div className="flex" style={{ width: totalWidth }}>
-                            {dateRange.reduce((acc: { week: string; width: number }[], date) => {
-                                const week = `W${getWeek(date, { weekStartsOn: 1 })}`;
-                                if (!acc.find(item => item.week === week)) {
-                                    const weekStartDate = startOfWeek(date, { weekStartsOn: 1 });
-                                    let count = 0;
-                                    for(let i=0; i<7; i++) {
-                                        if(dateRange.some(d => d.getTime() === addDays(weekStartDate, i).getTime())) {
-                                            count++;
-                                        }
-                                    }
-                                    acc.push({ week, width: count * cellWidth });
+            <div className="sticky top-0 z-10 bg-gray-100 border-b-2 border-gray-200">
+                <div className="flex" style={{ width: totalWidth }}>
+                     {dateRange.reduce((acc: { week: string; width: number }[], date) => {
+                        const week = `W${getWeek(date, { weekStartsOn: 1 })}`;
+                        if (!acc.find(item => item.week === week)) {
+                             const weekStartDate = startOfWeek(date, { weekStartsOn: 1 });
+                             let count = 0;
+                             for(let i=0; i<7; i++) {
+                                if(dateRange.some(d => d.getTime() === addDays(weekStartDate, i).getTime())) {
+                                    count++;
                                 }
-                                return acc;
-                            }, [] as { week: string; width: number }[]).map(({ week, width }) => (
-                                <div key={week} className="text-center font-semibold text-gray-600 border-r" style={{ width }}>
-                                    {week}
-                                </div>
-                            ))}
+                             }
+                            acc.push({ week, width: count * cellWidth });
+                        }
+                        return acc;
+                    }, [] as { week: string; width: number }[]).map(({ week, width }) => (
+                        <div key={week} className="text-center font-semibold text-gray-600 border-r" style={{ width }}>
+                            {week}
                         </div>
-                        <div className="flex h-[41px]" style={{ width: totalWidth }}>
-                            {dateRange.map((date, index) => (
-                                <div key={index} className={`flex-shrink-0 text-center border-r ${highlightWeekends && (getDay(date) === 0 || getDay(date) === 6) ? 'bg-gray-200' : 'bg-white'}`} style={{ width: cellWidth }}>
-                                    <div className="text-xs text-gray-500">{format(date, 'MMM')}</div>
-                                    <div className="text-sm font-medium text-gray-800">{format(date, 'd')}</div>
-                                </div>
-                            ))}
+                    ))}
+                </div>
+                <div className="flex h-[41px]" style={{ width: totalWidth }}>
+                    {dateRange.map((date, index) => (
+                        <div key={index} className={`flex-shrink-0 text-center border-r ${highlightWeekends && (getDay(date) === 0 || getDay(date) === 6) ? 'bg-gray-200' : 'bg-white'}`} style={{ width: cellWidth }}>
+                            <div className="text-xs text-gray-500">{format(date, 'MMM')}</div>
+                            <div className="text-sm font-medium text-gray-800">{format(date, 'd')}</div>
                         </div>
-                    </>
-                )}
-                {viewMode === 'week' && (
-                    <div className="flex h-[41px]" style={{ width: totalWidth }}>
-                        {dateRange.reduce((acc: { week: string; width: number }[], date) => {
-                            const week = `W${getWeek(date, { weekStartsOn: 1 })}`;
-                            if (!acc.find(item => item.week === week)) {
-                                acc.push({ week, width: 7 * cellWidth });
-                            }
-                            return acc;
-                        }, [] as { week: string; width: number }[]).map(({ week, width }) => (
-                            <div key={week} className="text-center font-semibold text-gray-600 border-r" style={{ width }}>
-                                {week}
-                            </div>
-                        ))}
-                    </div>
-                )}
-                {viewMode === 'month' && (
-                    <div className="flex h-[41px]" style={{ width: totalWidth }}>
-                        {dateRange.reduce((acc: { month: string; width: number }[], date) => {
-                            const month = format(date, 'MMM yyyy');
-                            if (!acc.find(item => item.month === month)) {
-                                const daysInMonth = differenceInDays(addDays(startOfMonth(date), 30), startOfMonth(date));
-                                acc.push({ month, width: daysInMonth * cellWidth });
-                            }
-                            return acc;
-                        }, [] as { month: string; width: number }[]).map(({ month, width }) => (
-                            <div key={month} className="text-center font-semibold text-gray-600 border-r" style={{ width }}>
-                                {month}
-                            </div>
-                        ))}
-                    </div>
-                )}
+                    ))}
+                </div>
             </div>
 
             {/* Grid and Tasks */}
@@ -285,7 +248,7 @@ export const GanttChart = React.forwardRef<HTMLDivElement, GanttChartProps>(({
 
                  {/* Today Marker */}
                 {todayOffset >= 0 && todayOffset <= totalWidth && (
-                     <div className="absolute top-0 bottom-0 border-l-2 border-red-500 z-30" style={{ left: todayOffset + cellWidth / 2}}>
+                     <div className="absolute top-0 bottom-0 border-l-2 border-red-500 z-20" style={{ left: todayOffset + cellWidth / 2}}>
                         <div className="absolute -top-1 -left-1.5 w-3 h-3 bg-red-500 rounded-full"></div>
                      </div>
                 )}
