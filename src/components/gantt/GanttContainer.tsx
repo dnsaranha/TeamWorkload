@@ -49,6 +49,7 @@ export const GanttContainer: React.FC = () => {
     const [groupBy, setGroupBy] = useState<string | null>(null);
     const [history, setHistory] = useState<Phase[][]>([]);
     const [historyIndex, setHistoryIndex] = useState(0);
+    const [employees, setEmployees] = useState<{ id: string, name: string }[]>([]);
 
     // New states for options
     const [showDependencies, setShowDependencies] = useState(true);
@@ -64,11 +65,12 @@ export const GanttContainer: React.FC = () => {
 
     const loadData = async () => {
         setLoading(true);
-        const [tasks, projects, employees] = await Promise.all([
+        const [tasks, projects, employeesData] = await Promise.all([
             taskService.getAll(),
             projectService.getAll(),
             employeeService.getAll(),
         ]);
+        setEmployees(employeesData.map(e => ({ id: e.id, name: e.name })));
 
         const phases = projects.map((project, index) => {
             const projectTasks = tasks
@@ -312,6 +314,8 @@ export const GanttContainer: React.FC = () => {
             end_date: updates.dueDate,
             progress: updates.progress,
             dependencies: updates.dependencies?.map(getStringId).filter(Boolean) as string[],
+            status: updates.status,
+            assigned_employee_id: employees.find(e => e.name === updates.assignee)?.id,
         };
 
         await taskService.update(stringId, dbUpdates);
@@ -324,8 +328,8 @@ export const GanttContainer: React.FC = () => {
     };
 
     const handleExportPNG = () => {
-        if (ganttChartRef.current) {
-            html2canvas(ganttChartRef.current).then(canvas => {
+        if (containerRef.current) {
+            html2canvas(containerRef.current).then(canvas => {
                 const link = document.createElement('a');
                 link.download = 'gantt-chart.png';
                 link.href = canvas.toDataURL('image/png');
@@ -499,6 +503,7 @@ export const GanttContainer: React.FC = () => {
                     onSave={handleEditTask}
                     task={selectedTask}
                     allTasks={allTasks}
+                    employees={employees}
                 />
             )}
         </div>

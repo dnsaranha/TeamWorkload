@@ -103,6 +103,7 @@ export type TaskInsert = {
   exceptions?: TaskException[] | null;
   dependencies?: string[] | null;
   progress?: number | null;
+  status?: string | null;
 };
 
 export type TaskUpdate = Partial<TaskInsert>;

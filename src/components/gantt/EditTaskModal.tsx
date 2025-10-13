@@ -13,15 +13,18 @@ import {
 import type { Task } from '../../types';
 import { MultiSelect } from '../ui/MultiSelect';
 
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+
 interface EditTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (taskId: number, updates: Partial<Task>) => void;
   task: Task | null;
   allTasks: Task[];
+  employees: { id: string, name: string }[];
 }
 
-export const EditTaskModal: React.FC<EditTaskModalProps> = ({ isOpen, onClose, onSave, task, allTasks }) => {
+export const EditTaskModal: React.FC<EditTaskModalProps> = ({ isOpen, onClose, onSave, task, allTasks, employees }) => {
   const [taskName, setTaskName] = useState('');
   const [assignee, setAssignee] = useState('');
   const [effort, setEffort] = useState(0);
@@ -30,6 +33,7 @@ export const EditTaskModal: React.FC<EditTaskModalProps> = ({ isOpen, onClose, o
   const [progress, setProgress] = useState(0);
   const [dependencies, setDependencies] = useState<number[]>([]);
   const [successors, setSuccessors] = useState<number[]>([]);
+  const [status, setStatus] = useState('');
 
   useEffect(() => {
     if (task) {
@@ -41,6 +45,7 @@ export const EditTaskModal: React.FC<EditTaskModalProps> = ({ isOpen, onClose, o
       setProgress(task.progress);
       setDependencies(task.dependencies || []);
       setSuccessors(allTasks.filter(t => t.dependencies.includes(task.id)).map(t => t.id));
+      setStatus(task.status || '');
     }
   }, [task, allTasks]);
 
@@ -54,6 +59,7 @@ export const EditTaskModal: React.FC<EditTaskModalProps> = ({ isOpen, onClose, o
         dueDate,
         progress,
         dependencies,
+        status,
       });
 
       const oldSuccessors = allTasks.filter(t => t.dependencies.includes(task.id)).map(t => t.id);
@@ -102,15 +108,32 @@ export const EditTaskModal: React.FC<EditTaskModalProps> = ({ isOpen, onClose, o
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="status" className="text-right">
+              Status
+            </Label>
+            <Input
+              id="status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="col-span-3"
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="assignee" className="text-right">
               Assignee
             </Label>
-            <Input
-              id="assignee"
-              value={assignee}
-              onChange={(e) => setAssignee(e.target.value)}
-              className="col-span-3"
-            />
+            <Select onValueChange={setAssignee} defaultValue={assignee}>
+              <SelectTrigger className="col-span-3">
+                <SelectValue placeholder="Select an assignee" />
+              </SelectTrigger>
+              <SelectContent>
+                {employees.map(employee => (
+                  <SelectItem key={employee.id} value={employee.name}>
+                    {employee.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="effort" className="text-right">

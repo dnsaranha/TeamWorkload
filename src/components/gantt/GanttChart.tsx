@@ -208,7 +208,7 @@ export const GanttChart = React.forwardRef<HTMLDivElement, GanttChartProps>(({
             onMouseUp={handleGlobalMouseUp}
         >
             {/* Timeline Header */}
-            <div className="sticky top-0 z-10 bg-gray-100 border-b-2 border-gray-200">
+            <div className="sticky top-0 z-20 bg-gray-100 border-b-2 border-gray-200">
                 <div className="flex" style={{ width: totalWidth }}>
                      {dateRange.reduce((acc: { week: string; width: number }[], date) => {
                         const week = `W${getWeek(date, { weekStartsOn: 1 })}`;
@@ -248,7 +248,7 @@ export const GanttChart = React.forwardRef<HTMLDivElement, GanttChartProps>(({
 
                  {/* Today Marker */}
                 {todayOffset >= 0 && todayOffset <= totalWidth && (
-                     <div className="absolute top-0 bottom-0 border-l-2 border-red-500 z-20" style={{ left: todayOffset + cellWidth / 2}}>
+                     <div className="absolute top-0 bottom-0 border-l-2 border-red-500 z-30" style={{ left: todayOffset + cellWidth / 2}}>
                         <div className="absolute -top-1 -left-1.5 w-3 h-3 bg-red-500 rounded-full"></div>
                      </div>
                 )}

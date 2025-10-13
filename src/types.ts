@@ -8,6 +8,7 @@ export interface Task {
   progress: number;
   dependencies: number[];
   color: string;
+  status?: string;
 }
 
 export interface Phase {
