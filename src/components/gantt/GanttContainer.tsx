@@ -13,7 +13,8 @@ import { taskService, projectService, employeeService, type Task as DBTask, type
 
 export const GanttContainer: React.FC = () => {
     const [data, setData] = useState<Phase[]>([]);
-    const [currentDate, setCurrentDate] = useState(new Date());
+    const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
+    const [dateRange, setDateRange] = useState<{ start: Date, end: Date }>({ start: new Date(), end: new Date() });
     const taskIdMap = useRef(new Map<string, number>()).current;
     const idTaskMap = useRef(new Map<number, string>()).current;
     const taskCounter = useRef(1);
@@ -50,6 +51,15 @@ export const GanttContainer: React.FC = () => {
     const [history, setHistory] = useState<Phase[][]>([]);
     const [historyIndex, setHistoryIndex] = useState(0);
     const [employees, setEmployees] = useState<{ id: string, name: string }[]>([]);
+
+    useEffect(() => {
+        if (data.length > 0) {
+            const allDates = data.flatMap(p => [new Date(p.startDate), new Date(p.dueDate), ...p.tasks.flatMap(t => [new Date(t.startDate), new Date(t.dueDate)])]);
+            const minDate = new Date(Math.min(...allDates.map(d => d.getTime())));
+            const maxDate = new Date(Math.max(...allDates.map(d => d.getTime())));
+            setDateRange({ start: minDate, end: maxDate });
+        }
+    }, [data]);
 
     // New states for options
     const [showDependencies, setShowDependencies] = useState(true);
@@ -152,15 +162,13 @@ export const GanttContainer: React.FC = () => {
         document.addEventListener('mouseup', handleMouseUp);
     };
 
-    const { dateRange, totalWidth } = useMemo(() => {
-        const start = startOfMonth(currentDate);
-        const end = endOfMonth(currentDate);
-        const range = eachDayOfInterval({ start, end });
+    const { dateRange: memoizedDateRange, totalWidth } = useMemo(() => {
+        const range = eachDayOfInterval({ start: dateRange.start, end: dateRange.end });
         return {
             dateRange: range,
             totalWidth: range.length * cellWidth,
         };
-    }, [currentDate, cellWidth]);
+    }, [dateRange, cellWidth]);
 
     const allTasks = useMemo(() => {
         let rowIndex = 0;
@@ -249,13 +257,6 @@ export const GanttContainer: React.FC = () => {
         setDataWithHistory(newData);
     }, [data, history, historyIndex]);
 
-    const handleNavigate = (direction: 'prev' | 'next') => {
-        setCurrentDate(prev => addDays(prev, direction === 'prev' ? -30 : 30));
-    };
-
-    const handleGoToToday = () => {
-        setCurrentDate(new Date());
-    };
 
     const handleAddTask = (phaseId: string) => {
         setSelectedPhaseId(phaseId);
@@ -355,12 +356,20 @@ export const GanttContainer: React.FC = () => {
     };
 
     const handleZoomIn = () => {
-        setCellWidth(prev => Math.min(prev + 20, 200));
+        if (viewMode === 'month') setViewMode('week');
+        if (viewMode === 'week') setViewMode('day');
     };
 
     const handleZoomOut = () => {
-        setCellWidth(prev => Math.max(prev - 20, 20));
+        if (viewMode === 'day') setViewMode('week');
+        if (viewMode === 'week') setViewMode('month');
     };
+
+    useEffect(() => {
+        if (viewMode === 'day') setCellWidth(50);
+        if (viewMode === 'week') setCellWidth(150);
+        if (viewMode === 'month') setCellWidth(300);
+    }, [viewMode]);
 
     const handleSearchChange = (term: string) => {
         setSearchTerm(term);
@@ -422,9 +431,7 @@ export const GanttContainer: React.FC = () => {
     return (
         <div className="flex flex-col h-full w-full bg-white">
             <Header
-                onGoToToday={handleGoToToday}
-                onNavigate={handleNavigate}
-                visibleMonthYear={format(currentDate, 'MMMM yyyy')}
+                visibleMonthYear={`${format(dateRange.start, 'MMM yyyy')} - ${format(dateRange.end, 'MMM yyyy')}`}
                 options={{ showDependencies, showProgress, highlightWeekends }}
                 onToggleDependencies={() => setShowDependencies(prev => !prev)}
                 onToggleProgress={() => setShowProgress(prev => !prev)}
@@ -485,6 +492,7 @@ export const GanttContainer: React.FC = () => {
                         cellWidth={cellWidth}
                         baselines={baselines}
                         showBaselines={showBaselines}
+                        viewMode={viewMode}
                     />
                 </div>
             </div>
