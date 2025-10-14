@@ -71,6 +71,7 @@ export type Task = {
   hours_per_day?: number | null; // Hours per day for repeated tasks
   special_marker?: string | null;
   exceptions?: any; // Adicionado para exceções
+  dependencies?: string[] | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -99,6 +100,7 @@ export type TaskInsert = {
   hours_per_day?: number | null;
   special_marker?: string | null;
   exceptions?: TaskException[] | null;
+  dependencies?: string[] | null;
 };
 
 export type TaskUpdate = Partial<TaskInsert>;

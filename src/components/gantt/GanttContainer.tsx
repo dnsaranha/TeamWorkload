@@ -13,6 +13,7 @@ import { taskService, projectService, employeeService, type Task as DBTask, type
 
 export const GanttContainer: React.FC = () => {
     const [data, setData] = useState<Phase[]>([]);
+    const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
     const [currentDate, setCurrentDate] = useState(new Date());
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -23,7 +24,6 @@ export const GanttContainer: React.FC = () => {
     const dividerRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const ganttChartRef = useRef<HTMLDivElement>(null);
-    const [cellWidth, setCellWidth] = useState(CELL_WIDTH);
     const [baselines, setBaselines] = useState<any[]>([]);
     const [showBaselines, setShowBaselines] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -33,6 +33,8 @@ export const GanttContainer: React.FC = () => {
     const [groupBy, setGroupBy] = useState<string | null>(null);
     const [history, setHistory] = useState<Phase[][]>([]);
     const [historyIndex, setHistoryIndex] = useState(0);
+    const [employees, setEmployees] = useState<DBEmployee[]>([]);
+    const taskIdMap = useRef(new Map<string, number>());
 
     // New states for options
     const [showDependencies, setShowDependencies] = useState(true);
@@ -48,20 +50,20 @@ export const GanttContainer: React.FC = () => {
 
     const loadData = async () => {
         setLoading(true);
-        const [tasks, projects, employees] = await Promise.all([
+        const [tasks, projects, employeesData] = await Promise.all([
             taskService.getAll(),
             projectService.getAll(),
             employeeService.getAll(),
         ]);
+        setEmployees(employeesData);
 
-        const taskIdMap = new Map<string, number>();
         let taskCounter = 1;
 
         const getNumericId = (taskId: string) => {
-            if (!taskIdMap.has(taskId)) {
-                taskIdMap.set(taskId, taskCounter++);
+            if (!taskIdMap.current.has(taskId)) {
+                taskIdMap.current.set(taskId, taskCounter++);
             }
-            return taskIdMap.get(taskId)!;
+            return taskIdMap.current.get(taskId)!;
         };
 
         const phases = projects.map((project, index) => {
@@ -70,7 +72,7 @@ export const GanttContainer: React.FC = () => {
                 .map(t => ({
                     id: getNumericId(t.id),
                     name: t.name,
-                    assignee: employees.find(e => e.id === t.assigned_employee_id)?.name || 'Unassigned',
+                    assignee: employeesData.find(e => e.id === t.assigned_employee_id)?.name || 'Unassigned',
                     effort: t.estimated_time,
                     startDate: t.start_date,
                     dueDate: t.end_date,
@@ -144,15 +146,44 @@ export const GanttContainer: React.FC = () => {
         document.addEventListener('mouseup', handleMouseUp);
     };
 
-    const { dateRange, totalWidth } = useMemo(() => {
-        const start = startOfMonth(currentDate);
-        const end = endOfMonth(currentDate);
-        const range = eachDayOfInterval({ start, end });
+    const { dateRange, totalWidth, cellWidth } = useMemo(() => {
+        const allDates = data.flatMap(p => [new Date(p.startDate), new Date(p.dueDate), ...p.tasks.flatMap(t => [new Date(t.startDate), new Date(t.dueDate)])]);
+        const validDates = allDates.filter(d => !isNaN(d.getTime()));
+
+        if (validDates.length === 0) {
+            const start = startOfMonth(new Date());
+            const end = endOfMonth(new Date());
+            const range = eachDayOfInterval({ start, end });
+            return {
+                dateRange: range,
+                totalWidth: range.length * CELL_WIDTH,
+                cellWidth: CELL_WIDTH,
+            };
+        }
+
+        const minDate = new Date(Math.min(...validDates.map(d => d.getTime())));
+        const maxDate = new Date(Math.max(...validDates.map(d => d.getTime())));
+
+        const range = eachDayOfInterval({ start: minDate, end: maxDate });
+
+        let cellWidth;
+        switch (viewMode) {
+            case 'week':
+                cellWidth = CELL_WIDTH * 2;
+                break;
+            case 'month':
+                cellWidth = CELL_WIDTH / 2;
+                break;
+            default: // day
+                cellWidth = CELL_WIDTH * 4;
+        }
+
         return {
             dateRange: range,
             totalWidth: range.length * cellWidth,
+            cellWidth,
         };
-    }, [currentDate, cellWidth]);
+    }, [data, viewMode]);
 
     const allTasks = useMemo(() => {
         let rowIndex = 0;
@@ -296,18 +327,25 @@ export const GanttContainer: React.FC = () => {
         }
     }, [data]);
 
-    const handleEditTask = useCallback((taskId: number, updates: Partial<Task>) => {
-        const newData = JSON.parse(JSON.stringify(data));
-        const phase = newData.find((p: Phase) => p.tasks.some((t: Task) => t.id === taskId));
-        if (phase) {
-            const task = phase.tasks.find((t: Task) => t.id === taskId);
-            if (task) {
-                Object.assign(task, updates);
-            }
-        }
-        setDataWithHistory(newData);
+    const handleEditTask = useCallback(async (taskId: number, updates: Partial<Task>) => {
+        const taskUUID = Array.from(taskIdMap.current.entries()).find(([uuid, numId]) => numId === taskId)?.[0];
+        if (!taskUUID) return;
+
+        const employee = employees.find(e => e.name === updates.assignee);
+        const dbUpdates: Partial<DBTask> = {
+            name: updates.name,
+            start_date: updates.startDate,
+            end_date: updates.dueDate,
+            estimated_time: updates.effort,
+            status: updates.progress === 100 ? 'completed' : updates.progress > 0 ? 'in_progress' : 'not_started',
+            dependencies: updates.dependencies?.map(depId => Array.from(taskIdMap.current.entries()).find(([uuid, numId]) => numId === depId)?.[0]).filter(Boolean) as string[],
+            assigned_employee_id: employee?.id,
+        };
+
+        await taskService.update(taskUUID, dbUpdates);
+        await loadData();
         setIsEditModalOpen(false);
-    }, [data, history, historyIndex]);
+    }, [data, history, historyIndex, employees]);
 
     const handleToggleColumn = (column: keyof typeof visibleColumns) => {
         setVisibleColumns(prev => ({ ...prev, [column]: !prev[column] }));
@@ -315,7 +353,12 @@ export const GanttContainer: React.FC = () => {
 
     const handleExportPNG = () => {
         if (ganttChartRef.current) {
-            html2canvas(ganttChartRef.current).then(canvas => {
+            html2canvas(ganttChartRef.current, {
+                width: totalWidth,
+                height: totalHeight,
+                scrollX: 0,
+                scrollY: -window.scrollY
+            }).then(canvas => {
                 const link = document.createElement('a');
                 link.download = 'gantt-chart.png';
                 link.href = canvas.toDataURL('image/png');
@@ -340,13 +383,6 @@ export const GanttContainer: React.FC = () => {
         alert('Link copied to clipboard!');
     };
 
-    const handleZoomIn = () => {
-        setCellWidth(prev => Math.min(prev + 20, 200));
-    };
-
-    const handleZoomOut = () => {
-        setCellWidth(prev => Math.max(prev - 20, 20));
-    };
 
     const handleSearchChange = (term: string) => {
         setSearchTerm(term);
@@ -420,10 +456,10 @@ export const GanttContainer: React.FC = () => {
                 onExportPNG={handleExportPNG}
                 onExportPDF={handleExportPDF}
                 onShareLink={handleShareLink}
-                onZoomIn={handleZoomIn}
-                onZoomOut={handleZoomOut}
                 onUndo={undo}
                 onRedo={redo}
+                viewMode={viewMode}
+                onSetViewMode={setViewMode}
                 onSetBaseline={handleSetBaseline}
                 onShowBaselines={handleShowBaselines}
                 showBaselines={showBaselines}
@@ -453,8 +489,9 @@ export const GanttContainer: React.FC = () => {
                 >
                     <div className="absolute inset-y-0 -left-1 -right-1" />
                 </div>
-                <div className="flex-1 overflow-x-auto">
+                <div className="flex-1 overflow-x-auto" ref={ganttChartRef}>
                      <GanttChart
+                        ref={ganttChartRef}
                         data={data}
                         allTasks={allTasks}
                         startDate={dateRange[0]}
@@ -488,6 +525,8 @@ export const GanttContainer: React.FC = () => {
                     onClose={() => setIsEditModalOpen(false)}
                     onSave={handleEditTask}
                     task={selectedTask}
+                    allTasks={allTasks}
+                    employees={employees}
                 />
             )}
         </div>

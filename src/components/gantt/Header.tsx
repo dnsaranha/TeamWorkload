@@ -26,8 +26,8 @@ interface HeaderProps {
     onExportPNG: () => void;
     onExportPDF: () => void;
     onShareLink: () => void;
-    onZoomIn: () => void;
-    onZoomOut: () => void;
+    viewMode: 'day' | 'week' | 'month';
+    onSetViewMode: (mode: 'day' | 'week' | 'month') => void;
     onUndo: () => void;
     onRedo: () => void;
     onSetBaseline: () => void;
@@ -76,8 +76,8 @@ export const Header: React.FC<HeaderProps> = ({
     onExportPNG,
     onExportPDF,
     onShareLink,
-    onZoomIn,
-    onZoomOut,
+    viewMode,
+    onSetViewMode,
     onUndo,
     onRedo,
     onSetBaseline,
@@ -91,15 +91,15 @@ export const Header: React.FC<HeaderProps> = ({
     assignees
 }) => {
     const [openMenu, setOpenMenu] = useState<string | null>(null);
-    const [scale, setScale] = useState<string>('Days');
     const headerRef = useRef<HTMLElement>(null);
+
 
     const handleMenuToggle = (menuName: string) => {
         setOpenMenu(prev => (prev === menuName ? null : menuName));
     };
 
-    const handleScaleChange = (newScale: string) => {
-        setScale(newScale);
+    const handleScaleChange = (newScale: 'day' | 'week' | 'month') => {
+        onSetViewMode(newScale);
         setOpenMenu(null);
     };
 
@@ -166,7 +166,7 @@ export const Header: React.FC<HeaderProps> = ({
     }, []);
 
     return (
-        <header ref={headerRef} className="flex-shrink-0 bg-gray-50/95 border-b border-gray-200">
+        <header ref={headerRef} className="flex-shrink-0 bg-gray-50/95 border-b border-gray-200 z-20 relative">
             <div className="flex items-center justify-between p-2 h-14">
                 <div className="flex items-center space-x-4">
                     <div className="relative">
@@ -222,12 +222,6 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                    <button className="p-2 rounded hover:bg-gray-200" onClick={onZoomOut}>
-                        <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" /></svg>
-                    </button>
-                    <button className="p-2 rounded hover:bg-gray-200" onClick={onZoomIn}>
-                        <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m-3-3h6" /></svg>
-                    </button>
                     <button className="p-2 rounded hover:bg-gray-200" onClick={onUndo}>
                         <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                     </button>
@@ -256,12 +250,12 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
                     <button onClick={onGoToToday} className="px-4 py-2 text-sm font-semibold text-red-600 bg-white border border-red-500 rounded-md hover:bg-red-50">Today</button>
                     <div className="relative">
-                        <HeaderButton onClick={() => handleMenuToggle('scale')}>Scale: {scale}</HeaderButton>
+                        <HeaderButton onClick={() => handleMenuToggle('scale')}>Scale: {viewMode.charAt(0).toUpperCase() + viewMode.slice(1)}</HeaderButton>
                         {openMenu === 'scale' && (
                             <DropdownMenu>
-                                <MenuItem onClick={() => handleScaleChange('Days')}>Days</MenuItem>
-                                <MenuItem onClick={() => handleScaleChange('Weeks')}>Weeks</MenuItem>
-                                <MenuItem onClick={() => handleScaleChange('Months')}>Months</MenuItem>
+                                <MenuItem onClick={() => handleScaleChange('day')}>Day</MenuItem>
+                                <MenuItem onClick={() => handleScaleChange('week')}>Week</MenuItem>
+                                <MenuItem onClick={() => handleScaleChange('month')}>Month</MenuItem>
                             </DropdownMenu>
                         )}
                     </div>
