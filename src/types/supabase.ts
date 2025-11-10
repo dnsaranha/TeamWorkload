@@ -256,6 +256,90 @@ export type Database = {
           },
         ]
       }
+      execution_logs: {
+        Row: {
+          created_at: string
+          execution_id: string
+          id: string
+          log_type: string
+          message: string | null
+          screenshot_url: string | null
+          step_id: string | null
+          step_order: number | null
+        }
+        Insert: {
+          created_at?: string
+          execution_id: string
+          id?: string
+          log_type: string
+          message?: string | null
+          screenshot_url?: string | null
+          step_id?: string | null
+          step_order?: number | null
+        }
+        Update: {
+          created_at?: string
+          execution_id?: string
+          id?: string
+          log_type?: string
+          message?: string | null
+          screenshot_url?: string | null
+          step_id?: string | null
+          step_order?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "execution_logs_execution_id_fkey"
+            columns: ["execution_id"]
+            isOneToOne: false
+            referencedRelation: "test_executions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "execution_logs_step_id_fkey"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "test_steps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_oauth_tokens: {
+        Row: {
+          access_token: string
+          created_at: string | null
+          expires_at: string
+          id: string
+          refresh_token: string | null
+          scope: string
+          token_type: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          created_at?: string | null
+          expires_at: string
+          id?: string
+          refresh_token?: string | null
+          scope: string
+          token_type?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          refresh_token?: string | null
+          scope?: string
+          token_type?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       m3u_sources: {
         Row: {
           created_at: string
@@ -836,6 +920,112 @@ export type Database = {
           },
         ]
       }
+      test_executions: {
+        Row: {
+          agent_id: string | null
+          completed_at: string | null
+          error_message: string | null
+          id: string
+          script_id: string
+          started_at: string
+          started_by: string | null
+          status: string
+        }
+        Insert: {
+          agent_id?: string | null
+          completed_at?: string | null
+          error_message?: string | null
+          id?: string
+          script_id: string
+          started_at?: string
+          started_by?: string | null
+          status?: string
+        }
+        Update: {
+          agent_id?: string | null
+          completed_at?: string | null
+          error_message?: string | null
+          id?: string
+          script_id?: string
+          started_at?: string
+          started_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_executions_script_id_fkey"
+            columns: ["script_id"]
+            isOneToOne: false
+            referencedRelation: "test_scripts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      test_scripts: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      test_steps: {
+        Row: {
+          created_at: string
+          id: string
+          parameters: Json
+          script_id: string
+          step_order: number
+          step_type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          parameters?: Json
+          script_id: string
+          step_order: number
+          step_type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          parameters?: Json
+          script_id?: string
+          step_order?: number
+          step_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_steps_script_id_fkey"
+            columns: ["script_id"]
+            isOneToOne: false
+            referencedRelation: "test_scripts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_settings: {
         Row: {
           created_at: string
@@ -1201,6 +1391,10 @@ export type Database = {
       get_project_member_role: {
         Args: { project_uuid: string; user_uuid: string }
         Returns: Database["public"]["Enums"]["user_role"]
+      }
+      is_google_token_expired: {
+        Args: { user_id_param: string }
+        Returns: boolean
       }
       is_project_member: {
         Args: {
