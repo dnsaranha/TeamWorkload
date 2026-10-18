@@ -278,296 +278,313 @@ const ProjectList = () => {
   };
 
   return (
-    <div className="bg-background p-6 w-full">
-      <Card className="w-full">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Project Management</CardTitle>
-          <div className="flex items-center space-x-2">
-            <div className="relative">
+    <div className="bg-background w-full">
+      <Card className="w-full shadow-sm">
+        <CardHeader className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-4 sm:p-6">
+          <CardTitle className="text-lg sm:text-xl font-bold">Projetos</CardTitle>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2">
+            <div className="relative flex-1 sm:w-64">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search projects..."
-                className="pl-8 w-[250px]"
+                placeholder="Buscar projetos..."
+                className="pl-8 w-full"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={exportToExcel}
-              className="flex items-center gap-1"
-            >
-              <Download className="h-4 w-4" />
-              Export
-            </Button>
-            <div className="relative">
-              <input
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleFileImport}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                id="project-file-import"
-              />
+            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
               <Button
                 variant="outline"
                 size="sm"
-                className="flex items-center gap-1"
-                onClick={() =>
-                  document.getElementById("project-file-import")?.click()
-                }
+                onClick={exportToExcel}
+                className="flex items-center gap-1 flex-1 sm:flex-none justify-center"
               >
-                <Upload className="h-4 w-4" />
-                Import
+                <Download className="h-4 w-4" />
+                <span>Exportar</span>
               </Button>
-            </div>
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="flex items-center gap-1">
-                  <PlusCircle className="h-4 w-4" />
-                  Add Project
+              <div className="relative flex-1 sm:flex-none">
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleFileImport}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  id="project-file-import"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-1 w-full justify-center"
+                  onClick={() =>
+                    document.getElementById("project-file-import")?.click()
+                  }
+                >
+                  <Upload className="h-4 w-4" />
+                  <span>Importar</span>
                 </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add New Project</DialogTitle>
-                  <DialogDescription>
-                    Enter the details for the new project.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="name" className="text-right">
-                      Name
-                    </Label>
-                    <Input
-                      id="name"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleInputChange}
-                      className="col-span-3"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="description" className="text-right">
-                      Description
-                    </Label>
-                    <Textarea
-                      id="description"
-                      name="description"
-                      value={formData.description}
-                      onChange={handleInputChange}
-                      className="col-span-3"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="start_date" className="text-right">
-                      Start Date
-                    </Label>
-                    <Input
-                      id="start_date"
-                      name="start_date"
-                      type="date"
-                      value={formData.start_date}
-                      onChange={handleInputChange}
-                      className="col-span-3"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="end_date" className="text-right">
-                      End Date
-                    </Label>
-                    <Input
-                      id="end_date"
-                      name="end_date"
-                      type="date"
-                      value={formData.end_date}
-                      onChange={handleInputChange}
-                      className="col-span-3"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label
-                      htmlFor="categoria_estrategica"
-                      className="text-right"
-                    >
-                      Strategic Category
-                    </Label>
-                    <Input
-                      id="categoria_estrategica"
-                      name="categoria_estrategica"
-                      value={formData.categoria_estrategica}
-                      onChange={handleInputChange}
-                      className="col-span-3"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="special_marker" className="text-right">
-                      Special Marker
-                    </Label>
-                    <Select
-                      name="special_marker"
-                      onValueChange={(value) =>
-                        handleSelectChange("special_marker", value)
-                      }
-                      value={formData.special_marker}
-                    >
-                      <SelectTrigger className="col-span-3">
-                        <SelectValue placeholder="Select a marker" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        <SelectItem value="major_release">
-                          Major Release
-                        </SelectItem>
-                        <SelectItem value="major_deployment">
-                          Major Deployment
-                        </SelectItem>
-                        <SelectItem value="major_theme">Major Theme</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsAddDialogOpen(false)}
-                  >
-                    Cancel
+              </div>
+              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="flex items-center gap-1 flex-1 sm:flex-none justify-center">
+                    <PlusCircle className="h-4 w-4" />
+                    <span>Novo</span>
                   </Button>
-                  <Button onClick={handleAddProject}>Add Project</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                </DialogTrigger>
+                <DialogContent className="max-w-md w-[calc(100%-2rem)]">
+                  <DialogHeader>
+                    <DialogTitle>Novo Projeto</DialogTitle>
+                    <DialogDescription>
+                      Preencha as informações para cadastrar um novo projeto.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                      <Label htmlFor="name" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                        Nome
+                      </Label>
+                      <Input
+                        id="name"
+                        name="name"
+                        value={formData.name}
+                        onChange={handleInputChange}
+                        className="sm:col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                      <Label htmlFor="description" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                        Descrição
+                      </Label>
+                      <Textarea
+                        id="description"
+                        name="description"
+                        value={formData.description}
+                        onChange={handleInputChange}
+                        className="sm:col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                      <Label htmlFor="start_date" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                        Início
+                      </Label>
+                      <Input
+                        id="start_date"
+                        name="start_date"
+                        type="date"
+                        value={formData.start_date}
+                        onChange={handleInputChange}
+                        className="sm:col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                      <Label htmlFor="end_date" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                        Término
+                      </Label>
+                      <Input
+                        id="end_date"
+                        name="end_date"
+                        type="date"
+                        value={formData.end_date}
+                        onChange={handleInputChange}
+                        className="sm:col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                      <Label
+                        htmlFor="categoria_estrategica"
+                        className="text-left sm:text-right text-xs sm:text-sm font-medium"
+                      >
+                        Categoria
+                      </Label>
+                      <Input
+                        id="categoria_estrategica"
+                        name="categoria_estrategica"
+                        value={formData.categoria_estrategica}
+                        onChange={handleInputChange}
+                        placeholder="Ex: Produto, Marketing"
+                        className="sm:col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                      <Label htmlFor="special_marker" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                        Marcador
+                      </Label>
+                      <Select
+                        name="special_marker"
+                        onValueChange={(value) =>
+                          handleSelectChange("special_marker", value)
+                        }
+                        value={formData.special_marker}
+                      >
+                        <SelectTrigger className="sm:col-span-3">
+                          <SelectValue placeholder="Selecione um marcador" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Nenhum</SelectItem>
+                          <SelectItem value="major_release">
+                            Major Release
+                          </SelectItem>
+                          <SelectItem value="major_deployment">
+                            Major Deployment
+                          </SelectItem>
+                          <SelectItem value="major_theme">Major Theme</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-0">
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsAddDialogOpen(false)}
+                      className="w-full sm:w-auto"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button onClick={handleAddProject} className="w-full sm:w-auto">Criar Projeto</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Start Date</TableHead>
-                <TableHead>End Date</TableHead>
-                <TableHead>Strategic Category</TableHead>
-                <TableHead>Special Marker</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
+        <CardContent className="p-0 sm:p-6">
+          <div className="overflow-x-auto">
+            <Table className="min-w-[620px]">
+              <TableHeader>
                 <TableRow>
-                  <TableCell
-                    colSpan={7}
-                    className="text-center py-6 text-muted-foreground"
-                  >
-                    Loading projects...
-                  </TableCell>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead>Data de Início</TableHead>
+                  <TableHead>Data de Término</TableHead>
+                  <TableHead>Categoria</TableHead>
+                  <TableHead>Marcador</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
-              ) : filteredProjects.length > 0 ? (
-                filteredProjects.map((project) => (
-                  <TableRow key={project.id}>
-                    <TableCell className="font-medium">
-                      {project.name}
-                    </TableCell>
-                    <TableCell>{project.description}</TableCell>
-                    <TableCell>{project.start_date}</TableCell>
-                    <TableCell>{project.end_date}</TableCell>
-                    <TableCell>{project.categoria_estrategica}</TableCell>
-                    <TableCell>{project.special_marker}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditDialog(project)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>
-                                Delete Project
-                              </AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to delete {project.name}?
-                                This action cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() =>
-                                  handleDeleteProject(project.id)
-                                }
-                                className="bg-destructive text-destructive-foreground"
-                              >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={7}
+                      className="text-center py-6 text-muted-foreground"
+                    >
+                      Carregando projetos...
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={7}
-                    className="text-center py-6 text-muted-foreground"
-                  >
-                    No projects found
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                ) : filteredProjects.length > 0 ? (
+                  filteredProjects.map((project) => (
+                    <TableRow key={project.id}>
+                      <TableCell className="font-medium">
+                        {project.name}
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate">
+                        {project.description || "-"}
+                      </TableCell>
+                      <TableCell>{project.start_date || "-"}</TableCell>
+                      <TableCell>{project.end_date || "-"}</TableCell>
+                      <TableCell>{project.categoria_estrategica || "-"}</TableCell>
+                      <TableCell>
+                        {project.special_marker && project.special_marker !== "none" ? (
+                          <span className="capitalize text-xs bg-muted px-2 py-0.5 rounded">
+                            {project.special_marker.replace("_", " ")}
+                          </span>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEditDialog(project)}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent className="w-[calc(100%-2rem)] max-w-md">
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Excluir Projeto
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Tem certeza que deseja excluir {project.name}?
+                                  Esta ação não pode ser desfeita.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-0">
+                                <AlertDialogCancel className="w-full sm:w-auto">Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() =>
+                                    handleDeleteProject(project.id)
+                                  }
+                                  className="bg-destructive text-destructive-foreground w-full sm:w-auto"
+                                >
+                                  Excluir
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={7}
+                      className="text-center py-6 text-muted-foreground"
+                    >
+                      Nenhum projeto encontrado
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md w-[calc(100%-2rem)]">
           <DialogHeader>
-            <DialogTitle>Edit Project</DialogTitle>
+            <DialogTitle>Editar Projeto</DialogTitle>
             <DialogDescription>
-              Update the project's information.
+              Atualize as informações do projeto.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-name" className="text-right">
-                Name
+          <div className="grid gap-4 py-2">
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+              <Label htmlFor="edit-name" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                Nome
               </Label>
               <Input
                 id="edit-name"
                 name="name"
                 value={formData.name}
                 onChange={handleInputChange}
-                className="col-span-3"
+                className="sm:col-span-3"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-description" className="text-right">
-                Description
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+              <Label htmlFor="edit-description" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                Descrição
               </Label>
               <Textarea
                 id="edit-description"
                 name="description"
                 value={formData.description}
                 onChange={handleInputChange}
-                className="col-span-3"
+                className="sm:col-span-3"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-start_date" className="text-right">
-                Start Date
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+              <Label htmlFor="edit-start_date" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                Início
               </Label>
               <Input
                 id="edit-start_date"
@@ -575,12 +592,12 @@ const ProjectList = () => {
                 type="date"
                 value={formData.start_date}
                 onChange={handleInputChange}
-                className="col-span-3"
+                className="sm:col-span-3"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-end_date" className="text-right">
-                End Date
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+              <Label htmlFor="edit-end_date" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                Término
               </Label>
               <Input
                 id="edit-end_date"
@@ -588,27 +605,27 @@ const ProjectList = () => {
                 type="date"
                 value={formData.end_date}
                 onChange={handleInputChange}
-                className="col-span-3"
+                className="sm:col-span-3"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
               <Label
                 htmlFor="edit-categoria_estrategica"
-                className="text-right"
+                className="text-left sm:text-right text-xs sm:text-sm font-medium"
               >
-                Strategic Category
+                Categoria
               </Label>
               <Input
                 id="edit-categoria_estrategica"
                 name="categoria_estrategica"
                 value={formData.categoria_estrategica}
                 onChange={handleInputChange}
-                className="col-span-3"
+                className="sm:col-span-3"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-special_marker" className="text-right">
-                Special Marker
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+              <Label htmlFor="edit-special_marker" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                Marcador
               </Label>
               <Select
                 name="special_marker"
@@ -617,11 +634,11 @@ const ProjectList = () => {
                 }
                 value={formData.special_marker}
               >
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select a marker" />
+                <SelectTrigger className="sm:col-span-3">
+                  <SelectValue placeholder="Selecione um marcador" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="none">Nenhum</SelectItem>
                   <SelectItem value="major_release">
                     Major Release
                   </SelectItem>
@@ -633,14 +650,15 @@ const ProjectList = () => {
               </Select>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-0">
             <Button
               variant="outline"
               onClick={() => setIsEditDialogOpen(false)}
+              className="w-full sm:w-auto"
             >
-              Cancel
+              Cancelar
             </Button>
-            <Button onClick={handleEditProject}>Save Changes</Button>
+            <Button onClick={handleEditProject} className="w-full sm:w-auto">Salvar Alterações</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,0 +1,6 @@
+{
+  "summary": "Plano de implementação para o Gráfico de Gantt: ajustes de posição da descrição nas barras (dentro, fora, ambas), visibilidade e campos customizados na barra e na tabela lateral, drag-and-drop interativo para mover e redimensionar tarefas, criação visual de conexões de dependência e reajuste automático das datas do projeto com alertas.",
+  "updatedAt": "2026-10-17T10:43:58.006241401Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,15 +11,23 @@ import {
   X,
   FolderOpen,
   Target,
+  Smartphone,
+  Layers,
+  Grid3X3,
+  Table,
 } from "lucide-react";
+import { ThemeToggleButton } from "@/lib/theme";
 import WorkloadCalendar from "./WorkloadCalendar";
+import XiaomiCalendar from "./XiaomiCalendar";
+import GanttChart from "./GanttChart";
+import ProjectGridSheet from "./ProjectGridSheet";
+import ResourcePlanningView from "./ResourcePlanningView";
 import EmployeeList from "./EmployeeList";
-import TaskManagement from "./TaskManagement";
 import WorkloadSummary from "./WorkloadSummary";
-import ProjectVisualization from "./ProjectVisualization";
-import ProjectList from "./ProjectList";
+import ReportsView from "./ReportsView";
 import UserProfile from "./UserProfile";
 import Roadmap from "./Roadmap";
+import FloatingTimeTracker from "./FloatingTimeTracker";
 import {
   employeeService,
   taskService,
@@ -111,17 +118,53 @@ const HomePage = () => {
   };
 
   return (
-    <div className="flex h-screen bg-background">
-      {/* Sidebar */}
+    <div className="flex flex-col md:flex-row h-screen bg-background overflow-hidden">
+      {/* Mobile Top Header */}
+      {isMobile && (
+        <header className="flex-shrink-0 h-14 bg-card border-b px-4 flex items-center justify-between z-40">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
+              TW
+            </div>
+            <div>
+              <h1 className="text-base font-bold leading-tight">Team Workload</h1>
+              <p className="text-[10px] text-muted-foreground capitalize leading-tight">
+                {activeTab}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-1">
+            <ThemeToggleButton />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-full"
+              onClick={() => setActiveTab("profile")}
+            >
+              <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold">
+                U
+              </div>
+            </Button>
+          </div>
+        </header>
+      )}
+
+      {/* Sidebar (Desktop) / Bottom Nav (Mobile) */}
       <div
-        className={`${isMobile ? "fixed bottom-0 left-0 right-0 z-50 h-16 flex-row border-t" : sidebarCollapsed ? "w-16" : "w-64"} ${isMobile ? "" : "border-r"} bg-card ${isMobile ? "p-2" : "p-4"} flex ${isMobile ? "flex-row justify-around items-center" : "flex-col"} transition-all duration-300`}
+        className={`${
+          isMobile
+            ? "fixed bottom-0 left-0 right-0 z-50 h-16 border-t bg-card/95 backdrop-blur-md px-1 py-1 flex flex-row items-center shadow-lg overflow-x-auto"
+            : sidebarCollapsed
+              ? "w-16 border-r bg-card p-3 flex flex-col transition-all duration-300"
+              : "w-64 border-r bg-card p-4 flex flex-col transition-all duration-300"
+        }`}
       >
         {!isMobile && (
-          <div className="mb-8">
+          <div className="mb-6">
             {!sidebarCollapsed && (
               <>
                 <h1 className="text-2xl font-bold text-primary">
-                  Workload Manager
+                  Team Workload
                 </h1>
                 <p className="text-sm text-muted-foreground">
                   Team capacity planning
@@ -130,7 +173,7 @@ const HomePage = () => {
             )}
             {sidebarCollapsed && (
               <div className="text-center">
-                <h1 className="text-lg font-bold text-primary">WM</h1>
+                <h1 className="text-lg font-bold text-primary">TW</h1>
               </div>
             )}
           </div>
@@ -141,102 +184,191 @@ const HomePage = () => {
             variant="ghost"
             size="sm"
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className={`mb-4 ${sidebarCollapsed ? "w-8 h-8 p-0" : "w-full items-center justify-start"}`}
+            className={`mb-4 ${sidebarCollapsed ? "w-8 h-8 p-0 mx-auto" : "w-full items-center justify-start"}`}
           >
             {sidebarCollapsed ? (
               <Menu className="h-4 w-4" />
             ) : (
               <>
-                <Menu className="mr-2 h-4 w-4 flex justify-end items-center" />
+                <Menu className="mr-2 h-4 w-4" />
+                <span className="text-xs text-muted-foreground">Recolher menu</span>
               </>
             )}
           </Button>
         )}
 
         <nav
-          className={`${isMobile ? "flex flex-row justify-around w-full" : "space-y-2 flex-1"}`}
+          className={`${isMobile ? "flex flex-row justify-between w-full min-w-max px-1 items-center gap-1" : "space-y-1.5 flex-1"}`}
         >
           <Button
             variant={activeTab === "dashboard" ? "default" : "ghost"}
-            className={`${isMobile ? "flex-col p-2 h-12" : sidebarCollapsed ? "w-8 h-8 p-0" : "w-full justify-start"}`}
+            className={`${
+              isMobile
+                ? "flex-col p-1 h-14 min-w-[52px] gap-0.5 rounded-lg"
+                : sidebarCollapsed
+                  ? "w-10 h-10 p-0 mx-auto"
+                  : "w-full justify-start"
+            }`}
             onClick={() => setActiveTab("dashboard")}
           >
             <Home
-              className={`${isMobile ? "mb-1" : sidebarCollapsed ? "" : "mr-2"} h-4 w-4`}
+              className={`${isMobile ? "h-4 w-4" : sidebarCollapsed ? "h-4 w-4" : "mr-2 h-4 w-4"}`}
             />
             {!sidebarCollapsed && !isMobile && "Dashboard"}
-            {isMobile && <span className="text-xs">Home</span>}
+            {isMobile && <span className="text-[10px] font-medium leading-tight">Home</span>}
           </Button>
+
           <Button
-            variant={activeTab === "employees" ? "default" : "ghost"}
-            className={`${isMobile ? "flex-col p-2 h-12" : sidebarCollapsed ? "w-8 h-8 p-0" : "w-full justify-start"}`}
-            onClick={() => setActiveTab("employees")}
+            variant={activeTab === "planning" ? "default" : "ghost"}
+            className={`${
+              isMobile
+                ? "flex-col p-1 h-14 min-w-[52px] gap-0.5 rounded-lg"
+                : sidebarCollapsed
+                  ? "w-10 h-10 p-0 mx-auto"
+                  : "w-full justify-start"
+            } text-blue-600 dark:text-blue-400 font-semibold`}
+            onClick={() => setActiveTab("planning")}
           >
-            <Users
-              className={`${isMobile ? "mb-1" : sidebarCollapsed ? "" : "mr-2"} h-4 w-4`}
+            <BarChart3
+              className={`${isMobile ? "h-4 w-4" : sidebarCollapsed ? "h-4 w-4" : "mr-2 h-4 w-4"}`}
             />
-            {!sidebarCollapsed && !isMobile && "Employees"}
-            {isMobile && <span className="text-xs">Team</span>}
+            {!sidebarCollapsed && !isMobile && "Alocação & Capacidade"}
+            {isMobile && <span className="text-[10px] font-medium leading-tight">Alocação</span>}
           </Button>
+
           <Button
-            variant={activeTab === "tasks" ? "default" : "ghost"}
-            className={`${isMobile ? "flex-col p-2 h-12" : sidebarCollapsed ? "w-8 h-8 p-0" : "w-full justify-start"}`}
-            onClick={() => setActiveTab("tasks")}
+            variant={activeTab === "grid" ? "default" : "ghost"}
+            className={`${
+              isMobile
+                ? "flex-col p-1 h-14 min-w-[52px] gap-0.5 rounded-lg"
+                : sidebarCollapsed
+                  ? "w-10 h-10 p-0 mx-auto"
+                  : "w-full justify-start"
+            } text-[#107c41] dark:text-[#28a745] font-semibold`}
+            onClick={() => setActiveTab("grid")}
           >
-            <ListTodo
-              className={`${isMobile ? "mb-1" : sidebarCollapsed ? "" : "mr-2"} h-4 w-4`}
+            <Grid3X3
+              className={`${isMobile ? "h-4 w-4" : sidebarCollapsed ? "h-4 w-4" : "mr-2 h-4 w-4"}`}
             />
-            {!sidebarCollapsed && !isMobile && "Tasks"}
-            {isMobile && <span className="text-xs">Tasks</span>}
+            {!sidebarCollapsed && !isMobile && "Grade (Tarefas & Projetos)"}
+            {isMobile && <span className="text-[10px] font-medium leading-tight">Grade</span>}
           </Button>
+
           <Button
-            variant={activeTab === "projects" ? "default" : "ghost"}
-            className={`${isMobile ? "flex-col p-2 h-12" : sidebarCollapsed ? "w-8 h-8 p-0" : "w-full justify-start"}`}
-            onClick={() => setActiveTab("projects")}
+            variant={activeTab === "gantt" ? "default" : "ghost"}
+            className={`${
+              isMobile
+                ? "flex-col p-1 h-14 min-w-[52px] gap-0.5 rounded-lg"
+                : sidebarCollapsed
+                  ? "w-10 h-10 p-0 mx-auto"
+                  : "w-full justify-start"
+            } text-indigo-600 dark:text-indigo-400 font-semibold`}
+            onClick={() => setActiveTab("gantt")}
           >
-            <FolderOpen
-              className={`${isMobile ? "mb-1" : sidebarCollapsed ? "" : "mr-2"} h-4 w-4`}
+            <Layers
+              className={`${isMobile ? "h-4 w-4" : sidebarCollapsed ? "h-4 w-4" : "mr-2 h-4 w-4"}`}
             />
-            {!sidebarCollapsed && !isMobile && "Projects"}
-            {isMobile && <span className="text-xs">Projects</span>}
+            {!sidebarCollapsed && !isMobile && "Gráfico Gantt"}
+            {isMobile && <span className="text-[10px] font-medium leading-tight">Gantt</span>}
           </Button>
+
           <Button
             variant={activeTab === "roadmap" ? "default" : "ghost"}
-            className={`${isMobile ? "flex-col p-2 h-12" : sidebarCollapsed ? "w-8 h-8 p-0" : "w-full justify-start"}`}
+            className={`${
+              isMobile
+                ? "flex-col p-1 h-14 min-w-[52px] gap-0.5 rounded-lg"
+                : sidebarCollapsed
+                  ? "w-10 h-10 p-0 mx-auto"
+                  : "w-full justify-start"
+            }`}
             onClick={() => setActiveTab("roadmap")}
           >
             <Target
-              className={`${isMobile ? "mb-1" : sidebarCollapsed ? "" : "mr-2"} h-4 w-4`}
+              className={`${isMobile ? "h-4 w-4" : sidebarCollapsed ? "h-4 w-4" : "mr-2 h-4 w-4"}`}
             />
             {!sidebarCollapsed && !isMobile && "Roadmap"}
-            {isMobile && <span className="text-xs">Roadmap</span>}
+            {isMobile && <span className="text-[10px] font-medium leading-tight">Roadmap</span>}
           </Button>
+
+          <Button
+            variant={activeTab === "xiaomi-calendar" ? "default" : "ghost"}
+            className={`${
+              isMobile
+                ? "flex-col p-1 h-14 min-w-[52px] gap-0.5 rounded-lg"
+                : sidebarCollapsed
+                  ? "w-10 h-10 p-0 mx-auto"
+                  : "w-full justify-start"
+            } text-blue-600 dark:text-blue-400 font-semibold`}
+            onClick={() => setActiveTab("xiaomi-calendar")}
+          >
+            <Smartphone
+              className={`${isMobile ? "h-4 w-4" : sidebarCollapsed ? "h-4 w-4" : "mr-2 h-4 w-4"}`}
+            />
+            {!sidebarCollapsed && !isMobile && "Cal. Xiaomi"}
+            {isMobile && <span className="text-[10px] font-medium leading-tight">Xiaomi</span>}
+          </Button>
+
           <Button
             variant={activeTab === "reports" ? "default" : "ghost"}
-            className={`${isMobile ? "flex-col p-2 h-12" : sidebarCollapsed ? "w-8 h-8 p-0" : "w-full justify-start"}`}
+            className={`${
+              isMobile
+                ? "flex-col p-1 h-14 min-w-[52px] gap-0.5 rounded-lg"
+                : sidebarCollapsed
+                  ? "w-10 h-10 p-0 mx-auto"
+                  : "w-full justify-start"
+            }`}
             onClick={() => setActiveTab("reports")}
           >
             <BarChart3
-              className={`${isMobile ? "mb-1" : sidebarCollapsed ? "" : "mr-2"} h-4 w-4`}
+              className={`${isMobile ? "h-4 w-4" : sidebarCollapsed ? "h-4 w-4" : "mr-2 h-4 w-4"}`}
             />
-            {!sidebarCollapsed && !isMobile && "Reports"}
-            {isMobile && <span className="text-xs">Reports</span>}
+            {!sidebarCollapsed && !isMobile && "Relatórios"}
+            {isMobile && <span className="text-[10px] font-medium leading-tight">Relatórios</span>}
+          </Button>
+
+          <Button
+            variant={activeTab === "employees" ? "default" : "ghost"}
+            className={`${
+              isMobile
+                ? "flex-col p-1 h-14 min-w-[52px] gap-0.5 rounded-lg"
+                : sidebarCollapsed
+                  ? "w-10 h-10 p-0 mx-auto"
+                  : "w-full justify-start"
+            }`}
+            onClick={() => setActiveTab("employees")}
+          >
+            <Users
+              className={`${isMobile ? "h-4 w-4" : sidebarCollapsed ? "h-4 w-4" : "mr-2 h-4 w-4"}`}
+            />
+            {!sidebarCollapsed && !isMobile && "Colaboradores"}
+            {isMobile && <span className="text-[10px] font-medium leading-tight">Equipe</span>}
           </Button>
         </nav>
 
         {!isMobile && (
-          <div className="pt-4 border-t">
+          <div className="pt-3 border-t space-y-2">
+            <div className={`flex items-center ${sidebarCollapsed ? "justify-center" : "justify-between px-1"}`}>
+              {!sidebarCollapsed && (
+                <span className="text-xs text-muted-foreground font-medium">Aparência</span>
+              )}
+              <ThemeToggleButton
+                variant="outline"
+                size="sm"
+                className={sidebarCollapsed ? "w-10 h-10 p-0" : "h-8 px-2.5 text-xs"}
+                showLabel={false}
+              />
+            </div>
             <Button
               variant={activeTab === "profile" ? "default" : "ghost"}
-              className={`${sidebarCollapsed ? "w-8 h-8 p-0" : "w-full justify-start"} hover:bg-accent`}
+              className={`${sidebarCollapsed ? "w-10 h-10 p-0 mx-auto" : "w-full justify-start"} hover:bg-accent`}
               onClick={() => setActiveTab("profile")}
             >
-              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
+              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold">
                 U
               </div>
               {!sidebarCollapsed && (
                 <div className="ml-2 text-left">
-                  <p className="text-sm font-medium">User Name</p>
+                  <p className="text-sm font-medium">User Profile</p>
                   <p className="text-xs text-muted-foreground">Administrator</p>
                 </div>
               )}
@@ -244,72 +376,85 @@ const HomePage = () => {
           </div>
         )}
       </div>
+
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        <div className={`flex-1 overflow-auto p-6 ${isMobile ? "pb-20" : ""}`}>
+        <main
+          className={`flex-1 overflow-x-hidden ${
+            activeTab === "xiaomi-calendar" || activeTab === "gantt" || activeTab === "planning"
+              ? "h-full overflow-hidden p-0 flex flex-col"
+              : `overflow-y-auto p-3 sm:p-5 md:p-6 ${isMobile ? "pb-24" : ""}`
+          }`}
+        >
+          {activeTab === "planning" && (
+            <div className="h-full w-full flex flex-col overflow-hidden pb-16 sm:pb-0">
+              <ResourcePlanningView />
+            </div>
+          )}
+
           {activeTab === "dashboard" && (
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               <div className="flex items-center justify-between">
-                <h2 className="text-3xl font-bold">Dashboard</h2>
-                <div className="flex space-x-2"></div>
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Dashboard</h2>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <Card>
-                  <CardContent className="p-4 flex items-center">
-                    <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mr-4">
-                      <Users className="h-6 w-6 text-green-600" />
+              {/* Metric summary cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+                <Card className="shadow-sm">
+                  <CardContent className="p-3 sm:p-4 flex items-center">
+                    <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-green-100 flex items-center justify-center mr-2.5 sm:mr-4 flex-shrink-0">
+                      <Users className="h-4 w-4 sm:h-6 sm:w-6 text-green-600" />
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">
-                        Total Employees
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground truncate">
+                        Colaboradores
                       </p>
-                      <p className="text-2xl font-bold">
+                      <p className="text-lg sm:text-2xl font-bold">
                         {loading ? "..." : totalEmployees}
                       </p>
                     </div>
                   </CardContent>
                 </Card>
-                <Card>
-                  <CardContent className="p-4 flex items-center">
-                    <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mr-4">
-                      <ListTodo className="h-6 w-6 text-blue-600" />
+                <Card className="shadow-sm">
+                  <CardContent className="p-3 sm:p-4 flex items-center">
+                    <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-blue-100 flex items-center justify-center mr-2.5 sm:mr-4 flex-shrink-0">
+                      <ListTodo className="h-4 w-4 sm:h-6 sm:w-6 text-blue-600" />
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">
-                        Active Tasks
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground truncate">
+                        Tarefas Ativas
                       </p>
-                      <p className="text-2xl font-bold">
+                      <p className="text-lg sm:text-2xl font-bold">
                         {loading ? "..." : activeTasks}
                       </p>
                     </div>
                   </CardContent>
                 </Card>
-                <Card>
-                  <CardContent className="p-4 flex items-center">
-                    <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center mr-4">
-                      <FolderOpen className="h-6 w-6 text-purple-600" />
+                <Card className="shadow-sm">
+                  <CardContent className="p-3 sm:p-4 flex items-center">
+                    <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-purple-100 flex items-center justify-center mr-2.5 sm:mr-4 flex-shrink-0">
+                      <FolderOpen className="h-4 w-4 sm:h-6 sm:w-6 text-purple-600" />
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">
-                        Total Projects
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground truncate">
+                        Projetos
                       </p>
-                      <p className="text-2xl font-bold">
+                      <p className="text-lg sm:text-2xl font-bold">
                         {loading ? "..." : totalProjects}
                       </p>
                     </div>
                   </CardContent>
                 </Card>
-                <Card>
-                  <CardContent className="p-4 flex items-center">
-                    <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mr-4">
-                      <BarChart3 className="h-6 w-6 text-amber-600" />
+                <Card className="shadow-sm">
+                  <CardContent className="p-3 sm:p-4 flex items-center">
+                    <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-amber-100 flex items-center justify-center mr-2.5 sm:mr-4 flex-shrink-0">
+                      <BarChart3 className="h-4 w-4 sm:h-6 sm:w-6 text-amber-600" />
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">
-                        Avg. Workload
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground truncate">
+                        Carga Média
                       </p>
-                      <p className="text-2xl font-bold">
+                      <p className="text-lg sm:text-2xl font-bold">
                         {loading ? "..." : `${avgWorkload}%`}
                       </p>
                     </div>
@@ -317,15 +462,16 @@ const HomePage = () => {
                 </Card>
               </div>
 
-              <div className="flex gap-6 h-[calc(100vh-280px)]">
-                <div className="flex-1">
+              {/* Main Calendar & Summary Flex Container */}
+              <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 min-h-0">
+                <div className="flex-1 min-w-0">
                   <WorkloadCalendar
                     selectedEmployeeId={selectedEmployeeId}
                     dataVersion={dataVersion}
                     onTaskAssigned={() => setDataVersion((v) => v + 1)}
                   />
                 </div>
-                <div className="w-80">
+                <div className="w-full lg:w-80 flex-shrink-0">
                   <WorkloadSummary
                     selectedEmployeeId={selectedEmployeeId}
                     onEmployeeSelect={setSelectedEmployeeId}
@@ -337,69 +483,56 @@ const HomePage = () => {
           )}
 
           {activeTab === "employees" && (
-            <div>
-              <h2 className="text-3xl font-bold mb-6">Employee Management</h2>
+            <div className="space-y-4">
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Gestão de Equipe</h2>
               <EmployeeList />
             </div>
           )}
 
-          {activeTab === "tasks" && (
-            <div>
-              <h2 className="text-3xl font-bold mb-6">Task Management</h2>
-              <TaskManagement />
-            </div>
-          )}
-
-          {activeTab === "projects" && (
-            <div>
-              <h2 className="text-3xl font-bold mb-6">Projects</h2>
-              <Tabs defaultValue="projects" className="w-full">
-                <TabsList>
-                  <TabsTrigger value="projects">Projects</TabsTrigger>
-                  <TabsTrigger value="overview">Overview</TabsTrigger>
-                  <TabsTrigger value="workload">Workload</TabsTrigger>
-                  <TabsTrigger value="timeline">Timeline</TabsTrigger>
-                </TabsList>
-                <TabsContent value="projects">
-                  <ProjectList />
-                </TabsContent>
-                <TabsContent value="overview">
-                  <ProjectVisualization activeView="overview" />
-                </TabsContent>
-                <TabsContent value="workload">
-                  <ProjectVisualization activeView="workload" />
-                </TabsContent>
-                <TabsContent value="timeline">
-                  <ProjectVisualization activeView="timeline" />
-                </TabsContent>
-              </Tabs>
+          {activeTab === "grid" && (
+            <div className="h-full w-full flex flex-col overflow-hidden pb-16 sm:pb-0 border rounded-lg shadow-sm">
+              <ProjectGridSheet onDataChange={loadDashboardData} />
             </div>
           )}
 
           {activeTab === "roadmap" && (
-            <div>
-              <h2 className="text-3xl font-bold mb-6">Strategic Roadmap</h2>
+            <div className="space-y-4">
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Roadmap Estratégico</h2>
               <Roadmap />
             </div>
           )}
 
+          {activeTab === "gantt" && (
+            <div className="h-full w-full flex flex-col overflow-hidden pb-16 sm:pb-0">
+              <GanttChart onTaskChange={loadDashboardData} />
+            </div>
+          )}
+
+          {activeTab === "xiaomi-calendar" && (
+            <div className="h-full w-full flex flex-col overflow-hidden pb-16 sm:pb-0">
+              <XiaomiCalendar onTaskChange={loadDashboardData} />
+            </div>
+          )}
+
           {activeTab === "reports" && (
-            <div>
-              <h2 className="text-3xl font-bold mb-6">Reports</h2>
-              <WorkloadSummary showCharts={true} />
+            <div className="space-y-4">
+              <ReportsView />
             </div>
           )}
 
           {activeTab === "profile" && (
-            <div>
-              <h2 className="text-3xl font-bold mb-6">User Profile</h2>
+            <div className="space-y-4">
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Perfil de Usuário</h2>
               <UserProfile
                 isOpen={true}
                 onClose={() => setActiveTab("dashboard")}
               />
             </div>
           )}
-        </div>
+        </main>
+
+        {/* Global Floating Time Tracker (Clockify style) */}
+        <FloatingTimeTracker onTimeLogged={loadDashboardData} />
       </div>
     </div>
   );

@@ -44,10 +44,13 @@ import {
   X,
   Grid3X3,
   Info,
+  Table as TableIcon,
+  LayoutGrid,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
+import ProjectGridSheet from "./ProjectGridSheet";
 import {
   taskService,
   projectService,
@@ -67,6 +70,7 @@ const TaskManagement = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewFormat, setViewFormat] = useState<"grid" | "classic">("grid");
 
   // Filter states
   const [filters, setFilters] = useState({
@@ -183,6 +187,8 @@ const TaskManagement = () => {
       setLoading(false);
     }
   };
+
+  const loadTasks = loadData;
 
   const handleCreateTask = async () => {
     try {
@@ -898,203 +904,248 @@ const TaskManagement = () => {
   const unassignedTasks = tasks.filter((task) => !task.assigned_employee_id);
 
   return (
-    <div className="bg-background p-6 w-full">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Task Management</h1>
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="Search tasks..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-64"
-          />
-          <Button
-            variant="outline"
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center gap-2"
-          >
-            <Filter size={16} />
-            Filters
-          </Button>
-          <Button
-            variant="outline"
-            onClick={exportToExcel}
-            className="flex items-center gap-2"
-          >
-            <Download size={16} />
-            Export
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setIsDragDropGridOpen(true)}
-            className="flex items-center gap-2"
-          >
-            <Grid3X3 size={16} />
-            Drag & Drop Grid
-          </Button>
-          <div className="relative">
-            <input
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              onChange={handleFileImport}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              id="file-import"
-            />
+    <div className="bg-background w-full space-y-4">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold">Gestão de Tarefas</h1>
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            {/* View Mode Switcher */}
+            <div className="flex items-center bg-muted p-0.5 rounded-lg border border-border">
+              <Button
+                variant={viewFormat === "grid" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewFormat("grid")}
+                className={`h-7 px-2.5 text-xs font-semibold ${
+                  viewFormat === "grid"
+                    ? "bg-[#107c41] text-white hover:bg-[#0c592e]"
+                    : "text-muted-foreground"
+                }`}
+              >
+                <Grid3X3 className="h-3.5 w-3.5 mr-1" />
+                <span>Grade MS Project</span>
+              </Button>
+              <Button
+                variant={viewFormat === "classic" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewFormat("classic")}
+                className="h-7 px-2.5 text-xs font-medium"
+              >
+                <TableIcon className="h-3.5 w-3.5 mr-1" />
+                <span>Lista</span>
+              </Button>
+            </div>
+
             <Button
               variant="outline"
-              className="flex items-center gap-2"
-              onClick={() => document.getElementById("file-import")?.click()}
+              size="sm"
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center gap-1.5 flex-1 sm:flex-none justify-center"
             >
-              <Upload size={16} />
-              Import
+              <Filter size={15} />
+              <span>Filtros</span>
             </Button>
-          </div>
-          <Dialog
-            open={isNewProjectDialogOpen}
-            onOpenChange={setIsNewProjectDialogOpen}
-          >
-            <DialogTrigger asChild>
-              <Button variant="outline" className="flex items-center gap-2">
-                <Plus size={16} />
-                New Project
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportToExcel}
+              className="flex items-center gap-1.5 flex-1 sm:flex-none justify-center"
+            >
+              <Download size={15} />
+              <span>Exportar</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsDragDropGridOpen(true)}
+              className="flex items-center gap-1.5 flex-1 sm:flex-none justify-center"
+            >
+              <Grid3X3 size={15} />
+              <span>Quadro</span>
+            </Button>
+            <div className="relative flex-1 sm:flex-none">
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleFileImport}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                id="file-import"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-1.5 w-full justify-center"
+                onClick={() => document.getElementById("file-import")?.click()}
+              >
+                <Upload size={15} />
+                <span>Importar</span>
               </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Create New Project</DialogTitle>
-                <DialogDescription>
-                  Add a new project to organize your tasks.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="project-name" className="text-right">
-                    Name
-                  </Label>
-                  <Input
-                    id="project-name"
-                    value={newProject.name}
-                    onChange={(e) =>
-                      setNewProject({ ...newProject, name: e.target.value })
-                    }
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="project-description" className="text-right">
-                    Description
-                  </Label>
-                  <Textarea
-                    id="project-description"
-                    value={newProject.description}
-                    onChange={(e) =>
-                      setNewProject({
-                        ...newProject,
-                        description: e.target.value,
-                      })
-                    }
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="project-start-date" className="text-right">
-                    Start Date
-                  </Label>
-                  <Input
-                    id="project-start-date"
-                    type="date"
-                    value={newProject.start_date}
-                    onChange={(e) =>
-                      setNewProject({
-                        ...newProject,
-                        start_date: e.target.value,
-                      })
-                    }
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="project-end-date" className="text-right">
-                    End Date
-                  </Label>
-                  <Input
-                    id="project-end-date"
-                    type="date"
-                    value={newProject.end_date}
-                    onChange={(e) =>
-                      setNewProject({ ...newProject, end_date: e.target.value })
-                    }
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="project-categoria" className="text-right">
-                    Categoria Estratégica
-                  </Label>
-                  <div className="col-span-3">
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          <Input
+            placeholder="Buscar tarefas..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="flex-1"
+          />
+          <div className="flex items-center gap-2">
+            <Dialog
+              open={isNewProjectDialogOpen}
+              onOpenChange={setIsNewProjectDialogOpen}
+            >
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="flex items-center gap-1.5 flex-1 sm:flex-none justify-center">
+                  <Plus size={15} />
+                  <span>Novo Projeto</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md w-[calc(100%-2rem)]">
+                <DialogHeader>
+                  <DialogTitle>Criar Novo Projeto</DialogTitle>
+                  <DialogDescription>
+                    Adicione um novo projeto para organizar suas tarefas.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-3 py-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                    <Label htmlFor="project-name" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                      Nome
+                    </Label>
                     <Input
-                      id="project-categoria"
-                      list="strategic-categories"
-                      value={newProject.categoria_estrategica}
+                      id="project-name"
+                      value={newProject.name}
+                      onChange={(e) =>
+                        setNewProject({ ...newProject, name: e.target.value })
+                      }
+                      className="sm:col-span-3"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                    <Label htmlFor="project-description" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                      Descrição
+                    </Label>
+                    <Textarea
+                      id="project-description"
+                      value={newProject.description}
                       onChange={(e) =>
                         setNewProject({
                           ...newProject,
-                          categoria_estrategica: e.target.value,
+                          description: e.target.value,
                         })
                       }
-                      placeholder="Digite ou selecione uma categoria"
-                      className="w-full"
+                      className="sm:col-span-3"
                     />
-                    <datalist id="strategic-categories">
-                      {strategicCategories.map((category) => (
-                        <option key={category} value={category} />
-                      ))}
-                    </datalist>
                   </div>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="submit" onClick={handleCreateProject}>
-                  Create Project
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          <Dialog
-            open={isNewTaskDialogOpen}
-            onOpenChange={setIsNewTaskDialogOpen}
-          >
-            <DialogTrigger asChild>
-              <Button
-                className="flex items-center gap-2"
-                data-testid="create-new-task-button"
-              >
-                <Plus size={16} />
-                Create New Task
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[550px]">
-              <DialogHeader>
-                <DialogTitle>Create New Task</DialogTitle>
-                <DialogDescription>
-                  Add a new task with details and time estimates.
-                </DialogDescription>
-              </DialogHeader>
-              <ScrollArea className="h-96">
-                <div className="grid gap-4 p-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="name" className="text-right">
-                      Task Name
+                  <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                    <Label htmlFor="project-start-date" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                      Início
                     </Label>
                     <Input
-                      id="name"
-                      value={newTask.name}
+                      id="project-start-date"
+                      type="date"
+                      value={newProject.start_date}
                       onChange={(e) =>
-                        setNewTask({ ...newTask, name: e.target.value })
+                        setNewProject({
+                          ...newProject,
+                          start_date: e.target.value,
+                        })
                       }
-                      className="col-span-3"
+                      className="sm:col-span-3"
                     />
                   </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                    <Label htmlFor="project-end-date" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                      Término
+                    </Label>
+                    <Input
+                      id="project-end-date"
+                      type="date"
+                      value={newProject.end_date}
+                      onChange={(e) =>
+                        setNewProject({ ...newProject, end_date: e.target.value })
+                      }
+                      className="sm:col-span-3"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                    <Label htmlFor="project-categoria" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                      Categoria
+                    </Label>
+                    <div className="sm:col-span-3">
+                      <Input
+                        id="project-categoria"
+                        list="strategic-categories"
+                        value={newProject.categoria_estrategica}
+                        onChange={(e) =>
+                          setNewProject({
+                            ...newProject,
+                            categoria_estrategica: e.target.value,
+                          })
+                        }
+                        placeholder="Digite ou selecione uma categoria"
+                        className="w-full"
+                      />
+                      <datalist id="strategic-categories">
+                        {strategicCategories.map((category) => (
+                          <option key={category} value={category} />
+                        ))}
+                      </datalist>
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-0">
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsNewProjectDialogOpen(false)}
+                    className="w-full sm:w-auto"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button type="submit" onClick={handleCreateProject} className="w-full sm:w-auto">
+                    Criar Projeto
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog
+              open={isNewTaskDialogOpen}
+              onOpenChange={setIsNewTaskDialogOpen}
+            >
+              <DialogTrigger asChild>
+                <Button
+                  size="sm"
+                  className="flex items-center gap-1.5 flex-1 sm:flex-none justify-center"
+                  data-testid="create-new-task-button"
+                >
+                  <Plus size={15} />
+                  <span>Nova Tarefa</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-xl w-[calc(100%-2rem)]">
+                <DialogHeader>
+                  <DialogTitle>Criar Nova Tarefa</DialogTitle>
+                  <DialogDescription>
+                    Adicione uma nova tarefa com detalhes e estimativas de tempo.
+                  </DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="max-h-[60vh] pr-2">
+                  <div className="grid gap-3 py-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                      <Label htmlFor="name" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                        Nome
+                      </Label>
+                      <Input
+                        id="name"
+                        value={newTask.name}
+                        onChange={(e) =>
+                          setNewTask({ ...newTask, name: e.target.value })
+                        }
+                        className="sm:col-span-3"
+                      />
+                    </div>
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="description" className="text-right">
                       Description
@@ -1387,7 +1438,14 @@ const TaskManagement = () => {
           </Dialog>
         </div>
       </div>
-      {/* Filters Panel */}
+    </div>
+      {viewFormat === "grid" ? (
+        <div className="h-[750px] border rounded-lg overflow-hidden shadow-xs">
+          <ProjectGridSheet onDataChange={loadData} />
+        </div>
+      ) : (
+        <>
+          {/* Filters Panel */}
       {showFilters && (
         <Card className="mb-6">
           <CardHeader>
@@ -1530,128 +1588,133 @@ const TaskManagement = () => {
           </CardContent>
         </Card>
       )}
-      <Card>
-        <CardHeader>
+      <Card className="shadow-sm">
+        <CardHeader className="p-4 sm:p-6">
           <div className="flex items-center justify-between">
-            <CardTitle>Task List</CardTitle>
-            <div className="text-sm text-muted-foreground">
-              Showing {filteredTasks.length} of {tasks.length} tasks
+            <CardTitle className="text-lg sm:text-xl">Lista de Tarefas</CardTitle>
+            <div className="text-xs sm:text-sm text-muted-foreground">
+              {filteredTasks.length} de {tasks.length} tarefas
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Task Name</TableHead>
-                <TableHead>Project</TableHead>
-                <TableHead>Est. Hours</TableHead>
-                <TableHead>Period</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Assigned To</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
+        <CardContent className="p-0 sm:p-6">
+          <div className="overflow-x-auto">
+            <Table className="min-w-[680px]">
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-6">
-                    Loading tasks...
-                  </TableCell>
+                  <TableHead>Tarefa</TableHead>
+                  <TableHead>Projeto</TableHead>
+                  <TableHead>Horas Estimadas</TableHead>
+                  <TableHead>Período</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Responsável</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
-              ) : filteredTasks.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-6">
-                    {tasks.length === 0
-                      ? "No tasks found"
-                      : "No tasks match the current filters"}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredTasks.map((task) => (
-                  <TableRow key={task.id}>
-                    <TableCell className="font-medium">{task.name}</TableCell>
-                    <TableCell>{task.project?.name || "No project"}</TableCell>
-                    <TableCell>{task.estimated_time}h</TableCell>
-                    <TableCell>
-                      {format(new Date(task.start_date + "T00:00:00"), "MMM d")}{" "}
-                      -{" "}
-                      {format(
-                        new Date(task.end_date + "T00:00:00"),
-                        "MMM d, yyyy",
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          task.status === "completed"
-                            ? "default"
-                            : task.status === "in_progress"
-                              ? "secondary"
-                              : "outline"
-                        }
-                      >
-                        {task.status === "pending"
-                          ? "Pendente"
-                          : task.status === "in_progress"
-                            ? "Em Andamento"
-                            : "Concluída"}
-                      </Badge>
-                      {task.status === "completed" && task.completion_date && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Concluída em{" "}
-                          {format(new Date(task.completion_date), "dd/MM/yyyy")}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {task.assigned_employee?.name || (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openAssignDialog(task)}
-                        >
-                          Assign
-                        </Button>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditDialog(task)}
-                          className="h-8 w-8 p-0"
-                        >
-                          <Edit size={14} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteTask(task.id)}
-                          className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
-                        >
-                          <Trash2 size={14} />
-                        </Button>
-                      </div>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-6">
+                      Carregando tarefas...
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : filteredTasks.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
+                      {tasks.length === 0
+                        ? "Nenhuma tarefa encontrada"
+                        : "Nenhuma tarefa corresponde aos filtros"}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredTasks.map((task) => (
+                    <TableRow key={task.id}>
+                      <TableCell className="font-medium">{task.name}</TableCell>
+                      <TableCell className="max-w-[150px] truncate">{task.project?.name || "-"}</TableCell>
+                      <TableCell>{task.estimated_time}h</TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {format(new Date(task.start_date + "T00:00:00"), "dd/MM")}{" "}
+                        -{" "}
+                        {format(
+                          new Date(task.end_date + "T00:00:00"),
+                          "dd/MM/yyyy",
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            task.status === "completed"
+                              ? "default"
+                              : task.status === "in_progress"
+                                ? "secondary"
+                                : "outline"
+                          }
+                        >
+                          {task.status === "pending"
+                            ? "Pendente"
+                            : task.status === "in_progress"
+                              ? "Em Andamento"
+                              : "Concluída"}
+                        </Badge>
+                        {task.status === "completed" && task.completion_date && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Concluída em{" "}
+                            {format(new Date(task.completion_date), "dd/MM/yyyy")}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {task.assigned_employee?.name || (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openAssignDialog(task)}
+                            className="h-7 text-xs"
+                          >
+                            Atribuir
+                          </Button>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEditDialog(task)}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Edit size={14} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteTask(task.id)}
+                            className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
+      </>
+      )}
       {/* Edit Task Dialog */}
       <Dialog
         open={isEditTaskDialogOpen}
         onOpenChange={setIsEditTaskDialogOpen}
       >
-        <DialogContent className="sm:max-w-[700px] w-[740px] container">
+        <DialogContent className="max-w-2xl w-[calc(100%-2rem)]">
           <DialogHeader>
-            <DialogTitle>Edit Task</DialogTitle>
+            <DialogTitle>Editar Tarefa</DialogTitle>
             <DialogDescription>
-              Update task details and time estimates.
+              Atualize os detalhes da tarefa e estimativas de tempo.
             </DialogDescription>
           </DialogHeader>
           {currentTask && (
@@ -2228,24 +2291,24 @@ const TaskManagement = () => {
         open={isAssignTaskDialogOpen}
         onOpenChange={setIsAssignTaskDialogOpen}
       >
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="max-w-md w-[calc(100%-2rem)]">
           <DialogHeader>
-            <DialogTitle>Assign Task</DialogTitle>
+            <DialogTitle>Atribuir Tarefa</DialogTitle>
             <DialogDescription>
-              Assign this task to an employee and schedule it on the calendar.
+              Atribua esta tarefa a um funcionário.
             </DialogDescription>
           </DialogHeader>
           {currentTask && (
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="task-name" className="text-right">
-                  Task
+            <div className="grid gap-3 py-2">
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                <Label htmlFor="task-name" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                  Tarefa
                 </Label>
-                <div className="col-span-3 font-medium">{currentTask.name}</div>
+                <div className="sm:col-span-3 font-medium text-sm">{currentTask.name}</div>
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="assign-employee" className="text-right">
-                  Employee
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                <Label htmlFor="assign-employee" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                  Responsável
                 </Label>
                 <Select
                   onValueChange={(value) =>
@@ -2256,11 +2319,11 @@ const TaskManagement = () => {
                   }
                   value={currentTask.assigned_employee_id || "none"}
                 >
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select an employee" />
+                  <SelectTrigger className="sm:col-span-3">
+                    <SelectValue placeholder="Selecione um funcionário" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">No employee</SelectItem>
+                    <SelectItem value="none">Nenhum</SelectItem>
                     {employees.map((employee) => (
                       <SelectItem key={employee.id} value={employee.id}>
                         {employee.name}
@@ -2269,55 +2332,50 @@ const TaskManagement = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right col-span-4 text-sm text-muted-foreground">
-                  Note: After assigning, you can drag and position this task on
-                  the calendar view.
-                </Label>
-              </div>
             </div>
           )}
-          <DialogFooter>
-            <Button type="submit" onClick={handleAssignTask}>
-              Assign Task
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setIsAssignTaskDialogOpen(false)}
+              className="w-full sm:w-auto"
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" onClick={handleAssignTask} className="w-full sm:w-auto">
+              Salvar Atribuição
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
       {/* Drag and Drop Grid Dialog */}
       <Dialog open={isDragDropGridOpen} onOpenChange={setIsDragDropGridOpen}>
-        <DialogContent className="max-w-7xl max-h-[90vh] overflow-auto">
+        <DialogContent className="max-w-7xl w-[calc(100%-1rem)] sm:w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
               <Grid3X3 size={20} />
-              Drag & Drop Task Scheduler
+              Quadro de Alocação de Tarefas
             </DialogTitle>
-            <DialogDescription>
-              Drag tasks from the unassigned list to employee cells to schedule
-              them.
+            <DialogDescription className="text-xs sm:text-sm">
+              Arraste tarefas não atribuídas para as células dos funcionários para agendá-las.
             </DialogDescription>
           </DialogHeader>
 
           <DndProvider backend={HTML5Backend}>
             <div className="space-y-4">
               {/* Instructions */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
                 <div className="flex items-start gap-2">
-                  <Info size={16} className="text-blue-600 mt-0.5" />
-                  <div className="text-sm text-blue-800">
+                  <Info size={16} className="text-blue-600 mt-0.5 shrink-0" />
+                  <div className="text-xs sm:text-sm text-blue-800">
                     <strong>Como usar:</strong>
-                    <ul className="mt-1 space-y-1 list-disc list-inside">
+                    <ul className="mt-1 space-y-0.5 list-disc list-inside">
                       <li>
                         Arraste tarefas não atribuídas para as células dos
                         funcionários
                       </li>
                       <li>
-                        As cores indicam a carga de trabalho: Verde (&lt;50%),
-                        Amarelo (50-100%), Vermelho (&gt;100%)
-                      </li>
-                      <li>
-                        As tarefas são automaticamente reatribuídas quando
-                        soltas
+                        Cores de carga: Verde (&lt;50%), Amarelo (50-100%), Vermelho (&gt;100%)
                       </li>
                     </ul>
                   </div>
@@ -2325,44 +2383,48 @@ const TaskManagement = () => {
               </div>
 
               {/* Week Navigation */}
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => {
                     const newDate = new Date(gridStartDate);
                     newDate.setDate(gridStartDate.getDate() - 7);
                     setGridStartDate(newDate);
                   }}
+                  className="text-xs"
                 >
                   ← Semana Anterior
                 </Button>
-                <h3 className="text-lg font-semibold">
+                <h3 className="text-sm sm:text-base font-semibold text-center">
                   Semana de {format(gridStartDate, "dd/MM/yyyy")}
                 </h3>
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => {
                     const newDate = new Date(gridStartDate);
                     newDate.setDate(gridStartDate.getDate() + 7);
                     setGridStartDate(newDate);
                   }}
+                  className="text-xs"
                 >
                   Próxima Semana →
                 </Button>
               </div>
 
-              <div className="grid grid-cols-12 gap-4">
+              <div className="flex flex-col lg:grid lg:grid-cols-12 gap-4">
                 {/* Unassigned Tasks Column */}
-                <div className="col-span-3">
+                <div className="lg:col-span-3">
                   <Card>
-                    <CardHeader>
-                      <CardTitle className="text-sm">
+                    <CardHeader className="p-3">
+                      <CardTitle className="text-xs sm:text-sm font-semibold">
                         Tarefas Não Atribuídas
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="max-h-96 overflow-y-auto">
+                    <CardContent className="p-3 max-h-60 lg:max-h-96 overflow-y-auto">
                       {unassignedTasks.length === 0 ? (
-                        <p className="text-sm text-gray-500 text-center py-4">
+                        <p className="text-xs text-gray-500 text-center py-3">
                           Todas as tarefas estão atribuídas
                         </p>
                       ) : (
@@ -2375,20 +2437,20 @@ const TaskManagement = () => {
                 </div>
 
                 {/* Grid Calendar */}
-                <div className="col-span-9">
-                  <div className="border rounded-lg overflow-hidden">
+                <div className="lg:col-span-9 overflow-x-auto">
+                  <div className="border rounded-lg overflow-hidden min-w-[650px]">
                     {/* Header with dates */}
                     <div className="grid grid-cols-8 bg-gray-50">
-                      <div className="p-3 font-medium text-sm border-r">
+                      <div className="p-2 sm:p-3 font-medium text-xs sm:text-sm border-r">
                         Funcionário
                       </div>
                       {weekDates.map((date) => (
                         <div
                           key={date}
-                          className="p-3 font-medium text-sm border-r text-center"
+                          className="p-2 sm:p-3 font-medium text-xs sm:text-sm border-r text-center"
                         >
                           <div>{format(new Date(date), "EEE")}</div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-[10px] sm:text-xs text-gray-500">
                             {format(new Date(date), "dd/MM")}
                           </div>
                         </div>
@@ -2401,11 +2463,11 @@ const TaskManagement = () => {
                         key={employee.id}
                         className="grid grid-cols-8 border-t"
                       >
-                        <div className="p-3 font-medium text-sm border-r bg-gray-50 flex items-center">
+                        <div className="p-2 sm:p-3 font-medium text-xs sm:text-sm border-r bg-gray-50 flex items-center">
                           <div>
                             <div>{employee.name}</div>
-                            <div className="text-xs text-gray-500">
-                              {employee.weekly_hours}h/semana
+                            <div className="text-[10px] sm:text-xs text-gray-500">
+                              {employee.weekly_hours}h/sem
                             </div>
                           </div>
                         </div>
@@ -2433,6 +2495,7 @@ const TaskManagement = () => {
             <Button
               variant="outline"
               onClick={() => setIsDragDropGridOpen(false)}
+              className="w-full sm:w-auto"
             >
               Fechar
             </Button>

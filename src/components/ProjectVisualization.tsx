@@ -213,19 +213,19 @@ const ProjectVisualization: React.FC<ProjectVisualizationProps> = ({
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-medium text-gray-900">
-          {activeView ? activeView.charAt(0).toUpperCase() + activeView.slice(1) : "Overview"} View
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-6 space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900">
+          Visualização: {activeView ? activeView.charAt(0).toUpperCase() + activeView.slice(1) : "Visão Geral"}
         </h3>
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
             <Input
-              placeholder="Search..."
+              placeholder="Buscar projetos ou tarefas..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-10"
+              className="w-full sm:w-56 pl-9 h-8 text-xs sm:text-sm"
             />
           </div>
           <DatePickerWithRange onDateChange={setDateRange} />

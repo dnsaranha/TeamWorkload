@@ -1,0 +1,6 @@
+{
+  "name": "Team Workload",
+  "description": "Comprehensive team workload, Gantt chart with task dependencies, MS Project web style spreadsheet grid with column management, Xiaomi calendar with Google Agenda hourly view, Clockify-style floating execution time tracker, and resource management dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -288,9 +288,23 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     const dateStr = date.toISOString().split("T")[0];
 
     filteredTasks.forEach((task) => {
+      // Obter os dias de trabalho do funcionário atribuído à tarefa
+      const taskEmp = employees.find((e) => e.id === task.assigned_employee_id);
+      const employeeWorkDays = taskEmp?.dias_de_trabalho || [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+      ];
+
+      // Se este dia não é um dia de trabalho do colaborador da tarefa (ex: fim de semana), NÃO renderiza a tarefa
+      if (!employeeWorkDays.includes(dayOfWeekName)) {
+        return;
+      }
+
       const taskStart = new Date(task.start_date + "T00:00:00Z");
       const taskEnd = new Date(task.end_date + "T00:00:00Z");
-      const dateStr = date.toISOString().split("T")[0];
 
       if (task.repeats_weekly && task.repeat_days && dayOfWeekName) {
         if (date >= taskStart && date <= taskEnd) {
@@ -441,10 +455,11 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   };
 
   const getWorkloadColor = (percentage: number) => {
-    if (percentage > 100) return "bg-red-100 border-red-300 text-red-800";
+    if (percentage > 100)
+      return "bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400";
     if (percentage >= 50)
-      return "bg-yellow-100 border-yellow-300 text-yellow-800";
-    return "bg-green-100 border-green-300 text-green-800";
+      return "bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400";
+    return "bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400";
   };
 
   const navigateDate = (direction: "prev" | "next") => {
@@ -762,115 +777,118 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div className="bg-card rounded-lg shadow-sm border border-border p-6">
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+    <div className="bg-card text-card-foreground rounded-lg shadow-sm border border-border">
       {/* Header */}
-      <div className="p-6 border-b border-gray-200">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-4">
-            <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-              <CalendarIcon className="h-5 w-5 mr-2" />
-              Workload Calendar
+      <div className="p-4 sm:p-6 border-b border-border space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center justify-between sm:justify-start space-x-3">
+            <h2 className="text-lg sm:text-xl font-semibold text-foreground flex items-center">
+              <CalendarIcon className="h-5 w-5 mr-2 shrink-0 text-primary" />
+              <span>Calendário</span>
             </h2>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center bg-muted p-0.5 rounded-lg">
               <button
                 onClick={() => setView("weekly")}
-                className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                className={`px-2.5 py-1 text-xs sm:text-sm font-medium rounded-md transition-colors ${
                   view === "weekly"
-                    ? "bg-blue-100 text-blue-700"
-                    : "text-gray-600 hover:text-gray-900"
+                    ? "bg-background text-foreground shadow-sm font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                Weekly
+                Semanal
               </button>
               <button
                 onClick={() => setView("monthly")}
-                className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                className={`px-2.5 py-1 text-xs sm:text-sm font-medium rounded-md transition-colors ${
                   view === "monthly"
-                    ? "bg-blue-100 text-blue-700"
-                    : "text-gray-600 hover:text-gray-900"
+                    ? "bg-background text-foreground shadow-sm font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                Monthly
+                Mensal
               </button>
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap sm:flex-nowrap">
+            <div className="relative flex-1 sm:flex-none">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                placeholder="Search tasks..."
+                placeholder="Buscar tarefas..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-64 pl-10"
+                className="w-full sm:w-48 md:w-64 pl-8 h-8 text-xs sm:text-sm bg-background border-border text-foreground"
               />
             </div>
-            <button
-              onClick={() => navigateDate("prev")}
-              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-              title="Previous month"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <span className="text-lg font-medium text-gray-900">
-              {view === "weekly"
-                ? `Week of ${formatDate(dates[0])}`
-                : currentDate.toLocaleDateString("en-US", {
-                    month: "long",
-                    year: "numeric",
-                    timeZone: "UTC",
-                  })}
-            </span>
-            <button
-              onClick={() => navigateDate("next")}
-              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-              title="Next month"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => navigateDate("prev")}
+                className="p-1.5 text-muted-foreground hover:text-foreground transition-colors rounded hover:bg-muted"
+                title="Anterior"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="text-xs sm:text-sm font-medium text-foreground whitespace-nowrap min-w-[120px] text-center">
+                {view === "weekly"
+                  ? `Semana de ${formatDate(dates[0])}`
+                  : currentDate.toLocaleDateString("pt-BR", {
+                      month: "short",
+                      year: "numeric",
+                      timeZone: "UTC",
+                    })}
+              </span>
+              <button
+                onClick={() => navigateDate("next")}
+                className="p-1.5 text-muted-foreground hover:text-foreground transition-colors rounded hover:bg-muted"
+                title="Próximo"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Legend */}
-        <div className="flex items-center space-x-6 text-sm">
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-green-100 border border-green-300 rounded"></div>
-            <span className="text-gray-600">Under-utilized (&lt;50%)</span>
+        <div className="flex items-center gap-3 sm:gap-6 text-xs text-muted-foreground flex-wrap">
+          <div className="flex items-center space-x-1.5">
+            <div className="w-2.5 h-2.5 bg-emerald-500/20 border border-emerald-500/40 rounded"></div>
+            <span>Sub (&lt;50%)</span>
           </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-yellow-100 border border-yellow-300 rounded"></div>
-            <span className="text-gray-600">Optimal (50-100%)</span>
+          <div className="flex items-center space-x-1.5">
+            <div className="w-2.5 h-2.5 bg-amber-500/20 border border-amber-500/40 rounded"></div>
+            <span>Ideal (50-100%)</span>
           </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-red-100 border border-red-300 rounded"></div>
-            <span className="text-gray-600">Overloaded (&gt;100%)</span>
+          <div className="flex items-center space-x-1.5">
+            <div className="w-2.5 h-2.5 bg-rose-500/20 border border-rose-500/40 rounded"></div>
+            <span>Sobrecarga (&gt;100%)</span>
           </div>
         </div>
       </div>
       {/* Calendar Grid */}
-      <div className="p-6">
-        <div className="grid grid-cols-7 gap-2">
+      <div className="p-2 sm:p-6 overflow-x-auto">
+        <div className="min-w-[650px]">
+          <div className="grid grid-cols-7 gap-2">
           {/* Day Headers */}
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+          {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((day) => (
             <div
               key={day}
-              className="p-2 text-center text-sm font-medium text-gray-500 border-b border-gray-200 flex items-center justify-center"
+              className="p-2 text-center text-xs sm:text-sm font-semibold text-muted-foreground border-b border-border flex items-center justify-center"
             >
               <span>{day}</span>
-              {view === "weekly" && day === "Sat" && (
+              {view === "weekly" && day === "Sáb" && (
                 <button
                   onClick={() => setIsWeekExpanded(!isWeekExpanded)}
-                  className="ml-2 p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                  title={isWeekExpanded ? "Collapse week" : "Expand week"}
+                  className="ml-2 p-1 text-muted-foreground hover:text-foreground transition-colors"
+                  title={isWeekExpanded ? "Recolher semana" : "Expandir semana"}
                 >
                   {isWeekExpanded ? (
                     <MinusCircle className="h-4 w-4" />
@@ -895,6 +913,20 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                 "friday",
               ];
               isWorkDay = workDays.includes(dayOfWeekName);
+            } else {
+              // Quando todos os funcionários estão selecionados:
+              // Verifica se algum colaborador da equipe trabalha neste dia da semana
+              const anyEmployeeWorks = employees.some((emp) => {
+                const empWorkDays = emp.dias_de_trabalho || [
+                  "monday",
+                  "tuesday",
+                  "wednesday",
+                  "thursday",
+                  "friday",
+                ];
+                return empWorkDays.includes(dayOfWeekName);
+              });
+              isWorkDay = employees.length > 0 ? anyEmployeeWorks : (dayOfWeekName !== "sunday" && dayOfWeekName !== "saturday");
             }
 
             const dayTasks = getTasksForDate(date);
@@ -917,25 +949,29 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                 <div
                   className={`${
                     isWeekExpanded && view === "weekly" ? "" : "min-h-[120px]"
-                  } p-2 border border-gray-200 rounded-lg ${
-                    isCurrentMonth ? "bg-white" : "bg-gray-50"
+                  } p-2 border border-border rounded-lg transition-colors ${
+                    isCurrentMonth ? "bg-card" : "bg-muted/30 opacity-75"
                   } ${
-                    !isWorkDay && selectedEmployeeId ? "bg-gray-100" : ""
-                  } ${isToday ? "ring-2 ring-blue-500" : ""}`}
+                    !isWorkDay ? "bg-muted/40 text-muted-foreground/60" : ""
+                  } ${isToday ? "ring-2 ring-primary ring-offset-1 ring-offset-background" : ""}`}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span
-                      className={`text-sm font-medium ${
-                        isCurrentMonth ? "text-gray-900" : "text-gray-400"
+                      className={`text-sm font-semibold ${
+                        isToday
+                          ? "text-primary font-bold"
+                          : isCurrentMonth
+                            ? "text-foreground"
+                            : "text-muted-foreground"
                       } ${
-                        !isWorkDay && selectedEmployeeId ? "text-gray-400" : ""
+                        !isWorkDay ? "text-muted-foreground/60" : ""
                       }`}
                     >
                       {date.getUTCDate()}
                     </span>
                     {isWorkDay && workload.percentage > 0 && (
                       <span
-                        className={`text-xs px-2 py-1 rounded-full font-semibold ${getWorkloadColor(
+                        className={`text-xs px-2 py-0.5 rounded-full font-semibold ${getWorkloadColor(
                           workload.percentage,
                         )}`}
                       >
@@ -969,21 +1005,21 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                       view === "weekly" &&
                       isWorkDay &&
                       dayTasks.length > 3 && (
-                        <div className="text-xs text-gray-500 text-center">
-                          +{dayTasks.length - 3} more
+                        <div className="text-xs text-muted-foreground text-center font-medium">
+                          +{dayTasks.length - 3} mais
                         </div>
                       )}
                   </div>
 
                   {isWorkDay && workload.hours > 0 && (
-                    <div className="mt-2 text-xs text-gray-600">
+                    <div className="mt-2 text-xs text-muted-foreground">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center">
-                          <Clock className="h-3 w-3 mr-1" />
-                          {workload.hours.toFixed(1)}h
+                          <Clock className="h-3 w-3 mr-1 text-primary" />
+                          <span className="font-medium text-foreground">{workload.hours.toFixed(1)}h</span>
                         </div>
                         {workload.capacity > 0 && (
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-muted-foreground">
                             /{workload.capacity.toFixed(1)}h
                           </div>
                         )}
@@ -996,6 +1032,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
           })}
         </div>
       </div>
+    </div>
       <DeallocationZone onDropTask={handleDeallocateTask} />
       {/* Edit Task Dialog */}
       <Dialog
@@ -1008,17 +1045,17 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
           }
         }}
       >
-        <DialogContent className="sm:max-w-[750px]">
+        <DialogContent className="max-w-2xl w-[calc(100%-2rem)]">
           <DialogHeader>
             <DialogTitle>
               {currentTask?.repeats_weekly
-                ? "Edit Recurring Task"
-                : "Edit Task"}
+                ? "Editar Tarefa Recorrente"
+                : "Editar Tarefa"}
             </DialogTitle>
             <DialogDescription>
               {currentTask?.repeats_weekly
-                ? "Manage exceptions and task details for recurring task."
-                : "Update task details and time estimates."}
+                ? "Gerenciar exceções e detalhes para tarefa recorrente."
+                : "Atualize os detalhes da tarefa e estimativas de tempo."}
             </DialogDescription>
           </DialogHeader>
           {currentTask && (
@@ -1685,20 +1722,22 @@ const DraggableTask: React.FC<DraggableTaskProps> = ({
     <div
       ref={drag}
       onClick={() => onTaskClick(task)}
-      className={`text-xs p-1 rounded truncate cursor-pointer ${
-        isDragging ? "opacity-50 cursor-grabbing" : "cursor-grab"
+      className={`text-xs p-1.5 rounded-md truncate cursor-pointer transition-all border shadow-xs ${
+        isDragging ? "opacity-40 cursor-grabbing scale-95" : "cursor-grab hover:shadow-sm"
       } ${
         isCompleted
-          ? "bg-green-100 border border-green-300 text-green-900 hover:bg-green-200"
-          : "bg-blue-50 border border-blue-200 text-blue-900 hover:bg-blue-100"
+          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20"
+          : "bg-primary/10 border-primary/25 text-primary hover:bg-primary/20"
       }`}
-      title={`${task.name} - ${employee?.name} (${project?.name})`}
+      title={`${task.name} - ${employee?.name || "Sem responsável"} (${project?.name || "Sem projeto"})`}
     >
-      <div className="flex items-center justify-between">
-        <div className="font-medium truncate">{task.name}</div>
+      <div className="flex items-center justify-between gap-1">
+        <div className={`font-medium truncate ${isCompleted ? "line-through opacity-80" : ""}`}>
+          {task.name}
+        </div>
         {task.is_recurring_instance && !isCompleted && (
           <Repeat
-            className="h-3 w-3 text-blue-400 flex-shrink-0"
+            className="h-3 w-3 text-primary/70 shrink-0"
             aria-label="Recurring task"
           />
         )}
@@ -1706,7 +1745,9 @@ const DraggableTask: React.FC<DraggableTaskProps> = ({
       {!selectedEmployeeId && employee && (
         <div
           className={
-            isCompleted ? "text-green-700 truncate" : "text-blue-600 truncate"
+            isCompleted
+              ? "text-[10px] text-emerald-600/80 dark:text-emerald-400/80 truncate mt-0.5"
+              : "text-[10px] text-muted-foreground truncate mt-0.5"
           }
         >
           {employee.name}
@@ -1731,13 +1772,15 @@ const DeallocationZone: React.FC<{ onDropTask: (taskId: string) => void }> = ({
   return (
     <div
       ref={drop}
-      className={`p-4 m-6 mt-0 border-2 border-dashed rounded-lg text-center transition-colors ${
-        isOver && canDrop ? "border-red-500 bg-red-100" : "border-gray-300"
+      className={`p-4 m-6 mt-0 border-2 border-dashed rounded-lg text-center transition-all ${
+        isOver && canDrop
+          ? "border-destructive bg-destructive/10 text-destructive scale-[1.01]"
+          : "border-border bg-muted/20 hover:border-muted-foreground/40 text-muted-foreground"
       }`}
     >
-      <div className="flex flex-col items-center justify-center text-gray-500 pointer-events-none">
-        <Trash2 className="h-8 w-8 mb-2" />
-        <p>Arraste uma tarefa aqui para desalocar.</p>
+      <div className="flex flex-col items-center justify-center pointer-events-none">
+        <Trash2 className={`h-6 w-6 mb-1.5 ${isOver && canDrop ? "text-destructive" : "text-muted-foreground"}`} />
+        <p className="text-xs sm:text-sm font-medium">Arraste uma tarefa aqui para desalocar.</p>
       </div>
     </div>
   );
@@ -1768,7 +1811,7 @@ const DayCell: React.FC<DayCellProps> = ({
   );
 
   return (
-    <div ref={drop} className={`relative ${isOver ? "bg-blue-100" : ""}`}>
+    <div ref={drop} className={`relative rounded-lg transition-colors ${isOver ? "bg-primary/15 ring-2 ring-primary" : ""}`}>
       {children}
     </div>
   );

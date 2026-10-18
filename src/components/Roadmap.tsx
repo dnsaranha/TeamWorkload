@@ -512,93 +512,95 @@ const Roadmap = () => {
   }
 
   return (
-    <div className="bg-background p-6 w-full">
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Target className="h-6 w-6 text-primary" />
-            <h1 className="text-2xl font-bold">Roadmap Estratégico</h1>
-          </div>
+    <div className="bg-background w-full space-y-4">
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Target className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+            <h1 className="text-xl sm:text-2xl font-bold">Roadmap Estratégico</h1>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <div className="relative flex-1 sm:flex-none">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
               <Input
-                placeholder="Search..."
+                placeholder="Buscar no roadmap..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-64 pl-10"
+                className="w-full sm:w-48 pl-9 h-8 text-xs sm:text-sm"
               />
             </div>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2"
+              className="flex items-center gap-1.5 h-8 text-xs"
             >
-              <Filter className="h-4 w-4" />
-              Filtros
+              <Filter className="h-3.5 w-3.5" />
+              <span>Filtros</span>
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleZoom("in")}
-              className="flex items-center gap-2"
-            >
-              <ZoomIn className="h-4 w-4" />
-              Zoom In
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleZoom("out")}
-              className="flex items-center gap-2"
-            >
-              <ZoomOut className="h-4 w-4" />
-              Zoom Out
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleZoom("in")}
+                className="h-8 w-8 p-0"
+                title="Zoom In"
+              >
+                <ZoomIn className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleZoom("out")}
+                className="h-8 w-8 p-0"
+                title="Zoom Out"
+              >
+                <ZoomOut className="h-3.5 w-3.5" />
+              </Button>
+            </div>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-1.5 h-8 text-xs"
                 >
-                  <Layers className="h-4 w-4" />
-                  Legenda
+                  <Layers className="h-3.5 w-3.5" />
+                  <span>Legenda</span>
                 </Button>
               </PopoverTrigger>
-              <PopoverContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <PopoverContent className="w-72 sm:w-80">
+                <div className="grid grid-cols-1 gap-4">
                   <div>
-                    <h4 className="font-medium mb-2">Marcadores Especiais</h4>
-                    <div className="space-y-1 text-sm">
+                    <h4 className="font-medium mb-2 text-xs">Marcadores Especiais</h4>
+                    <div className="space-y-1 text-xs">
                       <div className="flex items-center gap-2">
-                        <Rocket className="h-4 w-4 text-blue-600" />
+                        <Rocket className="h-3.5 w-3.5 text-blue-600" />
                         <span>Major Release</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-green-600" />
+                        <Calendar className="h-3.5 w-3.5 text-green-600" />
                         <span>Major Deployment</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Target className="h-4 w-4 text-purple-600" />
+                        <Target className="h-3.5 w-3.5 text-purple-600" />
                         <span>Major Theme</span>
                       </div>
                     </div>
                   </div>
                   <div>
-                    <h4 className="font-medium mb-2">Status das Atividades</h4>
-                    <div className="space-y-1 text-sm">
+                    <h4 className="font-medium mb-2 text-xs">Status das Atividades</h4>
+                    <div className="space-y-1 text-xs">
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                        <div className="w-2.5 h-2.5 rounded-full bg-yellow-500"></div>
                         <span>Pendente</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                        <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
                         <span>Em Andamento</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                        <div className="w-2.5 h-2.5 rounded-full bg-green-500"></div>
                         <span>Concluído</span>
                       </div>
                     </div>

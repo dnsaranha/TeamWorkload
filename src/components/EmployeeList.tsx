@@ -327,303 +327,309 @@ const EmployeeList = () => {
   };
 
   return (
-    <div className="bg-background p-6 w-full">
-      <Card className="w-full">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Employee Management</CardTitle>
-          <div className="flex items-center space-x-2">
-            <div className="relative">
+    <div className="bg-background w-full">
+      <Card className="w-full shadow-sm">
+        <CardHeader className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-4 sm:p-6">
+          <CardTitle className="text-lg sm:text-xl font-bold">Colaboradores</CardTitle>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2">
+            <div className="relative flex-1 sm:w-64">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search employees..."
-                className="pl-8 w-[250px]"
+                placeholder="Buscar colaborador..."
+                className="pl-8 w-full"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={exportToExcel}
-              className="flex items-center gap-1"
-            >
-              <Download className="h-4 w-4" />
-              Export
-            </Button>
-            <div className="relative">
-              <input
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleFileImport}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                id="employee-file-import"
-              />
+            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
               <Button
                 variant="outline"
                 size="sm"
-                className="flex items-center gap-1"
-                onClick={() =>
-                  document.getElementById("employee-file-import")?.click()
-                }
+                onClick={exportToExcel}
+                className="flex items-center gap-1 flex-1 sm:flex-none justify-center"
               >
-                <Upload className="h-4 w-4" />
-                Import
+                <Download className="h-4 w-4" />
+                <span>Exportar</span>
               </Button>
-            </div>
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="flex items-center gap-1">
-                  <PlusCircle className="h-4 w-4" />
-                  Add Employee
+              <div className="relative flex-1 sm:flex-none">
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleFileImport}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  id="employee-file-import"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-1 w-full justify-center"
+                  onClick={() =>
+                    document.getElementById("employee-file-import")?.click()
+                  }
+                >
+                  <Upload className="h-4 w-4" />
+                  <span>Importar</span>
                 </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add New Employee</DialogTitle>
-                  <DialogDescription>
-                    Enter the details for the new employee.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="name" className="text-right">
-                      Name
-                    </Label>
-                    <Input
-                      id="name"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleInputChange}
-                      className="col-span-3"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="role" className="text-right">
-                      Role
-                    </Label>
-                    <Input
-                      id="role"
-                      name="role"
-                      value={formData.role}
-                      onChange={handleInputChange}
-                      className="col-span-3"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="weekly_hours" className="text-right">
-                      Weekly Hours
-                    </Label>
-                    <Input
-                      id="weekly_hours"
-                      name="weekly_hours"
-                      type="number"
-                      value={formData.weekly_hours}
-                      onChange={handleInputChange}
-                      className="col-span-3"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="skills" className="text-right">
-                      Skills
-                    </Label>
-                    <Input
-                      id="skills"
-                      name="skills"
-                      value={formData.skills}
-                      onChange={handleInputChange}
-                      placeholder="React, TypeScript, Node.js"
-                      className="col-span-3"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="dias_de_trabalho" className="text-right">
-                      Working Days
-                    </Label>
-                    <div className="col-span-3 flex flex-wrap gap-x-4 gap-y-2">
-                      {daysOfWeek.map((day) => (
-                        <div key={day.id} className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            id={`add-${day.id}`}
-                            value={day.id}
-                            checked={formData.dias_de_trabalho.includes(
-                              day.id,
-                            )}
-                            onChange={(e) =>
-                              handleDayChange(day.id, e.target.checked)
-                            }
-                            className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                          />
-                          <Label htmlFor={`add-${day.id}`}>{day.label}</Label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsAddDialogOpen(false)}
-                  >
-                    Cancel
+              </div>
+              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="flex items-center gap-1 flex-1 sm:flex-none justify-center">
+                    <PlusCircle className="h-4 w-4" />
+                    <span>Novo</span>
                   </Button>
-                  <Button onClick={handleAddEmployee}>Add Employee</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Weekly Hours</TableHead>
-                <TableHead>Working Days</TableHead>
-                <TableHead>Skills</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-center py-6 text-muted-foreground"
-                  >
-                    Loading employees...
-                  </TableCell>
-                </TableRow>
-              ) : filteredEmployees.length > 0 ? (
-                filteredEmployees.map((employee) => (
-                  <TableRow key={employee.id}>
-                    <TableCell className="font-medium">
-                      {employee.name}
-                    </TableCell>
-                    <TableCell>{employee.role}</TableCell>
-                    <TableCell>{employee.weekly_hours}h</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {(employee.dias_de_trabalho || []).map((day) => (
-                          <Badge key={day} variant="outline">
-                            {
-                              daysOfWeek.find((d) => d.id === day)?.label || day
-                            }
-                          </Badge>
+                </DialogTrigger>
+                <DialogContent className="max-w-md w-[calc(100%-2rem)]">
+                  <DialogHeader>
+                    <DialogTitle>Novo Colaborador</DialogTitle>
+                    <DialogDescription>
+                      Preencha os dados do colaborador para adicionar à equipe.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                      <Label htmlFor="name" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                        Nome
+                      </Label>
+                      <Input
+                        id="name"
+                        name="name"
+                        value={formData.name}
+                        onChange={handleInputChange}
+                        className="sm:col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                      <Label htmlFor="role" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                        Cargo / Função
+                      </Label>
+                      <Input
+                        id="role"
+                        name="role"
+                        value={formData.role}
+                        onChange={handleInputChange}
+                        className="sm:col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                      <Label htmlFor="weekly_hours" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                        Horas/Semana
+                      </Label>
+                      <Input
+                        id="weekly_hours"
+                        name="weekly_hours"
+                        type="number"
+                        value={formData.weekly_hours}
+                        onChange={handleInputChange}
+                        className="sm:col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                      <Label htmlFor="skills" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                        Habilidades
+                      </Label>
+                      <Input
+                        id="skills"
+                        name="skills"
+                        value={formData.skills}
+                        onChange={handleInputChange}
+                        placeholder="React, TypeScript, Gestão"
+                        className="sm:col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 items-start gap-1 sm:gap-4">
+                      <Label htmlFor="dias_de_trabalho" className="text-left sm:text-right text-xs sm:text-sm font-medium sm:pt-1">
+                        Dias de Trabalho
+                      </Label>
+                      <div className="sm:col-span-3 flex flex-wrap gap-x-4 gap-y-2 pt-1">
+                        {daysOfWeek.map((day) => (
+                          <div key={day.id} className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              id={`add-${day.id}`}
+                              value={day.id}
+                              checked={formData.dias_de_trabalho.includes(
+                                day.id,
+                              )}
+                              onChange={(e) =>
+                                handleDayChange(day.id, e.target.checked)
+                              }
+                              className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                            />
+                            <Label htmlFor={`add-${day.id}`} className="text-xs sm:text-sm cursor-pointer">{day.label}</Label>
+                          </div>
                         ))}
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {Array.isArray(employee.skills) &&
-                          employee.skills.map((skill, index) => (
-                            <Badge key={index} variant="secondary">
-                              {skill}
-                            </Badge>
-                          ))}
-                        {typeof employee.skills === "string" &&
-                          employee.skills.split(",").map((skill, index) => (
-                            <Badge key={index} variant="secondary">
-                              {skill.trim()}
-                            </Badge>
-                          ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditDialog(employee)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>
-                                Delete Employee
-                              </AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to delete {employee.name}?
-                                This action cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() =>
-                                  handleDeleteEmployee(employee.id)
-                                }
-                                className="bg-destructive text-destructive-foreground"
-                              >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
+                    </div>
+                  </div>
+                  <DialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-0">
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsAddDialogOpen(false)}
+                      className="w-full sm:w-auto"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button onClick={handleAddEmployee} className="w-full sm:w-auto">Adicionar</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0 sm:p-6">
+          <div className="overflow-x-auto">
+            <Table className="min-w-[620px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Cargo</TableHead>
+                  <TableHead>Horas Semanais</TableHead>
+                  <TableHead>Dias de Trabalho</TableHead>
+                  <TableHead>Habilidades</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={6}
+                      className="text-center py-6 text-muted-foreground"
+                    >
+                      Carregando colaboradores...
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-center py-6 text-muted-foreground"
-                  >
-                    No employees found
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                ) : filteredEmployees.length > 0 ? (
+                  filteredEmployees.map((employee) => (
+                    <TableRow key={employee.id}>
+                      <TableCell className="font-medium">
+                        {employee.name}
+                      </TableCell>
+                      <TableCell>{employee.role}</TableCell>
+                      <TableCell>{employee.weekly_hours}h</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1 max-w-[200px]">
+                          {(employee.dias_de_trabalho || []).map((day) => (
+                            <Badge key={day} variant="outline" className="text-[11px] px-1.5 py-0">
+                              {
+                                daysOfWeek.find((d) => d.id === day)?.label || day
+                              }
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1 max-w-[200px]">
+                          {Array.isArray(employee.skills) &&
+                            employee.skills.map((skill, index) => (
+                              <Badge key={index} variant="secondary" className="text-[11px] px-1.5 py-0">
+                                {skill}
+                              </Badge>
+                            ))}
+                          {typeof employee.skills === "string" &&
+                            employee.skills.split(",").map((skill, index) => (
+                              <Badge key={index} variant="secondary" className="text-[11px] px-1.5 py-0">
+                                {skill.trim()}
+                              </Badge>
+                            ))}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEditDialog(employee)}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent className="w-[calc(100%-2rem)] max-w-md">
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Excluir Colaborador
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Tem certeza que deseja excluir {employee.name}?
+                                  Esta ação não pode ser desfeita.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-0">
+                                <AlertDialogCancel className="w-full sm:w-auto">Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() =>
+                                    handleDeleteEmployee(employee.id)
+                                  }
+                                  className="bg-destructive text-destructive-foreground w-full sm:w-auto"
+                                >
+                                  Excluir
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={6}
+                      className="text-center py-6 text-muted-foreground"
+                    >
+                      Nenhum colaborador encontrado
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
       {/* Edit Employee Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md w-[calc(100%-2rem)]">
           <DialogHeader>
-            <DialogTitle>Edit Employee</DialogTitle>
+            <DialogTitle>Editar Colaborador</DialogTitle>
             <DialogDescription>
-              Update the employee's information.
+              Atualize os dados e carga semanal do colaborador.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-name" className="text-right">
-                Name
+          <div className="grid gap-4 py-2">
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+              <Label htmlFor="edit-name" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                Nome
               </Label>
               <Input
                 id="edit-name"
                 name="name"
                 value={formData.name}
                 onChange={handleInputChange}
-                className="col-span-3"
+                className="sm:col-span-3"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-role" className="text-right">
-                Role
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+              <Label htmlFor="edit-role" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                Cargo / Função
               </Label>
               <Input
                 id="edit-role"
                 name="role"
                 value={formData.role}
                 onChange={handleInputChange}
-                className="col-span-3"
+                className="sm:col-span-3"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-weekly_hours" className="text-right">
-                Weekly Hours
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+              <Label htmlFor="edit-weekly_hours" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                Horas/Semana
               </Label>
               <Input
                 id="edit-weekly_hours"
@@ -631,27 +637,27 @@ const EmployeeList = () => {
                 type="number"
                 value={formData.weekly_hours}
                 onChange={handleInputChange}
-                className="col-span-3"
+                className="sm:col-span-3"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-skills" className="text-right">
-                Skills
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+              <Label htmlFor="edit-skills" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                Habilidades
               </Label>
               <Input
                 id="edit-skills"
                 name="skills"
                 value={formData.skills}
                 onChange={handleInputChange}
-                placeholder="React, TypeScript, Node.js"
-                className="col-span-3"
+                placeholder="React, TypeScript, Gestão"
+                className="sm:col-span-3"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="dias_de_trabalho" className="text-right">
-                Working Days
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-start gap-1 sm:gap-4">
+              <Label htmlFor="edit-dias_de_trabalho" className="text-left sm:text-right text-xs sm:text-sm font-medium sm:pt-1">
+                Dias de Trabalho
               </Label>
-              <div className="col-span-3 flex flex-wrap gap-x-4 gap-y-2">
+              <div className="sm:col-span-3 flex flex-wrap gap-x-4 gap-y-2 pt-1">
                 {daysOfWeek.map((day) => (
                   <div key={day.id} className="flex items-center gap-2">
                     <input
@@ -664,20 +670,21 @@ const EmployeeList = () => {
                       }
                       className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
                     />
-                    <Label htmlFor={`edit-${day.id}`}>{day.label}</Label>
+                    <Label htmlFor={`edit-${day.id}`} className="text-xs sm:text-sm cursor-pointer">{day.label}</Label>
                   </div>
                 ))}
               </div>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-0">
             <Button
               variant="outline"
               onClick={() => setIsEditDialogOpen(false)}
+              className="w-full sm:w-auto"
             >
-              Cancel
+              Cancelar
             </Button>
-            <Button onClick={handleEditEmployee}>Save Changes</Button>
+            <Button onClick={handleEditEmployee} className="w-full sm:w-auto">Salvar Alterações</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
