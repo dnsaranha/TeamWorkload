@@ -22,6 +22,9 @@ import {
   Minimize2,
   GripVertical,
   Move,
+  EyeOff,
+  Eye,
+  ExternalLink,
 } from "lucide-react";
 import {
   Task,
@@ -49,13 +52,22 @@ import { ptBR } from "date-fns/locale";
 
 interface FloatingTimeTrackerProps {
   onTimeLogged?: () => void;
+  onOpenTimesheet?: () => void;
 }
 
 export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
   onTimeLogged,
+  onOpenTimesheet,
 }) => {
   // Widget Open/Expanded state
   const [isOpen, setIsOpen] = useState(false);
+  const [isHidden, setIsHidden] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("crono_pulse_tracker_hidden") === "true";
+    } catch {
+      return false;
+    }
+  });
   const [activeTab, setActiveTab] = useState<"timer" | "manual" | "history">("timer");
 
   // Timer state
@@ -226,15 +238,16 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
 
   const loadData = async () => {
     try {
-      const [tList, pList, eList] = await Promise.all([
+      const [tList, pList, eList, entryList] = await Promise.all([
         taskService.getAll(),
         projectService.getAll(),
         employeeService.getAll(),
+        timeEntryService.getAll(),
       ]);
       setTasks(tList || []);
       setProjects(pList || []);
       setEmployees(eList || []);
-      setRecentEntries(timeEntryService.getAll());
+      setRecentEntries(Array.isArray(entryList) ? entryList : []);
     } catch (e) {
       console.error("Error loading time tracker data:", e);
     }
@@ -299,7 +312,7 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
     const now = new Date().toISOString();
 
     // 1. Create time entry
-    const entry: TimeEntry = timeEntryService.create({
+    const entry: TimeEntry = await timeEntryService.create({
       task_id: selectedTaskId,
       task_name: description || task?.name || "Atividade Avulsa",
       project_id: project?.id || null,
@@ -327,7 +340,8 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
     }
 
     // Refresh entries
-    setRecentEntries(timeEntryService.getAll());
+    const freshEntries = await timeEntryService.getAll();
+    setRecentEntries(Array.isArray(freshEntries) ? freshEntries : []);
     resetTimer();
     if (onTimeLogged) onTimeLogged();
   };
@@ -351,7 +365,7 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
     const project = projects.find((p) => p.id === manualProjectId) || task?.project;
     const now = new Date().toISOString();
 
-    timeEntryService.create({
+    await timeEntryService.create({
       task_id: manualTaskId,
       task_name: manualDesc || task?.name || "Registro Manual",
       project_id: project?.id || null,
@@ -376,7 +390,8 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
       }
     }
 
-    setRecentEntries(timeEntryService.getAll());
+    const freshEntries = await timeEntryService.getAll();
+    setRecentEntries(Array.isArray(freshEntries) ? freshEntries : []);
     setManualDesc("");
     setManualTaskId(null);
     setManualProjectId(null);
@@ -385,9 +400,10 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
     if (onTimeLogged) onTimeLogged();
   };
 
-  const handleDeleteEntry = (id: string) => {
-    timeEntryService.delete(id);
-    setRecentEntries(timeEntryService.getAll());
+  const handleDeleteEntry = async (id: string) => {
+    await timeEntryService.delete(id);
+    const freshEntries = await timeEntryService.getAll();
+    setRecentEntries(Array.isArray(freshEntries) ? freshEntries : []);
     if (onTimeLogged) onTimeLogged();
   };
 
@@ -399,8 +415,9 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
     return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
-  // Compute total tracked time today
-  const todayEntries = recentEntries.filter((entry) => {
+  // Compute total tracked time today safely
+  const safeRecentEntries = Array.isArray(recentEntries) ? recentEntries : [];
+  const todayEntries = safeRecentEntries.filter((entry) => {
     try {
       const entryDate = format(new Date(entry.start_time), "yyyy-MM-dd");
       const todayStr = format(new Date(), "yyyy-MM-dd");
@@ -421,7 +438,7 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
   return (
     <>
       {/* FLOATING TRIGGER BUTTON / COMPACT CAPSULE (DRAGGABLE) */}
-      {!isOpen && (
+      {!isOpen && !isHidden && (
         <div
           style={{
             position: "fixed",
@@ -430,7 +447,7 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
             zIndex: 9999,
             touchAction: "none",
           }}
-          className={`pointer-events-auto select-none ${isDragging ? "cursor-grabbing opacity-90 scale-105" : "cursor-grab"}`}
+          className={`pointer-events-auto select-none flex items-center gap-1.5 ${isDragging ? "cursor-grabbing opacity-90 scale-105" : "cursor-grab"}`}
           onMouseDown={(e) => {
             if ((e.target as HTMLElement).closest("button")) return;
             handlePointerDown(e.clientX, e.clientY);
@@ -519,7 +536,50 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
               </button>
             ) : null}
           </div>
+
+          {/* Button next to floating tracker to hide it */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsHidden(true);
+              try {
+                localStorage.setItem("crono_pulse_tracker_hidden", "true");
+              } catch {}
+            }}
+            className="p-1.5 rounded-full bg-card/90 hover:bg-card text-muted-foreground hover:text-foreground border border-border shadow-md transition-all hover:scale-105"
+            title="Ocultar rastreador flutuante"
+          >
+            <EyeOff className="h-3.5 w-3.5" />
+          </button>
         </div>
+      )}
+
+      {/* Floating edge chip when tracker is hidden */}
+      {isHidden && (
+        <button
+          type="button"
+          onClick={() => {
+            setIsHidden(false);
+            try {
+              localStorage.setItem("crono_pulse_tracker_hidden", "false");
+            } catch {}
+          }}
+          className="fixed bottom-3 right-4 z-40 bg-card/95 hover:bg-card text-foreground border border-border shadow-xl rounded-full px-3 py-1.5 flex items-center gap-2 text-xs font-semibold backdrop-blur-md transition-all hover:scale-105"
+          title="Exibir Rastreador de Tempo"
+        >
+          <Timer className="h-3.5 w-3.5 text-primary" />
+          <span>Rastreador</span>
+          {seconds > 0 && (
+            <span className="font-mono text-[11px] font-bold text-primary">
+              {formatTime(seconds)}
+            </span>
+          )}
+          {isRunning && (
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+          )}
+          <Eye className="h-3.5 w-3.5 text-muted-foreground ml-0.5" />
+        </button>
       )}
 
       {/* FULL EXPANDED CLOCKIFY-STYLE WIDGET MODAL / POPUP (DRAGGABLE) */}
@@ -582,6 +642,35 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
             </div>
 
             <div className="flex items-center gap-1">
+              {onOpenTimesheet && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setIsOpen(false);
+                    onOpenTimesheet();
+                  }}
+                  className="h-7 w-7 text-muted-foreground hover:text-primary"
+                  title="Abrir Grade de Apontamento de Horas"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setIsOpen(false);
+                  setIsHidden(true);
+                  try {
+                    localStorage.setItem("crono_pulse_tracker_hidden", "true");
+                  } catch {}
+                }}
+                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                title="Ocultar rastreador flutuante"
+              >
+                <EyeOff className="h-3.5 w-3.5" />
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
@@ -678,7 +767,7 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
                         <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-64 max-h-56 overflow-y-auto bg-popover border-border">
+                    <DropdownMenuContent className="!z-[99999] w-64 max-h-56 overflow-y-auto bg-popover text-popover-foreground border-border shadow-2xl">
                       <DropdownMenuLabel className="text-xs">Vincular a Tarefa</DropdownMenuLabel>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
@@ -726,7 +815,7 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
                         <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-56 max-h-56 overflow-y-auto bg-popover border-border">
+                    <DropdownMenuContent className="!z-[99999] w-56 max-h-56 overflow-y-auto bg-popover text-popover-foreground border-border shadow-2xl">
                       <DropdownMenuLabel className="text-xs">Vincular Projeto</DropdownMenuLabel>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
@@ -860,7 +949,7 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
                       <ChevronDown className="h-3 w-3 text-muted-foreground" />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-72 max-h-56 overflow-y-auto bg-popover border-border">
+                  <DropdownMenuContent className="!z-[99999] w-72 max-h-56 overflow-y-auto bg-popover text-popover-foreground border-border shadow-2xl">
                     <DropdownMenuItem
                       onClick={() => setManualTaskId(null)}
                       className="text-xs text-muted-foreground"

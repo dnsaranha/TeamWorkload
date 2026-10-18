@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Calendar,
   Users,
@@ -15,12 +16,21 @@ import {
   Layers,
   Grid3X3,
   Table,
+  Clock,
+  Network,
+  ShieldCheck,
+  Building2,
+  LogIn,
+  LogOut,
+  UserCheck,
+  ChevronDown,
 } from "lucide-react";
 import { ThemeToggleButton } from "@/lib/theme";
 import WorkloadCalendar from "./WorkloadCalendar";
 import XiaomiCalendar from "./XiaomiCalendar";
 import GanttChart from "./GanttChart";
 import ProjectGridSheet from "./ProjectGridSheet";
+import TimeTrackingSheet from "./TimeTrackingSheet";
 import ResourcePlanningView from "./ResourcePlanningView";
 import EmployeeList from "./EmployeeList";
 import WorkloadSummary from "./WorkloadSummary";
@@ -28,6 +38,9 @@ import ReportsView from "./ReportsView";
 import UserProfile from "./UserProfile";
 import Roadmap from "./Roadmap";
 import FloatingTimeTracker from "./FloatingTimeTracker";
+import WorkGroupAdmin from "./WorkGroupAdmin";
+import LoginPage from "./LoginPage";
+import { useAuth } from "@/lib/authContext";
 import {
   employeeService,
   taskService,
@@ -35,6 +48,16 @@ import {
 } from "@/lib/supabaseClient";
 
 const HomePage = () => {
+  const {
+    user,
+    activeEmployee,
+    activeEmployeeId,
+    allEmployees,
+    permissions,
+    isSuperAdmin,
+    switchPersona,
+  } = useAuth();
+
   const [activeTab, setActiveTab] = useState("dashboard");
   const [totalEmployees, setTotalEmployees] = useState(0);
   const [activeTasks, setActiveTasks] = useState(0);
@@ -273,6 +296,24 @@ const HomePage = () => {
           </Button>
 
           <Button
+            variant={activeTab === "timesheet" ? "default" : "ghost"}
+            className={`${
+              isMobile
+                ? "flex-col p-1 h-14 min-w-[52px] gap-0.5 rounded-lg"
+                : sidebarCollapsed
+                  ? "w-10 h-10 p-0 mx-auto"
+                  : "w-full justify-start"
+            } text-amber-600 dark:text-amber-400 font-semibold`}
+            onClick={() => setActiveTab("timesheet")}
+          >
+            <Clock
+              className={`${isMobile ? "h-4 w-4" : sidebarCollapsed ? "h-4 w-4" : "mr-2 h-4 w-4"}`}
+            />
+            {!sidebarCollapsed && !isMobile && "Apontamento de Horas"}
+            {isMobile && <span className="text-[10px] font-medium leading-tight">Horas</span>}
+          </Button>
+
+          <Button
             variant={activeTab === "roadmap" ? "default" : "ghost"}
             className={`${
               isMobile
@@ -343,6 +384,42 @@ const HomePage = () => {
             {!sidebarCollapsed && !isMobile && "Colaboradores"}
             {isMobile && <span className="text-[10px] font-medium leading-tight">Equipe</span>}
           </Button>
+
+          <Button
+            variant={activeTab === "groups" ? "default" : "ghost"}
+            className={`${
+              isMobile
+                ? "flex-col p-1 h-14 min-w-[52px] gap-0.5 rounded-lg"
+                : sidebarCollapsed
+                  ? "w-10 h-10 p-0 mx-auto"
+                  : "w-full justify-start"
+            } text-purple-600 dark:text-purple-400 font-semibold`}
+            onClick={() => setActiveTab("groups")}
+          >
+            <Network
+              className={`${isMobile ? "h-4 w-4" : sidebarCollapsed ? "h-4 w-4" : "mr-2 h-4 w-4"}`}
+            />
+            {!sidebarCollapsed && !isMobile && "Grupos de Trabalho"}
+            {isMobile && <span className="text-[10px] font-medium leading-tight">Grupos</span>}
+          </Button>
+
+          <Button
+            variant={activeTab === "login" ? "default" : "ghost"}
+            className={`${
+              isMobile
+                ? "flex-col p-1 h-14 min-w-[52px] gap-0.5 rounded-lg"
+                : sidebarCollapsed
+                  ? "w-10 h-10 p-0 mx-auto"
+                  : "w-full justify-start"
+            } text-indigo-600 dark:text-indigo-400`}
+            onClick={() => setActiveTab("login")}
+          >
+            <LogIn
+              className={`${isMobile ? "h-4 w-4" : sidebarCollapsed ? "h-4 w-4" : "mr-2 h-4 w-4"}`}
+            />
+            {!sidebarCollapsed && !isMobile && (user ? "Conta & Login" : "Acesso / Login")}
+            {isMobile && <span className="text-[10px] font-medium leading-tight">Login</span>}
+          </Button>
         </nav>
 
         {!isMobile && (
@@ -363,13 +440,17 @@ const HomePage = () => {
               className={`${sidebarCollapsed ? "w-10 h-10 p-0 mx-auto" : "w-full justify-start"} hover:bg-accent`}
               onClick={() => setActiveTab("profile")}
             >
-              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold">
-                U
+              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold text-xs shrink-0">
+                {user?.displayName ? user.displayName.charAt(0).toUpperCase() : activeEmployee?.name ? activeEmployee.name.charAt(0).toUpperCase() : "U"}
               </div>
               {!sidebarCollapsed && (
-                <div className="ml-2 text-left">
-                  <p className="text-sm font-medium">User Profile</p>
-                  <p className="text-xs text-muted-foreground">Administrator</p>
+                <div className="ml-2 text-left min-w-0">
+                  <p className="text-sm font-semibold truncate">
+                    {user?.displayName || activeEmployee?.name || "Lucas Mendes"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground truncate">
+                    {permissions.hierarchyTitle}
+                  </p>
                 </div>
               )}
             </Button>
@@ -378,10 +459,86 @@ const HomePage = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Desktop Top Header Bar with Persona Switcher & Level Status */}
+        {!isMobile && (
+          <header className="h-12 border-b bg-card px-4 py-2 flex items-center justify-between shrink-0 shadow-xs z-20">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-sm text-foreground">
+                {activeTab === "dashboard" && "Dashboard Geral"}
+                {activeTab === "planning" && "Alocação & Capacidade"}
+                {activeTab === "grid" && "Grade de Projetos & Tarefas"}
+                {activeTab === "gantt" && "Gráfico Gantt com Dependências"}
+                {activeTab === "timesheet" && "Apontamento de Horas & Histórico"}
+                {activeTab === "groups" && "Administração de Grupos de Trabalho"}
+                {activeTab === "login" && "Portal de Autenticação & Acessos"}
+                {activeTab === "roadmap" && "Roadmap Estratégico"}
+                {activeTab === "xiaomi-calendar" && "Calendário Xiaomi"}
+                {activeTab === "reports" && "Relatórios de Desempenho"}
+                {activeTab === "employees" && "Gestão de Colaboradores"}
+                {activeTab === "profile" && "Perfil de Usuário"}
+              </span>
+
+              {/* Hierarchy level badge */}
+              <Badge variant="outline" className="text-[11px] font-medium border-primary/30 text-primary bg-primary/5">
+                <Building2 className="w-3 h-3 mr-1" />
+                {permissions.hierarchyTitle}
+              </Badge>
+
+              {permissions.isAdmin && (
+                <Badge variant="secondary" className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-300">
+                  <ShieldCheck className="w-3 h-3 mr-1" />
+                  Admin
+                </Badge>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              {/* Persona Switcher Dropdown */}
+              <div className="flex items-center gap-1.5 bg-muted/60 px-2.5 py-1 rounded-lg border text-xs">
+                <span className="text-muted-foreground text-[11px] font-medium">
+                  Simulando:
+                </span>
+                <select
+                  value={activeEmployeeId}
+                  onChange={(e) => switchPersona(e.target.value)}
+                  className="bg-transparent font-semibold text-xs text-foreground cursor-pointer outline-none"
+                  title="Alterne de colaborador para testar visão hierárquica e permissões"
+                >
+                  {allEmployees.map((emp) => (
+                    <option key={emp.id} value={emp.id} className="bg-popover text-popover-foreground">
+                      {emp.name} ({emp.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <Button
+                variant={activeTab === "groups" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setActiveTab("groups")}
+                className="h-8 text-xs gap-1.5"
+              >
+                <Network className="w-3.5 h-3.5" />
+                Grupos & Hierarquia
+              </Button>
+
+              <Button
+                variant={activeTab === "login" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setActiveTab("login")}
+                className="h-8 text-xs gap-1.5"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                {user ? "Conta" : "Login"}
+              </Button>
+            </div>
+          </header>
+        )}
+
         <main
           className={`flex-1 overflow-x-hidden ${
-            activeTab === "xiaomi-calendar" || activeTab === "gantt" || activeTab === "planning"
+            activeTab === "xiaomi-calendar" || activeTab === "gantt" || activeTab === "planning" || activeTab === "grid" || activeTab === "timesheet" || activeTab === "groups" || activeTab === "login"
               ? "h-full overflow-hidden p-0 flex flex-col"
               : `overflow-y-auto p-3 sm:p-5 md:p-6 ${isMobile ? "pb-24" : ""}`
           }`}
@@ -495,6 +652,12 @@ const HomePage = () => {
             </div>
           )}
 
+          {activeTab === "timesheet" && (
+            <div className="h-full w-full flex flex-col overflow-hidden pb-16 sm:pb-0 border rounded-lg shadow-sm">
+              <TimeTrackingSheet onDataChange={loadDashboardData} />
+            </div>
+          )}
+
           {activeTab === "roadmap" && (
             <div className="space-y-4">
               <h2 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Roadmap Estratégico</h2>
@@ -529,10 +692,28 @@ const HomePage = () => {
               />
             </div>
           )}
+
+          {activeTab === "groups" && (
+            <div className="h-full w-full flex flex-col overflow-y-auto">
+              <WorkGroupAdmin />
+            </div>
+          )}
+
+          {activeTab === "login" && (
+            <div className="h-full w-full flex flex-col overflow-y-auto p-4 sm:p-6">
+              <LoginPage
+                onSuccess={() => setActiveTab("dashboard")}
+                onCancel={() => setActiveTab("dashboard")}
+              />
+            </div>
+          )}
         </main>
 
         {/* Global Floating Time Tracker (Clockify style) */}
-        <FloatingTimeTracker onTimeLogged={loadDashboardData} />
+        <FloatingTimeTracker
+          onTimeLogged={loadDashboardData}
+          onOpenTimesheet={() => setActiveTab("timesheet")}
+        />
       </div>
     </div>
   );

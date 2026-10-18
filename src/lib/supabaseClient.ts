@@ -1,5 +1,7 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { Database } from "@/types/supabase";
+import { firestoreService } from "./firestoreService";
+import { auth } from "./firebase";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
@@ -389,6 +391,11 @@ const getInitialData = () => {
 class LocalMockDB {
   private getStore<T>(key: string, defaultInit: () => T[]): T[] {
     try {
+      if (localStorage.getItem("crono_pulse_mock_cleared") === "true") {
+        const val = localStorage.getItem(key);
+        if (val) return JSON.parse(val);
+        return [];
+      }
       const val = localStorage.getItem(key);
       if (val) return JSON.parse(val);
       const initial = defaultInit();
@@ -738,28 +745,22 @@ function createMockQueryBuilder(tableName: string) {
   return builder;
 }
 
-// Real Supabase client instance (if configured)
-let rawSupabase: SupabaseClient<Database> | null = null;
-if (isSupabaseConfigured) {
-  try {
-    rawSupabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
-  } catch (e) {
-    console.warn("[Crono Pulse] Failed to initialize Supabase client, using fallback:", e);
-    rawSupabase = null;
-  }
-}
-
-// Resilient wrapper around Supabase with mock fallback
+// Resilient Supabase compatibility layer backed by Firestore & LocalMockDB
 export const supabase: any = {
   auth: {
     async getUser() {
-      if (rawSupabase) {
-        try {
-          const res = await rawSupabase.auth.getUser();
-          if (res.data?.user) return res;
-        } catch {
-          // fallback
-        }
+      const fbUser = auth.currentUser;
+      if (fbUser) {
+        return {
+          data: {
+            user: {
+              id: fbUser.uid,
+              email: fbUser.email,
+              user_metadata: { full_name: fbUser.displayName || "Usuário" },
+            },
+          },
+          error: null,
+        };
       }
       return {
         data: {
@@ -773,85 +774,41 @@ export const supabase: any = {
       };
     },
     onAuthStateChange(callback: any) {
-      if (rawSupabase) {
-        try {
-          return rawSupabase.auth.onAuthStateChange(callback);
-        } catch {
-          // fallback
-        }
-      }
       return { data: { subscription: { unsubscribe: () => {} } } };
     },
   },
   from(tableName: string) {
-    if (rawSupabase) {
-      // Return a proxy that tries real Supabase first, then falls back on error
-      const realBuilder = rawSupabase.from(tableName as any);
-      return new Proxy(realBuilder, {
-        get(target: any, prop: string | symbol) {
-          if (prop === "then") {
-            return (onfulfilled?: (val: any) => any, onrejected?: (err: any) => any) => {
-              return target
-                .then((result: any) => {
-                  if (result.error) {
-                    console.warn(`[Supabase Query Error on ${tableName}], falling back to local storage:`, result.error.message);
-                    return createMockQueryBuilder(tableName);
-                  }
-                  return result;
-                })
-                .catch((err: any) => {
-                  console.warn(`[Supabase Fetch Error on ${tableName}], falling back to local storage:`, err);
-                  return createMockQueryBuilder(tableName);
-                })
-                .then(onfulfilled, onrejected);
-            };
-          }
-          const orig = target[prop];
-          if (typeof orig === "function") {
-            return (...args: any[]) => {
-              const res = orig.apply(target, args);
-              return res;
-            };
-          }
-          return orig;
-        },
-      });
-    }
-
     return createMockQueryBuilder(tableName);
   },
 };
 
-// Helper functions for CRUD operations
+// Helper functions for CRUD operations with Firebase Firestore as primary storage
 export const employeeService = {
   async getAll(): Promise<Employee[]> {
-    if (rawSupabase) {
-      try {
-        const { data, error } = await rawSupabase
-          .from("employees")
-          .select("*")
-          .order("name");
-        if (!error && data) return data as unknown as Employee[];
-      } catch (err) {
-        console.warn("[Employee Service] Falling back to local data:", err);
+    try {
+      const remote = await firestoreService.getEmployees();
+      if (remote && remote.length > 0) {
+        mockDB.setEmployees(remote);
+        return remote;
+      } else {
+        if (localStorage.getItem("crono_pulse_mock_cleared") === "true") {
+          mockDB.setEmployees([]);
+          return [];
+        }
+        // Seed initial employees to Firestore
+        const initial = mockDB.getEmployees();
+        for (const emp of initial) {
+          firestoreService.saveEmployee(emp).catch(() => {});
+        }
+        return initial;
       }
+    } catch (err) {
+      console.warn("[Employee Service] Falling back to local data:", err);
     }
     return mockDB.getEmployees();
   },
 
   async create(employee: EmployeeInsert): Promise<Employee> {
-    if (rawSupabase) {
-      try {
-        const { data, error } = await rawSupabase
-          .from("employees")
-          .insert(employee as any)
-          .select()
-          .single();
-        if (!error && data) return data as unknown as Employee;
-      } catch (err) {
-        console.warn("[Employee Service] Falling back to local create:", err);
-      }
-    }
     const employees = mockDB.getEmployees();
     const now = new Date().toISOString();
     const newEmp: Employee = {
@@ -861,23 +818,11 @@ export const employeeService = {
       ...employee,
     };
     mockDB.setEmployees([...employees, newEmp]);
+    firestoreService.saveEmployee(newEmp).catch(console.warn);
     return newEmp;
   },
 
   async update(id: string, employee: EmployeeUpdate): Promise<Employee> {
-    if (rawSupabase) {
-      try {
-        const { data, error } = await rawSupabase
-          .from("employees")
-          .update(employee as any)
-          .eq("id", id)
-          .select()
-          .single();
-        if (!error && data) return data as unknown as Employee;
-      } catch (err) {
-        console.warn("[Employee Service] Falling back to local update:", err);
-      }
-    }
     const employees = mockDB.getEmployees();
     const now = new Date().toISOString();
     let updatedEmp: Employee | null = null;
@@ -889,35 +834,30 @@ export const employeeService = {
       return emp;
     });
     mockDB.setEmployees(updatedList);
-    return updatedEmp || { id, name: employee.name || "", role: employee.role || "", weekly_hours: employee.weekly_hours || 40, skills: [], dias_de_trabalho: null, created_at: now, updated_at: now };
+    if (updatedEmp) {
+      firestoreService.saveEmployee(updatedEmp).catch(console.warn);
+    }
+    return (
+      updatedEmp || {
+        id,
+        name: employee.name || "",
+        role: employee.role || "",
+        weekly_hours: employee.weekly_hours || 40,
+        skills: [],
+        dias_de_trabalho: null,
+        created_at: now,
+        updated_at: now,
+      }
+    );
   },
 
   async delete(id: string): Promise<void> {
-    if (rawSupabase) {
-      try {
-        const { error } = await rawSupabase.from("employees").delete().eq("id", id);
-        if (!error) return;
-      } catch (err) {
-        console.warn("[Employee Service] Falling back to local delete:", err);
-      }
-    }
     const employees = mockDB.getEmployees().filter((e) => e.id !== id);
     mockDB.setEmployees(employees);
+    firestoreService.deleteEmployee(id).catch(console.warn);
   },
 
   async upsert(employee: EmployeeInsert & { id?: string }): Promise<Employee> {
-    if (rawSupabase) {
-      try {
-        const { data, error } = await rawSupabase
-          .from("employees")
-          .upsert(employee as any)
-          .select()
-          .single();
-        if (!error && data) return data as unknown as Employee;
-      } catch (err) {
-        console.warn("[Employee Service] Falling back to local upsert:", err);
-      }
-    }
     if (employee.id) {
       return this.update(employee.id, employee);
     }
@@ -941,33 +881,30 @@ export const employeeService = {
 
 export const projectService = {
   async getAll(): Promise<Project[]> {
-    if (rawSupabase) {
-      try {
-        const { data, error } = await rawSupabase
-          .from("workload_projects")
-          .select("*")
-          .order("name");
-        if (!error && data) return data as unknown as Project[];
-      } catch (err) {
-        console.warn("[Project Service] Falling back to local data:", err);
+    try {
+      const remote = await firestoreService.getProjects();
+      if (remote && remote.length > 0) {
+        mockDB.setProjects(remote);
+        return remote;
+      } else {
+        if (localStorage.getItem("crono_pulse_mock_cleared") === "true") {
+          mockDB.setProjects([]);
+          return [];
+        }
+        // Seed initial projects to Firestore
+        const initial = mockDB.getProjects();
+        for (const proj of initial) {
+          firestoreService.saveProject(proj).catch(() => {});
+        }
+        return initial;
       }
+    } catch (err) {
+      console.warn("[Project Service] Falling back to local data:", err);
     }
     return mockDB.getProjects();
   },
 
   async create(project: ProjectInsert): Promise<Project> {
-    if (rawSupabase) {
-      try {
-        const { data, error } = await rawSupabase
-          .from("workload_projects")
-          .insert(project as any)
-          .select()
-          .single();
-        if (!error && data) return data as unknown as Project;
-      } catch (err) {
-        console.warn("[Project Service] Falling back to local create:", err);
-      }
-    }
     const projects = mockDB.getProjects();
     const now = new Date().toISOString();
     const newProj: Project = {
@@ -982,23 +919,11 @@ export const projectService = {
       special_marker: project.special_marker || null,
     };
     mockDB.setProjects([...projects, newProj]);
+    firestoreService.saveProject(newProj).catch(console.warn);
     return newProj;
   },
 
   async update(id: string, project: ProjectUpdate): Promise<Project> {
-    if (rawSupabase) {
-      try {
-        const { data, error } = await rawSupabase
-          .from("workload_projects")
-          .update(project as any)
-          .eq("id", id)
-          .select()
-          .single();
-        if (!error && data) return data as unknown as Project;
-      } catch (err) {
-        console.warn("[Project Service] Falling back to local update:", err);
-      }
-    }
     const projects = mockDB.getProjects();
     const now = new Date().toISOString();
     let updatedProj: Project | null = null;
@@ -1010,35 +935,29 @@ export const projectService = {
       return p;
     });
     mockDB.setProjects(updatedList);
-    return updatedProj || { id, name: project.name || "", description: null, start_date: null, end_date: null, created_at: now, updated_at: now };
+    if (updatedProj) {
+      firestoreService.saveProject(updatedProj).catch(console.warn);
+    }
+    return (
+      updatedProj || {
+        id,
+        name: project.name || "",
+        description: null,
+        start_date: null,
+        end_date: null,
+        created_at: now,
+        updated_at: now,
+      }
+    );
   },
 
   async delete(id: string): Promise<void> {
-    if (rawSupabase) {
-      try {
-        const { error } = await rawSupabase.from("workload_projects").delete().eq("id", id);
-        if (!error) return;
-      } catch (err) {
-        console.warn("[Project Service] Falling back to local delete:", err);
-      }
-    }
     const projects = mockDB.getProjects().filter((p) => p.id !== id);
     mockDB.setProjects(projects);
+    firestoreService.deleteProject(id).catch(console.warn);
   },
 
   async upsert(project: ProjectInsert & { id?: string }): Promise<Project> {
-    if (rawSupabase) {
-      try {
-        const { data, error } = await rawSupabase
-          .from("workload_projects")
-          .upsert(project as any)
-          .select()
-          .single();
-        if (!error && data) return data as unknown as Project;
-      } catch (err) {
-        console.warn("[Project Service] Falling back to local upsert:", err);
-      }
-    }
     if (project.id) {
       return this.update(project.id, project);
     }
@@ -1062,45 +981,30 @@ export const projectService = {
 
 export const taskService = {
   async getAll(): Promise<Task[]> {
-    if (rawSupabase) {
-      try {
-        const { data, error } = await rawSupabase
-          .from("workload_tasks")
-          .select(
-            `
-            *,
-            project:workload_projects(*),
-            assigned_employee:employees(*)
-          `
-          )
-          .order("created_at", { ascending: false });
-        if (!error && data) return data as unknown as Task[];
-      } catch (err) {
-        console.warn("[Task Service] Falling back to local data:", err);
+    try {
+      const remote = await firestoreService.getTasks();
+      if (remote && remote.length > 0) {
+        mockDB.setTasks(remote);
+        return mockDB.getTasks();
+      } else {
+        if (localStorage.getItem("crono_pulse_mock_cleared") === "true") {
+          mockDB.setTasks([]);
+          return [];
+        }
+        // Seed initial tasks to Firestore
+        const initial = mockDB.getTasks();
+        for (const task of initial) {
+          firestoreService.saveTask(task).catch(() => {});
+        }
+        return initial;
       }
+    } catch (err) {
+      console.warn("[Task Service] Falling back to local data:", err);
     }
     return mockDB.getTasks();
   },
 
   async create(task: TaskInsert): Promise<Task> {
-    if (rawSupabase) {
-      try {
-        const { data, error } = await rawSupabase
-          .from("workload_tasks")
-          .insert(task as any)
-          .select(
-            `
-            *,
-            project:workload_projects(*),
-            assigned_employee:employees(*)
-          `
-          )
-          .single();
-        if (!error && data) return data as unknown as Task;
-      } catch (err) {
-        console.warn("[Task Service] Falling back to local create:", err);
-      }
-    }
     const tasks = mockDB.getTasks();
     const now = new Date().toISOString();
     const newTask: Task = {
@@ -1121,78 +1025,41 @@ export const taskService = {
       hours_per_day: task.hours_per_day || null,
       special_marker: task.special_marker || null,
       exceptions: task.exceptions || null,
+      dependencies: task.dependencies || [],
+      parent_id: task.parent_id || null,
+      progress: task.progress ?? 0,
+      actual_time: task.actual_time ?? 0,
     };
     mockDB.setTasks([...tasks, newTask]);
-    return mockDB.getTasks().find((t) => t.id === newTask.id) || newTask;
+    const populated = mockDB.getTasks().find((t) => t.id === newTask.id) || newTask;
+    firestoreService.saveTask(populated).catch(console.warn);
+    return populated;
   },
 
   async update(id: string, task: TaskUpdate): Promise<Task> {
-    if (rawSupabase) {
-      try {
-        const { data, error } = await rawSupabase
-          .from("workload_tasks")
-          .update(task as any)
-          .eq("id", id)
-          .select(
-            `
-            *,
-            project:workload_projects(*),
-            assigned_employee:employees(*)
-          `
-          )
-          .single();
-        if (!error && data) return data as unknown as Task;
-      } catch (err) {
-        console.warn("[Task Service] Falling back to local update:", err);
-      }
-    }
     const tasks = mockDB.getTasks();
     const now = new Date().toISOString();
+    let updatedTask: Task | null = null;
     const updatedList = tasks.map((t) => {
       if (t.id === id) {
-        return { ...t, ...task, updated_at: now };
+        updatedTask = { ...t, ...task, updated_at: now };
+        return updatedTask;
       }
       return t;
     });
     mockDB.setTasks(updatedList);
-    return mockDB.getTasks().find((t) => t.id === id) || ({} as Task);
+    const fresh = mockDB.getTasks().find((t) => t.id === id) || ({} as Task);
+    firestoreService.saveTask(fresh).catch(console.warn);
+    return fresh;
   },
 
   async delete(id: string): Promise<void> {
-    if (rawSupabase) {
-      try {
-        const { error } = await rawSupabase
-          .from("workload_tasks")
-          .delete()
-          .eq("id", id);
-        if (!error) return;
-      } catch (err) {
-        console.warn("[Task Service] Falling back to local delete:", err);
-      }
-    }
     const tasks = mockDB.getTasks().filter((t) => t.id !== id);
     mockDB.setTasks(tasks);
+    firestoreService.deleteTask(id).catch(console.warn);
   },
 
   async upsert(task: TaskInsert & { id?: string }): Promise<Task> {
-    if (rawSupabase) {
-      try {
-        const { data, error } = await rawSupabase
-          .from("workload_tasks")
-          .upsert(task as any)
-          .select(
-            `
-            *,
-            project:workload_projects(*),
-            assigned_employee:employees(*)
-          `
-          )
-          .single();
-        if (!error && data) return data as unknown as Task;
-      } catch (err) {
-        console.warn("[Task Service] Falling back to local upsert:", err);
-      }
-    }
     if (task.id) {
       return this.update(task.id, task);
     }
@@ -1204,10 +1071,13 @@ export const taskService = {
     try {
       localStorage.setItem(
         "crono_pulse_task_order",
-        JSON.stringify(orderedTasks.map((t) => t.id))
+        JSON.stringify(orderedTasks.map((t) => t.id)),
       );
     } catch (e) {
       console.warn("Error saving task order:", e);
+    }
+    for (const t of orderedTasks) {
+      firestoreService.saveTask(t).catch(() => {});
     }
   },
 
@@ -1227,7 +1097,16 @@ export const taskService = {
 };
 
 export const timeEntryService = {
-  getAll(): TimeEntry[] {
+  async getAll(): Promise<TimeEntry[]> {
+    try {
+      const remote = await firestoreService.getTimeEntries();
+      if (remote && remote.length > 0) {
+        localStorage.setItem("crono_pulse_time_entries", JSON.stringify(remote));
+        return remote;
+      }
+    } catch (err) {
+      console.warn("Firestore time entries fallback to local:", err);
+    }
     try {
       const data = localStorage.getItem("crono_pulse_time_entries");
       return data ? JSON.parse(data) : [];
@@ -1236,8 +1115,17 @@ export const timeEntryService = {
     }
   },
 
-  create(entry: TimeEntryInsert): TimeEntry {
-    const all = this.getAll();
+  getAllSync(): TimeEntry[] {
+    try {
+      const data = localStorage.getItem("crono_pulse_time_entries");
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  async create(entry: TimeEntryInsert): Promise<TimeEntry> {
+    const all = this.getAllSync();
     const newEntry: TimeEntry = {
       id: `time-${Date.now()}`,
       created_at: new Date().toISOString(),
@@ -1249,16 +1137,39 @@ export const timeEntryService = {
     } catch (e) {
       console.error("Error saving time entry:", e);
     }
+    firestoreService.saveTimeEntry(newEntry).catch(console.warn);
     return newEntry;
   },
 
-  delete(id: string): void {
-    const all = this.getAll().filter((t) => t.id !== id);
+  async update(id: string, updates: Partial<TimeEntry>): Promise<TimeEntry | null> {
+    const all = this.getAllSync();
+    let updatedItem: TimeEntry | null = null;
+    const updated = all.map((item) => {
+      if (item.id === id) {
+        updatedItem = { ...item, ...updates };
+        return updatedItem;
+      }
+      return item;
+    });
+    try {
+      localStorage.setItem("crono_pulse_time_entries", JSON.stringify(updated));
+    } catch (e) {
+      console.error("Error updating time entry:", e);
+    }
+    if (updatedItem) {
+      firestoreService.saveTimeEntry(updatedItem).catch(console.warn);
+    }
+    return updatedItem;
+  },
+
+  async delete(id: string): Promise<void> {
+    const all = this.getAllSync().filter((t) => t.id !== id);
     try {
       localStorage.setItem("crono_pulse_time_entries", JSON.stringify(all));
     } catch (e) {
       console.error("Error deleting time entry:", e);
     }
+    firestoreService.deleteTimeEntry(id).catch(console.warn);
   },
 
   getActive(): {
@@ -1295,3 +1206,55 @@ export const timeEntryService = {
     }
   },
 };
+
+// Global utilities to clear mock data after first login or restore demo data
+export async function clearAllMockData(): Promise<void> {
+  localStorage.setItem("crono_pulse_mock_cleared", "true");
+  mockDB.setEmployees([]);
+  mockDB.setProjects([]);
+  mockDB.setTasks([]);
+  localStorage.setItem("crono_pulse_time_entries", "[]");
+  localStorage.setItem("crono_pulse_work_groups", "[]");
+  localStorage.removeItem("crono_pulse_active_timer");
+
+  // Clean remote Firestore docs
+  try {
+    const emps = await firestoreService.getEmployees();
+    for (const e of emps) {
+      await firestoreService.deleteEmployee(e.id).catch(() => {});
+    }
+    const projs = await firestoreService.getProjects();
+    for (const p of projs) {
+      await firestoreService.deleteProject(p.id).catch(() => {});
+    }
+    const tasks = await firestoreService.getTasks();
+    for (const t of tasks) {
+      await firestoreService.deleteTask(t.id).catch(() => {});
+    }
+    const times = await firestoreService.getTimeEntries();
+    for (const te of times) {
+      await firestoreService.deleteTimeEntry(te.id).catch(() => {});
+    }
+  } catch (err) {
+    console.warn("Notice during remote mock data clearing:", err);
+  }
+}
+
+export async function restoreMockData(): Promise<void> {
+  localStorage.removeItem("crono_pulse_mock_cleared");
+  const init = getInitialData();
+  mockDB.setEmployees(init.employees);
+  mockDB.setProjects(init.projects);
+  mockDB.setTasks(init.tasks);
+
+  // Re-seed to Firestore
+  try {
+    for (const e of init.employees) await firestoreService.saveEmployee(e).catch(() => {});
+    for (const p of init.projects) await firestoreService.saveProject(p).catch(() => {});
+    for (const t of init.tasks) await firestoreService.saveTask(t).catch(() => {});
+  } catch (err) {
+    console.warn("Notice during restore mock data:", err);
+  }
+}
+
+

@@ -2685,12 +2685,12 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
                     onMouseEnter={() => setHoveredArrowId(conn.id)}
                     onMouseLeave={() => setHoveredArrowId(null)}
                   >
-                    {/* Invisible Wide Hit Area for easy hover & grab */}
+                    {/* Generous Hit Area along the dependency line for effortless hovering */}
                     <path
                       d={conn.d}
                       fill="none"
                       stroke="transparent"
-                      strokeWidth="16"
+                      strokeWidth="22"
                       className="pointer-events-auto cursor-pointer"
                     />
 
@@ -2700,16 +2700,16 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
                         d={conn.d}
                         fill="none"
                         stroke="currentColor"
-                        strokeWidth="6"
-                        className="text-primary/25 pointer-events-none"
+                        strokeWidth="8"
+                        className="text-primary/35 pointer-events-none transition-all"
                       />
                     )}
 
-                    {/* Main Visible Arrow Path */}
+                    {/* Main Visible Dependency Line */}
                     <path
                       d={conn.d}
                       fill="none"
-                      strokeWidth={isHovered ? "2.6" : conn.isHighlighted ? "2.2" : "1.6"}
+                      strokeWidth={isHovered ? "3.2" : conn.isHighlighted ? "2.5" : "1.8"}
                       strokeDasharray={conn.hasConflict ? "4 3" : undefined}
                       markerEnd={
                         conn.hasConflict
@@ -2718,51 +2718,35 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
                             ? "url(#arrow-highlight)"
                             : "url(#arrow-normal)"
                       }
-                      className={`pointer-events-none transition-colors ${
+                      className={`pointer-events-none transition-all duration-150 ${
                         conn.hasConflict
                           ? "stroke-rose-500 animate-pulse"
                           : conn.isHighlighted || isHovered
-                            ? "stroke-primary"
-                            : "stroke-primary/60 dark:stroke-primary/70"
+                            ? "stroke-blue-600 dark:stroke-blue-400"
+                            : "stroke-primary/70 dark:stroke-primary/80"
                       }`}
                     />
 
-                    {/* Origin/Tail Handle (startX, startY) - Drag to change predecessor task */}
-                    <g
-                      className="pointer-events-auto cursor-grab active:cursor-grabbing group/originHandle"
-                      onPointerDown={(e) => handleStartArrowDrag(e, conn, "source")}
-                    >
-                      <circle
-                        cx={conn.startX}
-                        cy={conn.startY}
-                        r={isHovered ? 6 : 4}
-                        className="fill-primary stroke-background stroke-1.5 hover:stroke-2 hover:fill-blue-600 transition-all shadow-xs"
-                      />
-                      <title>
-                        {`Arraste o início da seta para mudar a tarefa predecessora de "${conn.toName}" (ou solte fora para desconectar)`}
-                      </title>
-                    </g>
-
-                    {/* Arrowhead/Target Handle (endX, endY) - Drag to change successor task */}
-                    <g
-                      className="pointer-events-auto cursor-grab active:cursor-grabbing group/targetHandle"
-                      onPointerDown={(e) => handleStartArrowDrag(e, conn, "target")}
-                    >
-                      <circle
-                        cx={conn.endX - 4}
-                        cy={conn.endY}
-                        r={isHovered ? 7 : 4.5}
-                        className="fill-primary stroke-background stroke-1.5 hover:stroke-2 hover:fill-blue-600 transition-all shadow-xs animate-pulse"
-                      />
-                      <title>
-                        {`Arraste a ponta da seta para mudar a tarefa dependente de "${conn.fromName}" (ou solte fora para desconectar)`}
-                      </title>
-                    </g>
-
-                    {/* Quick Unlink Chip at midpoint when hovered */}
+                    {/* Drag Handle at origin (startX, startY) */}
                     {isHovered && (
                       <g
-                        className="pointer-events-auto cursor-pointer group/unlinkChip"
+                        className="pointer-events-auto cursor-grab active:cursor-grabbing"
+                        onPointerDown={(e) => handleStartArrowDrag(e, conn, "source")}
+                      >
+                        <circle
+                          cx={conn.startX}
+                          cy={conn.startY}
+                          r={5}
+                          className="fill-blue-600 stroke-background stroke-1.5 hover:scale-125 transition-transform"
+                        />
+                        <title>Arraste para reconectar origem</title>
+                      </g>
+                    )}
+
+                    {/* Disconnect Button (x) on the line when hovered - no collision with task bar endpoint */}
+                    {isHovered && (
+                      <g
+                        className="pointer-events-auto cursor-pointer group/unlinkBtn"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleUnlinkDependency(conn.fromId, conn.toId);
@@ -2771,18 +2755,20 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
                         <circle
                           cx={conn.midX}
                           cy={conn.midY}
-                          r="9"
-                          className="fill-card stroke-border hover:stroke-rose-500 hover:fill-rose-500/10 transition-colors shadow-xs"
+                          r="10"
+                          className="fill-card stroke-rose-500 stroke-1.5 hover:scale-115 hover:fill-rose-50 dark:hover:fill-rose-950 transition-all shadow-md"
                         />
                         <text
                           x={conn.midX}
                           y={conn.midY + 3.5}
                           textAnchor="middle"
-                          className="text-[10px] font-bold fill-muted-foreground group-hover/unlinkChip:fill-rose-600 pointer-events-none select-none"
+                          className="text-[11px] font-extrabold fill-rose-600 pointer-events-none select-none"
                         >
                           ✕
                         </text>
-                        <title>Clique para desconectar esta dependência</title>
+                        <title>
+                          {`ao passar o mouse sobre a linha destaca e exibe um (x) para desconectar as dependência.\nClique para desconectar "${conn.fromName}" ➔ "${conn.toName}"`}
+                        </title>
                       </g>
                     )}
                   </g>

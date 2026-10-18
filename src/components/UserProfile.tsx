@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { X, User, Mail, Calendar, Settings } from "lucide-react";
+import { X, User, Mail, Calendar, Settings, LogIn, LogOut, ShieldCheck, CheckCircle2 } from "lucide-react";
 import {
   userProfileService,
   UserProfile as UserProfileType,
 } from "../lib/userProfileService";
+import { auth } from "../lib/firebase";
+import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
 
 interface UserProfileProps {
   isOpen?: boolean;
@@ -21,6 +24,7 @@ const UserProfile: React.FC<UserProfileProps> = ({
     full_name: "",
     email: "",
   });
+  const [isGoogleAuth, setIsGoogleAuth] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -33,6 +37,7 @@ const UserProfile: React.FC<UserProfileProps> = ({
       setLoading(true);
       const userProfile = await userProfileService.getCurrentUser();
       setProfile(userProfile);
+      setIsGoogleAuth(Boolean(auth.currentUser));
       if (userProfile) {
         setFormData({
           full_name: userProfile.full_name,
@@ -41,6 +46,38 @@ const UserProfile: React.FC<UserProfileProps> = ({
       }
     } catch (error) {
       console.error("Error loading profile:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      setLoading(true);
+      const userProfile = await userProfileService.loginWithGoogle();
+      if (userProfile) {
+        setProfile(userProfile);
+        setIsGoogleAuth(true);
+        setFormData({
+          full_name: userProfile.full_name,
+          email: userProfile.email,
+        });
+      }
+    } catch (error) {
+      console.error("Google login failed:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      setLoading(true);
+      await userProfileService.logout();
+      setIsGoogleAuth(false);
+      loadProfile();
+    } catch (error) {
+      console.error("Logout failed:", error);
     } finally {
       setLoading(false);
     }
@@ -77,47 +114,107 @@ const UserProfile: React.FC<UserProfileProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+      <div className="bg-card text-card-foreground border border-border rounded-2xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Perfil do Usuário</h2>
+        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-border">
+          <div className="flex items-center space-x-2">
+            <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+              <User className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-bold">Perfil do Usuário</h2>
+              <p className="text-xs text-muted-foreground">Autenticação Firebase & Google</p>
+            </div>
+          </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-md hover:bg-gray-100"
+            className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-lg hover:bg-muted"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-4 sm:p-6 overflow-y-auto">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
           {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="flex flex-col items-center justify-center py-10 space-y-2">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <p className="text-xs text-muted-foreground">Carregando dados da conta...</p>
             </div>
           ) : profile ? (
-            <div className="space-y-6">
+            <div className="space-y-5">
+              {/* Google Auth Status Banner */}
+              <div className="p-3 rounded-xl border flex items-center justify-between bg-muted/40 border-border">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-8 h-8 rounded-full bg-white dark:bg-slate-800 shadow-xs border flex items-center justify-center text-xs font-bold text-blue-600">
+                    G
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold flex items-center gap-1.5">
+                      {isGoogleAuth ? "Conectado via Google" : "Modo Local / Convidado"}
+                      {isGoogleAuth && (
+                        <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                          <CheckCircle2 className="h-3 w-3 mr-1" /> Ativo
+                        </Badge>
+                      )}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {isGoogleAuth ? "Sincronizado com Firebase Cloud Firestore" : "Entre com sua conta Google para sincronizar"}
+                    </p>
+                  </div>
+                </div>
+
+                {isGoogleAuth ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleLogout}
+                    className="text-xs h-7 text-rose-500 border-rose-200 hover:bg-rose-50 dark:hover:bg-rose-950"
+                  >
+                    <LogOut className="h-3 w-3 mr-1" /> Sair
+                  </Button>
+                ) : (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleGoogleLogin}
+                    className="text-xs h-7 bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    <LogIn className="h-3 w-3 mr-1" /> Entrar com Google
+                  </Button>
+                )}
+              </div>
+
               {/* Avatar */}
-              <div className="flex items-center justify-center">
-                <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center">
+              <div className="flex flex-col items-center justify-center pt-1">
+                <div className="w-20 h-20 rounded-full border-2 border-primary/20 p-1 flex items-center justify-center relative shadow-sm">
                   {profile.avatar_url ? (
                     <img
                       src={profile.avatar_url}
                       alt="Profile"
-                      className="w-20 h-20 rounded-full object-cover"
+                      className="w-full h-full rounded-full object-cover"
                     />
                   ) : (
-                    <User className="h-10 w-10 text-gray-400" />
+                    <div className="w-full h-full rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-2xl">
+                      {profile.full_name ? profile.full_name.charAt(0).toUpperCase() : "U"}
+                    </div>
+                  )}
+                  {isGoogleAuth && (
+                    <div className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center border-2 border-background shadow-xs">
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                    </div>
                   )}
                 </div>
+                <h3 className="text-sm font-bold mt-2">{profile.full_name}</h3>
+                <p className="text-xs text-muted-foreground">{profile.email}</p>
               </div>
 
-              {/* Profile Information */}
-              <div className="space-y-4">
+              {/* Profile Details */}
+              <div className="space-y-3.5 pt-2 border-t border-border">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Name
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    Nome Completo
                   </label>
                   {editing ? (
                     <input
@@ -126,19 +223,19 @@ const UserProfile: React.FC<UserProfileProps> = ({
                       onChange={(e) =>
                         setFormData({ ...formData, full_name: e.target.value })
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-1.5 text-xs border rounded-lg bg-background text-foreground focus:ring-1 focus:ring-primary"
                     />
                   ) : (
-                    <div className="flex items-center space-x-2">
-                      <User className="h-4 w-4 text-gray-400" />
-                      <span className="text-gray-900">{profile.full_name}</span>
+                    <div className="flex items-center space-x-2 text-xs font-medium bg-muted/40 p-2 rounded-lg border border-border">
+                      <User className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>{profile.full_name}</span>
                     </div>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    Email Google / Firebase
                   </label>
                   {editing ? (
                     <input
@@ -147,61 +244,67 @@ const UserProfile: React.FC<UserProfileProps> = ({
                       onChange={(e) =>
                         setFormData({ ...formData, email: e.target.value })
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-1.5 text-xs border rounded-lg bg-background text-foreground focus:ring-1 focus:ring-primary"
                     />
                   ) : (
-                    <div className="flex items-center space-x-2">
-                      <Mail className="h-4 w-4 text-gray-400" />
-                      <span className="text-gray-900">{profile.email}</span>
+                    <div className="flex items-center space-x-2 text-xs font-medium bg-muted/40 p-2 rounded-lg border border-border">
+                      <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>{profile.email}</span>
                     </div>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Member Since
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    Membro Desde
                   </label>
-                  <div className="flex items-center space-x-2">
-                    <Calendar className="h-4 w-4 text-gray-400" />
-                    <span className="text-gray-900">
-                      {new Date(profile.created_at).toLocaleDateString()}
+                  <div className="flex items-center space-x-2 text-xs font-medium bg-muted/40 p-2 rounded-lg border border-border">
+                    <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>
+                      {new Date(profile.created_at).toLocaleDateString("pt-BR")}
                     </span>
                   </div>
                 </div>
               </div>
 
               {/* Actions */}
-              <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+              <div className="flex justify-end space-x-2 pt-3 border-t border-border">
                 {editing ? (
                   <>
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={handleCancel}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                      className="text-xs"
                     >
-                      Cancel
-                    </button>
-                    <button
+                      Cancelar
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
                       onClick={handleSave}
-                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+                      className="text-xs"
                     >
-                      Save Changes
-                    </button>
+                      Salvar Alterações
+                    </Button>
                   </>
                 ) : (
-                  <button
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => setEditing(true)}
-                    className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                    className="text-xs gap-1.5"
                   >
-                    <Settings className="h-4 w-4" />
-                    <span>Edit Profile</span>
-                  </button>
+                    <Settings className="h-3.5 w-3.5" />
+                    <span>Editar Dados</span>
+                  </Button>
                 )}
               </div>
             </div>
           ) : (
             <div className="text-center py-8">
-              <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">No profile found</p>
+              <User className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
+              <p className="text-xs text-muted-foreground">Nenhum perfil encontrado</p>
             </div>
           )}
         </div>

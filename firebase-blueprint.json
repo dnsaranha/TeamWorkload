@@ -1,0 +1,146 @@
+{
+  "entities": {
+    "Employee": {
+      "title": "Employee",
+      "description": "Team member and employee information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "maxLength": 128 },
+        "weekly_hours": { "type": "number" },
+        "skills": { "type": "array" },
+        "dias_de_trabalho": { "type": "array" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" }
+      },
+      "required": ["name", "role", "weekly_hours"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Workload projects and initiatives",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 128 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "start_date": { "type": "string" },
+        "end_date": { "type": "string" },
+        "categoria_estrategica": { "type": "string" },
+        "special_marker": { "type": "string" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Tasks and subtasks with assignments, schedules, and dependencies",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "estimated_time": { "type": "number" },
+        "start_date": { "type": "string" },
+        "end_date": { "type": "string" },
+        "project_id": { "type": "string" },
+        "assigned_employee_id": { "type": "string" },
+        "status": { "type": "string" },
+        "completion_date": { "type": "string" },
+        "repeats_weekly": { "type": "boolean" },
+        "repeat_days": { "type": "array" },
+        "hours_per_day": { "type": "number" },
+        "special_marker": { "type": "string" },
+        "dependencies": { "type": "array" },
+        "parent_id": { "type": "string" },
+        "progress": { "type": "number" },
+        "actual_time": { "type": "number" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" }
+      },
+      "required": ["name", "estimated_time", "start_date", "end_date"]
+    },
+    "TimeEntry": {
+      "title": "TimeEntry",
+      "description": "Recorded work hours and timesheet records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "task_id": { "type": "string" },
+        "task_name": { "type": "string", "maxLength": 200 },
+        "project_id": { "type": "string" },
+        "project_name": { "type": "string", "maxLength": 200 },
+        "employee_id": { "type": "string" },
+        "employee_name": { "type": "string", "maxLength": 128 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "start_time": { "type": "string" },
+        "end_time": { "type": "string" },
+        "duration_seconds": { "type": "number" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["description", "start_time", "duration_seconds"]
+    },
+    "Profile": {
+      "title": "Profile",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "full_name": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "avatar_url": { "type": "string" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" }
+      },
+      "required": ["id"]
+    },
+    "WorkGroup": {
+      "title": "WorkGroup",
+      "description": "Work groups and subgroups with organizational hierarchy, parent links, and collaborator permissions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 150 },
+        "code": { "type": "string", "maxLength": 30 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "level": { "type": "number" },
+        "level_name": { "type": "string", "maxLength": 60 },
+        "parent_id": { "type": "string" },
+        "parent_name": { "type": "string", "maxLength": 150 },
+        "color": { "type": "string", "maxLength": 30 },
+        "icon": { "type": "string", "maxLength": 50 },
+        "members": { "type": "array" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" }
+      },
+      "required": ["name", "level"]
+    }
+  },
+  "firestore": {
+    "/employees/{employeeId}": {
+      "schema": { "$ref": "#/entities/Employee" },
+      "description": "Team members and employees with their capacity and skills"
+    },
+    "/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "Workload projects and initiatives"
+    },
+    "/tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/Task" },
+      "description": "Tasks and subtasks with assignments, timelines and dependencies"
+    },
+    "/time_entries/{timeEntryId}": {
+      "schema": { "$ref": "#/entities/TimeEntry" },
+      "description": "Logged work hours and timesheet entries"
+    },
+    "/profiles/{profileId}": {
+      "schema": { "$ref": "#/entities/Profile" },
+      "description": "User profile information"
+    },
+    "/work_groups/{groupId}": {
+      "schema": { "$ref": "#/entities/WorkGroup" },
+      "description": "Work groups, organizational hierarchy and member permissions"
+    }
+  }
+}

@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Default-Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    // Employees Collection
+    match /employees/{employeeId} {
+      allow read, write: if isValidId(employeeId);
+    }
+
+    // Projects Collection
+    match /projects/{projectId} {
+      allow read, write: if isValidId(projectId);
+    }
+
+    // Tasks Collection
+    match /tasks/{taskId} {
+      allow read, write: if isValidId(taskId);
+    }
+
+    // Time Entries Collection
+    match /time_entries/{timeEntryId} {
+      allow read, write: if isValidId(timeEntryId);
+    }
+
+    // Profiles Collection
+    match /profiles/{profileId} {
+      allow read, write: if isValidId(profileId);
+    }
+
+    // Work Groups Collection
+    match /work_groups/{groupId} {
+      allow read, write: if isValidId(groupId);
+    }
+  }
+}
