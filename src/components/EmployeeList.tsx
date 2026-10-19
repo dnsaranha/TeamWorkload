@@ -39,9 +39,23 @@ import {
   Search,
   Download,
   Upload,
+  Mail,
+  Send,
+  CheckCircle2,
+  Clock,
+  Copy,
+  Check,
+  UserCheck,
+  Building2,
+  XCircle,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { employeeService, type Employee } from "@/lib/supabaseClient";
+import {
+  invitationService,
+  type CollaboratorInvitation,
+} from "@/lib/invitationService";
+import InviteCollaboratorModal from "./InviteCollaboratorModal";
 
 const daysOfWeek = [
   { id: "sunday", label: "Sun" },
@@ -55,6 +69,10 @@ const daysOfWeek = [
 
 const EmployeeList = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [invitations, setInvitations] = useState<CollaboratorInvitation[]>([]);
+  const [viewMode, setViewMode] = useState<"employees" | "invitations">("employees");
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -64,13 +82,14 @@ const EmployeeList = () => {
   // Form state for new/edit employee
   const [formData, setFormData] = useState({
     name: "",
+    email: "",
     role: "",
     weekly_hours: 40,
     skills: "",
     dias_de_trabalho: ["monday", "tuesday", "wednesday", "thursday", "friday"],
   });
 
-  // Load employees from database
+  // Load employees & invitations from database
   useEffect(() => {
     loadEmployees();
   }, []);
@@ -78,10 +97,14 @@ const EmployeeList = () => {
   const loadEmployees = async () => {
     try {
       setLoading(true);
-      const data = await employeeService.getAll();
+      const [data, invs] = await Promise.all([
+        employeeService.getAll(),
+        invitationService.getAll(),
+      ]);
       setEmployees(data);
+      setInvitations(invs);
     } catch (error) {
-      console.error("Error loading employees:", error);
+      console.error("Error loading employees and invitations:", error);
     } finally {
       setLoading(false);
     }
@@ -110,15 +133,15 @@ const EmployeeList = () => {
     try {
       // Validate required fields
       if (!formData.name.trim()) {
-        alert("Name is required");
+        alert("O nome é obrigatório");
         return;
       }
       if (!formData.role.trim()) {
-        alert("Role is required");
+        alert("O cargo / função é obrigatório");
         return;
       }
       if (formData.weekly_hours <= 0) {
-        alert("Weekly hours must be greater than 0");
+        alert("As horas semanais devem ser maiores que 0");
         return;
       }
 
@@ -130,12 +153,12 @@ const EmployeeList = () => {
       const newEmployee = await employeeService.create({
         name: formData.name.trim(),
         role: formData.role.trim(),
+        email: formData.email.trim() || null,
         weekly_hours: formData.weekly_hours,
         skills: skillsArray,
         dias_de_trabalho: formData.dias_de_trabalho,
       });
 
-      // After Supabase returns the new employee, it might not have the default value if it was null
       const employeeWithDefaults = {
         ...newEmployee,
         dias_de_trabalho: newEmployee.dias_de_trabalho || [],
@@ -146,7 +169,7 @@ const EmployeeList = () => {
       setIsAddDialogOpen(false);
     } catch (error) {
       console.error("Error adding employee:", error);
-      alert("Failed to add employee. Please try again.");
+      alert("Falha ao cadastrar colaborador. Tente novamente.");
     }
   };
 
@@ -154,17 +177,16 @@ const EmployeeList = () => {
     if (!currentEmployee) return;
 
     try {
-      // Validate required fields
       if (!formData.name.trim()) {
-        alert("Name is required");
+        alert("O nome é obrigatório");
         return;
       }
       if (!formData.role.trim()) {
-        alert("Role is required");
+        alert("O cargo / função é obrigatório");
         return;
       }
       if (formData.weekly_hours <= 0) {
-        alert("Weekly hours must be greater than 0");
+        alert("As horas semanais devem ser maiores que 0");
         return;
       }
 
@@ -178,6 +200,7 @@ const EmployeeList = () => {
         {
           name: formData.name.trim(),
           role: formData.role.trim(),
+          email: formData.email.trim() || null,
           weekly_hours: formData.weekly_hours,
           skills: skillsArray,
           dias_de_trabalho: formData.dias_de_trabalho,
@@ -193,7 +216,7 @@ const EmployeeList = () => {
       setIsEditDialogOpen(false);
     } catch (error) {
       console.error("Error updating employee:", error);
-      alert("Failed to update employee. Please try again.");
+      alert("Falha ao atualizar colaborador.");
     }
   };
 
@@ -206,10 +229,29 @@ const EmployeeList = () => {
     }
   };
 
+  const copyInviteLink = (inv: CollaboratorInvitation) => {
+    const inviteUrl = `${window.location.origin}?invite=${inv.id}`;
+    navigator.clipboard.writeText(
+      `Olá ${inv.name}! Você foi convidado para a equipe TeamWorkload no cargo de ${inv.role}. Acesse com seu login: ${inviteUrl}`
+    );
+    setCopiedInviteId(inv.id);
+    setTimeout(() => setCopiedInviteId(null), 3000);
+  };
+
+  const handleDeleteInvitation = async (id: string) => {
+    try {
+      await invitationService.deleteInvitation(id);
+      setInvitations((prev) => prev.filter((i) => i.id !== id));
+    } catch (e) {
+      console.error("Error deleting invitation:", e);
+    }
+  };
+
   const openEditDialog = (employee: Employee) => {
     setCurrentEmployee(employee);
     setFormData({
       name: employee.name,
+      email: (employee as any).email || "",
       role: employee.role,
       weekly_hours: employee.weekly_hours,
       skills: Array.isArray(employee.skills) ? employee.skills.join(", ") : "",
@@ -221,6 +263,7 @@ const EmployeeList = () => {
   const resetForm = () => {
     setFormData({
       name: "",
+      email: "",
       role: "",
       weekly_hours: 40,
       skills: "",
@@ -232,7 +275,16 @@ const EmployeeList = () => {
   const filteredEmployees = employees.filter(
     (employee) =>
       employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      employee.role.toLowerCase().includes(searchTerm.toLowerCase()),
+      employee.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      ((employee as any).email && (employee as any).email.toLowerCase().includes(searchTerm.toLowerCase())),
+  );
+
+  const filteredInvitations = invitations.filter(
+    (inv) =>
+      inv.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      inv.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      inv.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (inv.groupName && inv.groupName.toLowerCase().includes(searchTerm.toLowerCase())),
   );
 
   const exportToExcel = () => {
@@ -329,29 +381,71 @@ const EmployeeList = () => {
   return (
     <div className="bg-background w-full">
       <Card className="w-full shadow-sm">
-        <CardHeader className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-4 sm:p-6">
-          <CardTitle className="text-lg sm:text-xl font-bold">Colaboradores</CardTitle>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2">
-            <div className="relative flex-1 sm:w-64">
+        <CardHeader className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <CardTitle className="text-lg sm:text-xl font-bold">Colaboradores</CardTitle>
+            <div className="flex items-center bg-muted/60 p-1 rounded-lg border text-xs w-fit">
+              <button
+                type="button"
+                onClick={() => setViewMode("employees")}
+                className={`px-3 py-1 rounded-md font-semibold transition-all ${
+                  viewMode === "employees"
+                    ? "bg-background text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Ativos ({employees.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("invitations")}
+                className={`px-3 py-1 rounded-md font-semibold transition-all flex items-center gap-1.5 ${
+                  viewMode === "invitations"
+                    ? "bg-background text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <span>Convites</span>
+                {invitations.filter((i) => i.status === "pending").length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+                    {invitations.filter((i) => i.status === "pending").length}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-wrap">
+            <div className="relative flex-1 sm:w-60">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar colaborador..."
-                className="pl-8 w-full"
+                className="pl-8 w-full h-9 text-xs"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+
+            <Button
+              size="sm"
+              onClick={() => setIsInviteModalOpen(true)}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold flex items-center gap-1.5 h-9 text-xs shadow-xs"
+            >
+              <Mail className="h-3.5 w-3.5" />
+              <span>Convidar por E-mail</span>
+            </Button>
+
+            <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={exportToExcel}
-                className="flex items-center gap-1 flex-1 sm:flex-none justify-center"
+                className="flex items-center gap-1 h-9 text-xs"
               >
-                <Download className="h-4 w-4" />
+                <Download className="h-3.5 w-3.5" />
                 <span>Exportar</span>
               </Button>
-              <div className="relative flex-1 sm:flex-none">
+              <div className="relative">
                 <input
                   type="file"
                   accept=".xlsx,.xls,.csv"
@@ -362,27 +456,27 @@ const EmployeeList = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="flex items-center gap-1 w-full justify-center"
+                  className="flex items-center gap-1 h-9 text-xs"
                   onClick={() =>
                     document.getElementById("employee-file-import")?.click()
                   }
                 >
-                  <Upload className="h-4 w-4" />
+                  <Upload className="h-3.5 w-3.5" />
                   <span>Importar</span>
                 </Button>
               </div>
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button size="sm" className="flex items-center gap-1 flex-1 sm:flex-none justify-center">
-                    <PlusCircle className="h-4 w-4" />
-                    <span>Novo</span>
+                  <Button size="sm" variant="secondary" className="flex items-center gap-1 h-9 text-xs">
+                    <PlusCircle className="h-3.5 w-3.5" />
+                    <span>Cadastro Direto</span>
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-md w-[calc(100%-2rem)]">
                   <DialogHeader>
-                    <DialogTitle>Novo Colaborador</DialogTitle>
+                    <DialogTitle>Novo Colaborador (Cadastro Direto)</DialogTitle>
                     <DialogDescription>
-                      Preencha os dados do colaborador para adicionar à equipe.
+                      Cadastre diretamente no sistema ou prefira enviar um convite para acesso próprio.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-2">

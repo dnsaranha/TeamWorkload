@@ -39,5 +39,10 @@ service cloud.firestore {
     match /work_groups/{groupId} {
       allow read, write: if isValidId(groupId);
     }
+
+    // Invitations Collection
+    match /invitations/{invitationId} {
+      allow read, write: if isValidId(invitationId);
+    }
   }
 }

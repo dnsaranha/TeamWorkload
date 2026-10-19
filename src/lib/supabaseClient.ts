@@ -18,6 +18,7 @@ export type Employee = {
   id: string;
   name: string;
   role: string;
+  email?: string | null;
   weekly_hours: number;
   skills: any; // Using any to match Supabase Json type
   dias_de_trabalho: string[] | null;
@@ -28,6 +29,7 @@ export type Employee = {
 export type EmployeeInsert = {
   name: string;
   role: string;
+  email?: string | null;
   weekly_hours: number;
   skills: any;
   dias_de_trabalho?: string[] | null;
@@ -145,20 +147,20 @@ export type TimeEntryInsert = {
 
 // --- IN-MEMORY & LOCAL STORAGE FALLBACK STORAGE ---
 
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
   EMPLOYEES: "crono_pulse_employees",
   PROJECTS: "crono_pulse_projects",
   TASKS: "crono_pulse_tasks",
   PROFILES: "crono_pulse_profiles",
 };
 
-const formatDateOffset = (days: number): string => {
+export const formatDateOffset = (days: number): string => {
   const d = new Date();
   d.setDate(d.getDate() + days);
   return d.toISOString().split("T")[0];
 };
 
-const getInitialData = () => {
+export const getInitialData = () => {
   const now = new Date().toISOString();
 
   const employees: Employee[] = [

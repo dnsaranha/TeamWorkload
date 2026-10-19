@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, User, Mail, Calendar, Settings, LogIn, LogOut, ShieldCheck, CheckCircle2 } from "lucide-react";
+import { X, User, Mail, Calendar, Settings, LogOut, ShieldCheck, CheckCircle2 } from "lucide-react";
 import {
   userProfileService,
   UserProfile as UserProfileType,
@@ -7,6 +7,7 @@ import {
 import { auth } from "../lib/firebase";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
+import { useAuth } from "../lib/authContext";
 
 interface UserProfileProps {
   isOpen?: boolean;
@@ -17,6 +18,7 @@ const UserProfile: React.FC<UserProfileProps> = ({
   isOpen = true,
   onClose = () => {},
 }) => {
+  const { logout, user: authUser } = useAuth();
   const [profile, setProfile] = useState<UserProfileType | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -165,25 +167,17 @@ const UserProfile: React.FC<UserProfileProps> = ({
                   </div>
                 </div>
 
-                {isGoogleAuth ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleLogout}
-                    className="text-xs h-7 text-rose-500 border-rose-200 hover:bg-rose-50 dark:hover:bg-rose-950"
-                  >
-                    <LogOut className="h-3 w-3 mr-1" /> Sair
-                  </Button>
-                ) : (
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={handleGoogleLogin}
-                    className="text-xs h-7 bg-blue-600 hover:bg-blue-700 text-white"
-                  >
-                    <LogIn className="h-3 w-3 mr-1" /> Entrar com Google
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    await logout();
+                    onClose();
+                  }}
+                  className="text-xs h-7 text-rose-500 border-rose-200 hover:bg-rose-50 dark:hover:bg-rose-950 gap-1"
+                >
+                  <LogOut className="h-3 w-3" /> Sair da Conta
+                </Button>
               </div>
 
               {/* Avatar */}

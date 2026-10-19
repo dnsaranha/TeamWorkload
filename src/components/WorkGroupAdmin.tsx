@@ -69,7 +69,14 @@ const COLOR_PRESETS = [
 ];
 
 export const WorkGroupAdmin: React.FC = () => {
-  const { activeEmployeeId, isSuperAdmin, refreshUserData } = useAuth();
+  const {
+    activeEmployeeId,
+    isSuperAdmin,
+    refreshUserData,
+    isMockCleared,
+    clearMockData,
+    restoreMockData,
+  } = useAuth();
 
   const [groups, setGroups] = useState<WorkGroup[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -77,6 +84,10 @@ export const WorkGroupAdmin: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [levelFilter, setLevelFilter] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<string>("tree");
+
+  // Mock Data Modal State
+  const [isClearMockDialogOpen, setIsClearMockDialogOpen] = useState<boolean>(false);
+  const [isProcessingMock, setIsProcessingMock] = useState<boolean>(false);
 
   // Modal State
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
@@ -479,11 +490,43 @@ export const WorkGroupAdmin: React.FC = () => {
             Administração de Grupos de Trabalho
           </h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            Estruture a hierarquia entre Diretorias, Departamentos, Coordenações e Squads. Membros em níveis superiores possuem visão total de seus subgrupos subordinados.
+            Estruture os grupos de trabalho por níveis (Nível 1, Nível 2, Nível 3, Nível 4). Colaboradores em níveis superiores possuem visão de todos no mesmo nível e dos grupos subordinados em níveis inferiores.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {!isMockCleared ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsClearMockDialogOpen(true)}
+              className="gap-1.5 text-xs text-destructive hover:bg-destructive/10 border-destructive/30"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Limpar Dados Mock (Iniciar Limpo)
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                setIsProcessingMock(true);
+                try {
+                  await restoreMockData();
+                  const fresh = await workGroupService.getAll();
+                  setGroups(fresh);
+                } finally {
+                  setIsProcessingMock(false);
+                }
+              }}
+              disabled={isProcessingMock}
+              className="gap-1.5 text-xs text-primary hover:bg-primary/10"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              Restaurar Dados Mock
+            </Button>
+          )}
+
           <Button
             onClick={() => handleOpenCreate()}
             className="gap-2 shadow-sm font-semibold text-sm bg-primary hover:bg-primary/90"
@@ -516,7 +559,7 @@ export const WorkGroupAdmin: React.FC = () => {
               <p className="text-2xl font-bold mt-0.5">
                 {new Set(groups.map((g) => g.level)).size} / 4
               </p>
-              <p className="text-[11px] text-muted-foreground">Diretoria até Squads</p>
+              <p className="text-[11px] text-muted-foreground">Nível 1 ao Nível 4</p>
             </div>
             <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-600 flex items-center justify-center">
               <Layers className="w-5 h-5" />
@@ -594,10 +637,10 @@ export const WorkGroupAdmin: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os Níveis</SelectItem>
-                <SelectItem value="1">Nível 1 • Diretoria</SelectItem>
-                <SelectItem value="2">Nível 2 • Departamento</SelectItem>
-                <SelectItem value="3">Nível 3 • Coordenação</SelectItem>
-                <SelectItem value="4">Nível 4 • Squad</SelectItem>
+                <SelectItem value="1">Nível 1</SelectItem>
+                <SelectItem value="2">Nível 2</SelectItem>
+                <SelectItem value="3">Nível 3</SelectItem>
+                <SelectItem value="4">Nível 4</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -621,7 +664,7 @@ export const WorkGroupAdmin: React.FC = () => {
               ))}
             </div>
             <span className="text-[11px] text-muted-foreground hidden md:inline">
-              Dois ou mais grupos podem apontar para o mesmo superior (ex: Squads Frontend & Backend)
+              Dois ou mais grupos podem apontar para o mesmo superior (grupos compartilhados)
             </span>
           </div>
 
@@ -636,7 +679,7 @@ export const WorkGroupAdmin: React.FC = () => {
                   onClick={() => handleOpenCreate(undefined, 1)}
                   className="mt-3 text-xs"
                 >
-                  Criar Primeiro Grupo Raiz (Diretoria)
+                  Criar Primeiro Grupo Raiz (Nível 1)
                 </Button>
               </div>
             ) : (
@@ -811,7 +854,7 @@ export const WorkGroupAdmin: React.FC = () => {
 
                   <div className="p-3 bg-background rounded-lg border text-xs text-muted-foreground">
                     <strong className="text-foreground">Regra do Sistema:</strong>{" "}
-                    Ao estar em um nível hierárquico superior (ex: Nível 1 Diretoria ou Nível 2 Departamento), o colaborador obtém automaticamente a visão e supervisão de todos os subgrupos inferiores subordinados na mesma ramificação da árvore.
+                    Ao estar em um nível hierárquico superior (ex: Nível 1 ou Nível 2), o colaborador obtém automaticamente a visão e supervisão de todos os subgrupos inferiores subordinados na mesma ramificação da árvore.
                   </div>
                 </div>
               )}
@@ -988,10 +1031,10 @@ export const WorkGroupAdmin: React.FC = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1">Nível 1 • Diretoria Estratégica</SelectItem>
-                    <SelectItem value="2">Nível 2 • Departamento / Divisão</SelectItem>
-                    <SelectItem value="3">Nível 3 • Coordenação / Setor</SelectItem>
-                    <SelectItem value="4">Nível 4 • Squad / Célula de Trabalho</SelectItem>
+                    <SelectItem value="1">Nível 1</SelectItem>
+                    <SelectItem value="2">Nível 2</SelectItem>
+                    <SelectItem value="3">Nível 3</SelectItem>
+                    <SelectItem value="4">Nível 4</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1298,6 +1341,61 @@ export const WorkGroupAdmin: React.FC = () => {
               className="bg-primary text-primary-foreground font-semibold"
             >
               Salvar Grupo de Trabalho
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* CLEAR MOCK DATA CONFIRMATION DIALOG */}
+      <Dialog open={isClearMockDialogOpen} onOpenChange={setIsClearMockDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-destructive">
+              <Trash2 className="w-5 h-5 text-destructive" />
+              Limpar Todos os Dados de Demonstração?
+            </DialogTitle>
+            <DialogDescription className="text-xs pt-1">
+              Esta ação removerá todos os dados pré-carregados de exemplo (colaboradores mock, grupos mock, projetos e tarefas de teste) para que você possa iniciar a plataforma 100% limpa com os dados reais da sua organização.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-3 bg-muted/40 rounded-lg text-xs space-y-2 border">
+            <p className="font-semibold text-foreground">O que acontecerá:</p>
+            <ul className="list-disc list-inside text-muted-foreground space-y-1 text-[11px]">
+              <li>Os grupos e squads de exemplo serão removidos.</li>
+              <li>A base de colaboradores, projetos e tarefas ficará limpa.</li>
+              <li>Você poderá criar seus próprios grupos e hierarquias do zero.</li>
+              <li>Você poderá restaurar os dados de demonstração a qualquer momento.</li>
+            </ul>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsClearMockDialogOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={isProcessingMock}
+              onClick={async () => {
+                setIsProcessingMock(true);
+                try {
+                  await clearMockData();
+                  setGroups([]);
+                  setIsClearMockDialogOpen(false);
+                } finally {
+                  setIsProcessingMock(false);
+                }
+              }}
+              className="gap-1.5 font-semibold"
+            >
+              {isProcessingMock ? "Limpando..." : "Sim, Limpar Dados Mock"}
             </Button>
           </DialogFooter>
         </DialogContent>

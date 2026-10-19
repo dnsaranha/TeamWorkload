@@ -20,11 +20,20 @@ import {
   Network,
   ShieldCheck,
   Building2,
-  LogIn,
   LogOut,
   UserCheck,
   ChevronDown,
+  Trash2,
+  Sparkles,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { ThemeToggleButton } from "@/lib/theme";
 import WorkloadCalendar from "./WorkloadCalendar";
 import XiaomiCalendar from "./XiaomiCalendar";
@@ -39,7 +48,6 @@ import UserProfile from "./UserProfile";
 import Roadmap from "./Roadmap";
 import FloatingTimeTracker from "./FloatingTimeTracker";
 import WorkGroupAdmin from "./WorkGroupAdmin";
-import LoginPage from "./LoginPage";
 import { useAuth } from "@/lib/authContext";
 import {
   employeeService,
@@ -56,9 +64,15 @@ const HomePage = () => {
     permissions,
     isSuperAdmin,
     switchPersona,
+    logout,
+    isMockCleared,
+    clearMockData,
+    restoreMockData,
   } = useAuth();
 
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [isClearMockDialogOpen, setIsClearMockDialogOpen] = useState(false);
+  const [isProcessingMock, setIsProcessingMock] = useState(false);
   const [totalEmployees, setTotalEmployees] = useState(0);
   const [activeTasks, setActiveTasks] = useState(0);
   const [avgWorkload, setAvgWorkload] = useState(0);
@@ -404,21 +418,22 @@ const HomePage = () => {
           </Button>
 
           <Button
-            variant={activeTab === "login" ? "default" : "ghost"}
+            variant="ghost"
             className={`${
               isMobile
-                ? "flex-col p-1 h-14 min-w-[52px] gap-0.5 rounded-lg"
+                ? "flex-col p-1 h-14 min-w-[52px] gap-0.5 rounded-lg text-destructive"
                 : sidebarCollapsed
-                  ? "w-10 h-10 p-0 mx-auto"
-                  : "w-full justify-start"
-            } text-indigo-600 dark:text-indigo-400`}
-            onClick={() => setActiveTab("login")}
+                  ? "w-10 h-10 p-0 mx-auto text-destructive"
+                  : "w-full justify-start text-destructive hover:bg-destructive/10"
+            }`}
+            onClick={logout}
+            title="Sair do sistema e voltar ao login"
           >
-            <LogIn
+            <LogOut
               className={`${isMobile ? "h-4 w-4" : sidebarCollapsed ? "h-4 w-4" : "mr-2 h-4 w-4"}`}
             />
-            {!sidebarCollapsed && !isMobile && (user ? "Conta & Login" : "Acesso / Login")}
-            {isMobile && <span className="text-[10px] font-medium leading-tight">Login</span>}
+            {!sidebarCollapsed && !isMobile && "Sair da Conta"}
+            {isMobile && <span className="text-[10px] font-medium leading-tight">Sair</span>}
           </Button>
         </nav>
 
@@ -471,7 +486,6 @@ const HomePage = () => {
                 {activeTab === "gantt" && "Gráfico Gantt com Dependências"}
                 {activeTab === "timesheet" && "Apontamento de Horas & Histórico"}
                 {activeTab === "groups" && "Administração de Grupos de Trabalho"}
-                {activeTab === "login" && "Portal de Autenticação & Acessos"}
                 {activeTab === "roadmap" && "Roadmap Estratégico"}
                 {activeTab === "xiaomi-calendar" && "Calendário Xiaomi"}
                 {activeTab === "reports" && "Relatórios de Desempenho"}
@@ -493,7 +507,7 @@ const HomePage = () => {
               )}
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2 flex-wrap">
               {/* Persona Switcher Dropdown */}
               <div className="flex items-center gap-1.5 bg-muted/60 px-2.5 py-1 rounded-lg border text-xs">
                 <span className="text-muted-foreground text-[11px] font-medium">
@@ -513,6 +527,38 @@ const HomePage = () => {
                 </select>
               </div>
 
+              {!isMockCleared ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsClearMockDialogOpen(true)}
+                  className="h-8 text-xs gap-1.5 text-destructive hover:bg-destructive/10 border-destructive/30"
+                  title="Limpar dados mock e iniciar com base vazia"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Limpar Mock
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    setIsProcessingMock(true);
+                    try {
+                      await restoreMockData();
+                    } finally {
+                      setIsProcessingMock(false);
+                    }
+                  }}
+                  disabled={isProcessingMock}
+                  className="h-8 text-xs gap-1.5 text-primary hover:bg-primary/10"
+                  title="Restaurar dados de exemplo"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  Restaurar Mock
+                </Button>
+              )}
+
               <Button
                 variant={activeTab === "groups" ? "default" : "outline"}
                 size="sm"
@@ -520,17 +566,18 @@ const HomePage = () => {
                 className="h-8 text-xs gap-1.5"
               >
                 <Network className="w-3.5 h-3.5" />
-                Grupos & Hierarquia
+                Grupos
               </Button>
 
               <Button
-                variant={activeTab === "login" ? "default" : "outline"}
+                variant="ghost"
                 size="sm"
-                onClick={() => setActiveTab("login")}
-                className="h-8 text-xs gap-1.5"
+                onClick={logout}
+                className="h-8 text-xs gap-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                title="Sair do sistema e voltar ao login"
               >
-                <LogIn className="w-3.5 h-3.5" />
-                {user ? "Conta" : "Login"}
+                <LogOut className="w-3.5 h-3.5" />
+                Sair
               </Button>
             </div>
           </header>
@@ -538,7 +585,7 @@ const HomePage = () => {
 
         <main
           className={`flex-1 overflow-x-hidden ${
-            activeTab === "xiaomi-calendar" || activeTab === "gantt" || activeTab === "planning" || activeTab === "grid" || activeTab === "timesheet" || activeTab === "groups" || activeTab === "login"
+            activeTab === "xiaomi-calendar" || activeTab === "gantt" || activeTab === "planning" || activeTab === "grid" || activeTab === "timesheet" || activeTab === "groups"
               ? "h-full overflow-hidden p-0 flex flex-col"
               : `overflow-y-auto p-3 sm:p-5 md:p-6 ${isMobile ? "pb-24" : ""}`
           }`}
@@ -699,14 +746,6 @@ const HomePage = () => {
             </div>
           )}
 
-          {activeTab === "login" && (
-            <div className="h-full w-full flex flex-col overflow-y-auto p-4 sm:p-6">
-              <LoginPage
-                onSuccess={() => setActiveTab("dashboard")}
-                onCancel={() => setActiveTab("dashboard")}
-              />
-            </div>
-          )}
         </main>
 
         {/* Global Floating Time Tracker (Clockify style) */}
@@ -715,6 +754,60 @@ const HomePage = () => {
           onOpenTimesheet={() => setActiveTab("timesheet")}
         />
       </div>
+
+      {/* CLEAR MOCK DATA CONFIRMATION DIALOG */}
+      <Dialog open={isClearMockDialogOpen} onOpenChange={setIsClearMockDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-destructive">
+              <Trash2 className="w-5 h-5 text-destructive" />
+              Limpar Dados de Demonstração?
+            </DialogTitle>
+            <DialogDescription className="text-xs pt-1">
+              Deseja remover todos os dados pré-carregados (colaboradores mock, tarefas e projetos de exemplo) para iniciar o sistema com uma base 100% limpa?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-3 bg-muted/40 rounded-lg text-xs space-y-1.5 border">
+            <p className="font-semibold text-foreground">Aviso:</p>
+            <ul className="list-disc list-inside text-muted-foreground space-y-1 text-[11px]">
+              <li>A base de tarefas, projetos e colaboradores ficará vazia.</li>
+              <li>Você poderá cadastrar sua própria equipe e projetos reais.</li>
+              <li>Você poderá restaurar os dados de demonstração a qualquer momento.</li>
+            </ul>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsClearMockDialogOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={isProcessingMock}
+              onClick={async () => {
+                setIsProcessingMock(true);
+                try {
+                  await clearMockData();
+                  setIsClearMockDialogOpen(false);
+                  loadDashboardData();
+                } finally {
+                  setIsProcessingMock(false);
+                }
+              }}
+              className="gap-1.5 font-semibold"
+            >
+              {isProcessingMock ? "Limpando..." : "Sim, Limpar Dados Mock"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

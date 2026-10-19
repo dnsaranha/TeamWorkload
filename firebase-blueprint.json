@@ -115,6 +115,25 @@
         "updated_at": { "type": "string" }
       },
       "required": ["name", "level"]
+    },
+    "Invitation": {
+      "title": "Invitation",
+      "description": "Collaborator invitations to join the team and work groups",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 150 },
+        "email": { "type": "string", "maxLength": 150 },
+        "role": { "type": "string", "maxLength": 100 },
+        "weekly_hours": { "type": "number" },
+        "group_id": { "type": "string" },
+        "group_name": { "type": "string", "maxLength": 150 },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
+        "invited_by": { "type": "string", "maxLength": 150 },
+        "invited_at": { "type": "string" },
+        "accepted_at": { "type": "string" }
+      },
+      "required": ["email", "name", "role", "status"]
     }
   },
   "firestore": {
@@ -141,6 +160,10 @@
     "/work_groups/{groupId}": {
       "schema": { "$ref": "#/entities/WorkGroup" },
       "description": "Work groups, organizational hierarchy and member permissions"
+    },
+    "/invitations/{invitationId}": {
+      "schema": { "$ref": "#/entities/Invitation" },
+      "description": "Pending and accepted invitations for team members"
     }
   }
 }
