@@ -29,6 +29,8 @@ import {
   DollarSign,
   Maximize2,
   Minimize2,
+  PanelLeftClose,
+  PanelLeftOpen,
   Trash2,
   Edit2,
   ArrowRight,
@@ -147,6 +149,25 @@ export const ResourcePlanningView: React.FC = () => {
   const [starredEmployees, setStarredEmployees] = useState<Record<string, boolean>>({});
   const [isTimeOffSectionOpen, setIsTimeOffSectionOpen] = useState(false);
   const [isPeopleSectionOpen, setIsPeopleSectionOpen] = useState(true);
+
+  // Lateral Toolbar / Sidebar Minimized state (persisted in localStorage)
+  const [isSidebarMinimized, setIsSidebarMinimized] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("crono_pulse_resource_sidebar_minimized") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebarMinimized = () => {
+    setIsSidebarMinimized((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("crono_pulse_resource_sidebar_minimized", String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   // Modal Dialog States
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
@@ -950,6 +971,11 @@ export const ResourcePlanningView: React.FC = () => {
     return Math.ceil(max * 1.15); // +15% margin
   }, [teamDailyCalculations]);
 
+  // Dynamic lateral toolbar / sidebar width
+  const sidebarWidthClass = isSidebarMinimized
+    ? "w-14 sm:w-16 min-w-[56px] max-w-[64px]"
+    : "w-44 sm:w-64 md:w-72 min-w-[176px] sm:min-w-[256px] md:min-w-[288px]";
+
   return (
     <div className="flex flex-col h-full bg-background border border-border rounded-xl shadow-xs overflow-hidden text-foreground">
       {/* 1. TOP HEADER & MAIN CONTROLS (Float / Resource Planning Style) */}
@@ -1062,8 +1088,25 @@ export const ResourcePlanningView: React.FC = () => {
             </Label>
           </div>
 
-          {/* View / Histogram Toggle Icon Buttons */}
-          <div className="flex items-center border border-border rounded-lg bg-muted/30 p-0.5">
+          {/* View / Histogram & Lateral Toolbar Toggle Icon Buttons */}
+          <div className="flex items-center border border-border rounded-lg bg-muted/30 p-0.5 gap-0.5">
+            <Button
+              variant={isSidebarMinimized ? "secondary" : "ghost"}
+              size="icon"
+              className="h-7 w-7"
+              onClick={toggleSidebarMinimized}
+              title={
+                isSidebarMinimized
+                  ? "Expandir Barra Lateral de Recursos & Projetos"
+                  : "Minimizar Barra Lateral de Recursos & Projetos"
+              }
+            >
+              {isSidebarMinimized ? (
+                <PanelLeftOpen className="h-3.5 w-3.5 text-primary" />
+              ) : (
+                <PanelLeftClose className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+              )}
+            </Button>
             <Button
               variant={showHistogram ? "secondary" : "ghost"}
               size="icon"
@@ -1248,73 +1291,145 @@ export const ResourcePlanningView: React.FC = () => {
           {/* Histogram Canvas & Timeline-Aligned Bars */}
           <div className="flex border border-border/80 rounded-lg bg-background overflow-x-auto shadow-2xs">
             {/* Left Legend Sidebar */}
-            <div className="w-40 sm:w-56 md:w-64 p-2 sm:p-3 border-r border-border/80 flex-shrink-0 flex flex-col justify-between bg-card/40">
-              <div className="space-y-1">
-                <span className="text-[10px] sm:text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                  Legenda ({chartMetric === "capacity" ? "Capacidade" : chartMetric === "availability" ? "Disponibilidade" : "Utilização"})
-                </span>
-              </div>
+            <div className={`${sidebarWidthClass} p-2 sm:p-2.5 border-r border-border/80 flex-shrink-0 flex flex-col justify-between bg-card/40 transition-all duration-200 overflow-hidden`}>
+              {isSidebarMinimized ? (
+                <div className="flex flex-col items-center justify-between h-full py-1 gap-2">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-primary hover:bg-primary/10 rounded-md"
+                        title="Ver Legenda do Gráfico"
+                      >
+                        <BarChart2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent side="right" className="w-56 p-2.5 text-xs space-y-2">
+                      <p className="font-bold text-[11px] uppercase tracking-wider text-muted-foreground border-b pb-1">
+                        Legenda ({chartMetric === "capacity" ? "Capacidade" : chartMetric === "availability" ? "Disponibilidade" : "Utilização"})
+                      </p>
+                      {chartMetric === "capacity" && (
+                        <div className="space-y-1 text-[11px] text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-xs bg-blue-600 inline-block shadow-2xs" />
+                            <span className="font-medium text-foreground">Carga Confirmada</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-xs bg-purple-500/30 border border-purple-500 inline-block" />
+                            <span>Capacidade Efetiva</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-xs bg-[repeating-linear-gradient(45deg,#cbd5e1,#cbd5e1_2px,#f1f5f9_2px,#f1f5f9_4px)] border border-border inline-block" />
+                            <span>Ausência / Time Off</span>
+                          </div>
+                        </div>
+                      )}
+                      {chartMetric === "availability" && (
+                        <div className="space-y-1 text-[11px] text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-xs bg-emerald-600 inline-block" />
+                            <span className="font-medium text-foreground">Horas Disponíveis</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-xs bg-rose-500 inline-block" />
+                            <span>Sobrecarga de Horas</span>
+                          </div>
+                        </div>
+                      )}
+                      {chartMetric === "utilization" && (
+                        <div className="space-y-1 text-[11px] text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-xs bg-emerald-500 inline-block" />
+                            <span>&lt; 85% Ideal</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-xs bg-amber-500 inline-block" />
+                            <span>85% - 100% Alta</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-xs bg-rose-600 inline-block" />
+                            <span>&gt; 100% Sobrecarga</span>
+                          </div>
+                        </div>
+                      )}
+                    </PopoverContent>
+                  </Popover>
 
-              {chartMetric === "capacity" && (
-                <div className="space-y-1 text-[10px] sm:text-[11px] text-muted-foreground mt-1.5">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-xs bg-blue-600 inline-block shadow-2xs flex-shrink-0" />
-                    <span className="font-medium text-foreground truncate">Carga Confirmada</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-xs bg-purple-500/30 border border-purple-500 inline-block flex-shrink-0" />
-                    <span className="truncate">Capacidade Efetiva</span>
-                  </div>
-                  <div className="hidden sm:flex items-center gap-2">
-                    <span className="w-3 h-0.5 bg-gray-400 inline-block flex-shrink-0" />
-                    <span className="truncate">Capacidade Contratada</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-xs bg-[repeating-linear-gradient(45deg,#cbd5e1,#cbd5e1_2px,#f1f5f9_2px,#f1f5f9_4px)] border border-border inline-block flex-shrink-0" />
-                    <span className="truncate">Ausência / Time Off</span>
-                  </div>
+                  <span className="text-[8px] font-mono font-bold text-muted-foreground tracking-tighter uppercase">
+                    {chartMetric.substring(0, 3)}
+                  </span>
                 </div>
-              )}
+              ) : (
+                <>
+                  <div className="space-y-1">
+                    <span className="text-[10px] sm:text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                      Legenda ({chartMetric === "capacity" ? "Capacidade" : chartMetric === "availability" ? "Disponibilidade" : "Utilização"})
+                    </span>
+                  </div>
 
-              {chartMetric === "availability" && (
-                <div className="space-y-1 text-[10px] sm:text-[11px] text-muted-foreground mt-1.5">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-xs bg-emerald-600 inline-block shadow-2xs flex-shrink-0" />
-                    <span className="font-medium text-foreground truncate">Horas Disponíveis / Livres</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-xs bg-rose-500 inline-block flex-shrink-0" />
-                    <span className="truncate">Sobrecarga de Horas</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-xs bg-purple-500/30 border border-purple-500 inline-block flex-shrink-0" />
-                    <span className="truncate">Capacidade Máxima</span>
-                  </div>
-                </div>
-              )}
+                  {chartMetric === "capacity" && (
+                    <div className="space-y-1 text-[10px] sm:text-[11px] text-muted-foreground mt-1.5">
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-xs bg-blue-600 inline-block shadow-2xs flex-shrink-0" />
+                        <span className="font-medium text-foreground truncate">Carga Confirmada</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-xs bg-purple-500/30 border border-purple-500 inline-block flex-shrink-0" />
+                        <span className="truncate">Capacidade Efetiva</span>
+                      </div>
+                      <div className="hidden sm:flex items-center gap-2">
+                        <span className="w-3 h-0.5 bg-gray-400 inline-block flex-shrink-0" />
+                        <span className="truncate">Capacidade Contratada</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-xs bg-[repeating-linear-gradient(45deg,#cbd5e1,#cbd5e1_2px,#f1f5f9_2px,#f1f5f9_4px)] border border-border inline-block flex-shrink-0" />
+                        <span className="truncate">Ausência / Time Off</span>
+                      </div>
+                    </div>
+                  )}
 
-              {chartMetric === "utilization" && (
-                <div className="space-y-1 text-[10px] sm:text-[11px] text-muted-foreground mt-1.5">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-xs bg-emerald-500 inline-block shadow-2xs flex-shrink-0" />
-                    <span className="font-medium text-foreground truncate">&lt; 85% Ideal</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-xs bg-amber-500 inline-block flex-shrink-0" />
-                    <span className="truncate">85% - 100% Carga Alta</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-xs bg-rose-600 inline-block flex-shrink-0" />
-                    <span className="truncate">&gt; 100% Sobrecarga</span>
-                  </div>
-                </div>
-              )}
+                  {chartMetric === "availability" && (
+                    <div className="space-y-1 text-[10px] sm:text-[11px] text-muted-foreground mt-1.5">
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-xs bg-emerald-600 inline-block shadow-2xs flex-shrink-0" />
+                        <span className="font-medium text-foreground truncate">Horas Disponíveis / Livres</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-xs bg-rose-500 inline-block flex-shrink-0" />
+                        <span className="truncate">Sobrecarga de Horas</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-xs bg-purple-500/30 border border-purple-500 inline-block flex-shrink-0" />
+                        <span className="truncate">Capacidade Máxima</span>
+                      </div>
+                    </div>
+                  )}
 
-              <div className="text-[9px] sm:text-[10px] text-muted-foreground/80 pt-1.5 border-t border-border/40 font-mono">
-                {chartMetric === "utilization"
-                  ? `Escala: 0% a ${maxHistogramScale}%`
-                  : `Escala: 0h a ${maxHistogramScale}h`}
-              </div>
+                  {chartMetric === "utilization" && (
+                    <div className="space-y-1 text-[10px] sm:text-[11px] text-muted-foreground mt-1.5">
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-xs bg-emerald-500 inline-block shadow-2xs flex-shrink-0" />
+                        <span className="font-medium text-foreground truncate">&lt; 85% Ideal</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-xs bg-amber-500 inline-block flex-shrink-0" />
+                        <span className="truncate">85% - 100% Carga Alta</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-xs bg-rose-600 inline-block flex-shrink-0" />
+                        <span className="truncate">&gt; 100% Sobrecarga</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="text-[9px] sm:text-[10px] text-muted-foreground/80 pt-1.5 border-t border-border/40 font-mono">
+                    {chartMetric === "utilization"
+                      ? `Escala: 0% a ${maxHistogramScale}%`
+                      : `Escala: 0h a ${maxHistogramScale}h`}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Right Synchronized Histogram Columns */}
@@ -1560,16 +1675,39 @@ export const ResourcePlanningView: React.FC = () => {
           <thead className="sticky top-0 z-30 bg-card shadow-xs">
             {/* Row 1: Month Groupings */}
             <tr className="border-b border-border/80 text-[10px] sm:text-[11px] font-semibold text-muted-foreground bg-muted/40">
-              <th className="w-44 sm:w-64 md:w-72 px-2 sm:px-3 py-2 text-left sticky left-0 z-40 bg-card border-r border-border font-bold text-foreground">
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
-                    <span className="truncate">Recursos & Projetos</span>
-                  </span>
-                  <Badge variant="outline" className="hidden sm:inline-flex text-[10px] font-mono">
-                    {filteredEmployees.length} pessoas
-                  </Badge>
-                </div>
+              <th className={`${sidebarWidthClass} ${isSidebarMinimized ? "px-1 text-center" : "px-2 sm:px-3 text-left"} py-2 sticky left-0 z-40 bg-card border-r border-border font-bold text-foreground transition-all duration-200 overflow-hidden`}>
+                {isSidebarMinimized ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 mx-auto text-primary hover:bg-primary/10 rounded"
+                    onClick={toggleSidebarMinimized}
+                    title="Expandir barra lateral de Recursos & Projetos"
+                  >
+                    <PanelLeftOpen className="h-3.5 w-3.5" />
+                  </Button>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+                      <span className="truncate">Recursos & Projetos</span>
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <Badge variant="outline" className="hidden sm:inline-flex text-[10px] font-mono">
+                        {filteredEmployees.length} pessoas
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                        onClick={toggleSidebarMinimized}
+                        title="Minimizar barra lateral de Recursos & Projetos"
+                      >
+                        <PanelLeftClose className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </th>
 
               {/* Month Group Cells */}
@@ -1589,11 +1727,17 @@ export const ResourcePlanningView: React.FC = () => {
 
             {/* Row 2: Days Header (e.g. 4 5 6 7 8 | 11 12 13 14 15) */}
             <tr className="border-b border-border text-[10px] sm:text-[11px] font-medium text-muted-foreground bg-card">
-              <th className="px-2 sm:px-3 py-1.5 text-left sticky left-0 z-40 bg-card border-r border-border">
-                <div className="flex items-center justify-between text-muted-foreground">
-                  <span className="truncate">Colaborador / Tarefa</span>
-                  <span className="hidden sm:inline-block text-[10px] font-mono">Horas/Dia</span>
-                </div>
+              <th className={`${sidebarWidthClass} ${isSidebarMinimized ? "px-1 text-center" : "px-2 sm:px-3 text-left"} py-1.5 sticky left-0 z-40 bg-card border-r border-border transition-all duration-200 overflow-hidden`}>
+                {isSidebarMinimized ? (
+                  <span className="text-[9px] font-mono font-bold text-muted-foreground uppercase" title="Recursos">
+                    Rec.
+                  </span>
+                ) : (
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span className="truncate">Colaborador / Tarefa</span>
+                    <span className="hidden sm:inline-block text-[10px] font-mono">Horas/Dia</span>
+                  </div>
+                )}
               </th>
 
               {timelineDays.map((day, idx) => {
@@ -1621,11 +1765,17 @@ export const ResourcePlanningView: React.FC = () => {
 
             {/* Row 3: Free Capacity per Week Header Indicator (Matching Screenshot 1: '3h 30m/w free') */}
             <tr className="border-b border-border/60 bg-blue-50/50 dark:bg-blue-950/20 text-[9px] sm:text-[10px] text-blue-700 dark:text-blue-300">
-              <th className="px-2 sm:px-3 py-1 text-left sticky left-0 z-40 bg-card border-r border-border font-semibold">
-                <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
-                  <Sparkles className="h-3 w-3" />
-                  <span className="truncate">Capacidade Livre</span>
-                </span>
+              <th className={`${sidebarWidthClass} ${isSidebarMinimized ? "px-1 text-center" : "px-2 sm:px-3 text-left"} py-1 sticky left-0 z-40 bg-card border-r border-border font-semibold transition-all duration-200 overflow-hidden`}>
+                {isSidebarMinimized ? (
+                  <span title="Capacidade Livre da Semana">
+                    <Sparkles className="h-3 w-3 text-blue-600 dark:text-blue-400 mx-auto" />
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
+                    <Sparkles className="h-3 w-3" />
+                    <span className="truncate">Capacidade Livre</span>
+                  </span>
+                )}
               </th>
 
               {headerWeeks.map((week) => {
@@ -1657,21 +1807,28 @@ export const ResourcePlanningView: React.FC = () => {
             {/* 1. TIME OFF COLLAPSIBLE ROW */}
             <tr className="bg-muted/30 hover:bg-muted/50 font-semibold">
               <td
-                className="px-3 py-2 sticky left-0 z-20 bg-muted/40 border-r border-border cursor-pointer flex items-center justify-between"
+                className={`${sidebarWidthClass} ${isSidebarMinimized ? "px-1 justify-center" : "px-3 justify-between"} py-2 sticky left-0 z-20 bg-muted/40 border-r border-border cursor-pointer flex items-center transition-all duration-200 overflow-hidden`}
                 onClick={() => setIsTimeOffSectionOpen(!isTimeOffSectionOpen)}
+                title="Time Off / Ausências"
               >
-                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold">
-                  {isTimeOffSectionOpen ? (
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  ) : (
-                    <ChevronRightIcon className="h-3.5 w-3.5" />
-                  )}
-                  <Palmtree className="h-4 w-4" />
-                  <span>Time Off</span>
-                </div>
-                <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/20 font-mono">
-                  {timeOffs.length}
-                </Badge>
+                {isSidebarMinimized ? (
+                  <Palmtree className="h-4 w-4 text-amber-600 mx-auto" />
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold">
+                      {isTimeOffSectionOpen ? (
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      ) : (
+                        <ChevronRightIcon className="h-3.5 w-3.5" />
+                      )}
+                      <Palmtree className="h-4 w-4" />
+                      <span>Time Off</span>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/20 font-mono">
+                      {timeOffs.length}
+                    </Badge>
+                  </>
+                )}
               </td>
 
               {/* Time off row spanning columns */}
@@ -1706,20 +1863,27 @@ export const ResourcePlanningView: React.FC = () => {
             {/* 2. PEOPLE SECTION HEADER ROW */}
             <tr className="bg-card font-bold border-b border-border/80">
               <td
-                className="px-3 py-2 sticky left-0 z-20 bg-card border-r border-border cursor-pointer flex items-center justify-between text-foreground"
+                className={`${sidebarWidthClass} ${isSidebarMinimized ? "px-1 justify-center" : "px-3 justify-between"} py-2 sticky left-0 z-20 bg-card border-r border-border cursor-pointer flex items-center text-foreground transition-all duration-200 overflow-hidden`}
                 onClick={() => setIsPeopleSectionOpen(!isPeopleSectionOpen)}
+                title="Pessoas & Equipe"
               >
-                <div className="flex items-center gap-2">
-                  {isPeopleSectionOpen ? (
-                    <ChevronDown className="h-3.5 w-3.5 text-primary" />
-                  ) : (
-                    <ChevronRightIcon className="h-3.5 w-3.5 text-primary" />
-                  )}
-                  <span>Pessoas & Equipe</span>
-                </div>
-                <Badge variant="secondary" className="text-[10px] font-mono">
-                  {filteredEmployees.length}
-                </Badge>
+                {isSidebarMinimized ? (
+                  <Users className="h-4 w-4 text-primary mx-auto" />
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      {isPeopleSectionOpen ? (
+                        <ChevronDown className="h-3.5 w-3.5 text-primary" />
+                      ) : (
+                        <ChevronRightIcon className="h-3.5 w-3.5 text-primary" />
+                      )}
+                      <span>Pessoas & Equipe</span>
+                    </div>
+                    <Badge variant="secondary" className="text-[10px] font-mono">
+                      {filteredEmployees.length}
+                    </Badge>
+                  </>
+                )}
               </td>
               <td colSpan={timelineDays.length} className="bg-muted/10" />
             </tr>
@@ -1736,83 +1900,53 @@ export const ResourcePlanningView: React.FC = () => {
                   .join("")
                   .substring(0, 2)
                   .toUpperCase();
+                const summary = getEmployeePeriodCapacitySummary(employee.id);
 
                 return (
                   <React.Fragment key={employee.id}>
                     {/* Employee Master Row */}
                     <tr className="bg-muted/15 hover:bg-muted/30 border-t-2 border-border/70 transition-colors">
                       {/* Employee Info Cell */}
-                      <td className="px-2 sm:px-3 py-2 sticky left-0 z-20 bg-card border-r border-border">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
-                            {/* Avatar Circle */}
-                            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-[10px] sm:text-xs flex-shrink-0 border border-primary/20">
-                              {initials}
-                            </div>
-                            {/* Name, Role & Capacity Badges */}
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <p className="font-bold text-foreground truncate text-xs">
-                                  {employee.name}
-                                </p>
-                                {(() => {
-                                  const summary = getEmployeePeriodCapacitySummary(employee.id);
-                                  if (summary.hasOverload) {
-                                    return (
-                                      <span
-                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
-                                        title={`${summary.daysOverloaded} dia(s) com sobrecarga acima da capacidade`}
-                                      >
-                                        <AlertTriangle className="h-2.5 w-2.5" />
-                                        <span>Sobrecarga ({summary.daysOverloaded}d)</span>
-                                      </span>
-                                    );
-                                  }
-                                  if (summary.hasLimitReached) {
-                                    return (
-                                      <span
-                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
-                                        title={`${summary.daysAtLimit} dia(s) no limite diário máximo (100%)`}
-                                      >
-                                        <AlertCircle className="h-2.5 w-2.5" />
-                                        <span>No Limite ({summary.daysAtLimit}d)</span>
-                                      </span>
-                                    );
-                                  }
-                                  return null;
-                                })()}
-                              </div>
-                              <p className="text-[9px] sm:text-[10px] text-muted-foreground truncate">
-                                {employee.role || "Especialista"} •{" "}
-                                <span className="font-mono text-primary font-medium" title="Jornada semanal e capacidade diária">
-                                  {employee.weekly_hours || 40}h/sem ({((employee.weekly_hours || 40) / 5).toFixed(0)}h/dia)
-                                </span>
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Quick Actions (Star, More, Expand/Collapse) */}
-                          <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
-                            <button
-                              onClick={() => toggleStar(employee.id)}
-                              className={`p-1 rounded hover:bg-muted ${
-                                isStarred ? "text-amber-500" : "text-muted-foreground/50 hover:text-muted-foreground"
-                              }`}
-                              title="Favoritar"
-                            >
-                              <Star className="h-3 sm:h-3.5 w-3 sm:w-3.5 fill-current" />
-                            </button>
-
+                      <td className={`${sidebarWidthClass} ${isSidebarMinimized ? "px-1 py-1.5" : "px-2 sm:px-3 py-2"} sticky left-0 z-20 bg-card border-r border-border transition-all duration-200 overflow-hidden`}>
+                        {isSidebarMinimized ? (
+                          <div className="flex flex-col items-center justify-center gap-1 group/empmin">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground">
-                                  <MoreHorizontal className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
-                                </Button>
+                                <div className="relative cursor-pointer">
+                                  <div
+                                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full font-bold flex items-center justify-center text-[10px] sm:text-xs flex-shrink-0 transition-transform hover:scale-105 ${
+                                      summary.hasOverload
+                                        ? "bg-rose-500/15 text-rose-600 ring-2 ring-rose-500/50"
+                                        : summary.hasLimitReached
+                                        ? "bg-amber-500/15 text-amber-700 ring-2 ring-amber-500/50"
+                                        : "bg-primary/10 text-primary border border-primary/20"
+                                    }`}
+                                    title={`${employee.name} (${employee.role || "Especialista"})\nJornada: ${employee.weekly_hours || 40}h/sem • ${((employee.weekly_hours || 40) / 5).toFixed(0)}h/dia\nClique para opções ou gerenciar tarefas.`}
+                                  >
+                                    {initials}
+                                  </div>
+                                  {summary.hasOverload && (
+                                    <span
+                                      className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-rose-600 ring-2 ring-background"
+                                      title={`Sobrecarga em ${summary.daysOverloaded} dia(s)`}
+                                    />
+                                  )}
+                                  {!summary.hasOverload && summary.hasLimitReached && (
+                                    <span
+                                      className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-background"
+                                      title={`No limite em ${summary.daysAtLimit} dia(s)`}
+                                    />
+                                  )}
+                                </div>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="text-xs">
+                              <DropdownMenuContent align="start" className="text-xs w-48">
+                                <div className="px-2 py-1.5 border-b font-medium">
+                                  <p className="font-bold text-foreground truncate">{employee.name}</p>
+                                  <p className="text-[10px] text-muted-foreground">{employee.role} • {employee.weekly_hours || 40}h/sem</p>
+                                </div>
                                 <DropdownMenuItem onClick={() => handleOpenNewTask(employee.id)}>
                                   <Plus className="h-3.5 w-3.5 mr-2 text-primary" />
-                                  <span>Atribuir Tarefa / Projeto</span>
+                                  <span>Atribuir Tarefa</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => {
@@ -1821,23 +1955,117 @@ export const ResourcePlanningView: React.FC = () => {
                                   }}
                                 >
                                   <Palmtree className="h-3.5 w-3.5 mr-2 text-amber-600" />
-                                  <span>Adicionar Ausência (Time Off)</span>
+                                  <span>Time Off</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => toggleStar(employee.id)}>
+                                  <Star className={`h-3.5 w-3.5 mr-2 ${isStarred ? "text-amber-500 fill-amber-500" : ""}`} />
+                                  <span>{isStarred ? "Remover Favorito" : "Favoritar"}</span>
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
 
+                            {/* Chevron expand/collapse button in minimized mode */}
                             <button
                               onClick={() => toggleEmployee(employee.id)}
-                              className="p-1 rounded hover:bg-muted text-muted-foreground"
+                              className="p-0.5 text-muted-foreground hover:text-foreground rounded"
+                              title={isExpanded ? "Recolher tarefas" : "Expandir tarefas"}
                             >
                               {isExpanded ? (
-                                <ChevronDown className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
+                                <ChevronDown className="h-3 w-3" />
                               ) : (
-                                <ChevronRightIcon className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
+                                <ChevronRightIcon className="h-3 w-3" />
                               )}
                             </button>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+                              {/* Avatar Circle */}
+                              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-[10px] sm:text-xs flex-shrink-0 border border-primary/20">
+                                {initials}
+                              </div>
+                              {/* Name, Role & Capacity Badges */}
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className="font-bold text-foreground truncate text-xs">
+                                    {employee.name}
+                                  </p>
+                                  {summary.hasOverload && (
+                                    <span
+                                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
+                                      title={`${summary.daysOverloaded} dia(s) com sobrecarga acima da capacidade`}
+                                    >
+                                      <AlertTriangle className="h-2.5 w-2.5" />
+                                      <span>Sobrecarga ({summary.daysOverloaded}d)</span>
+                                    </span>
+                                  )}
+                                  {!summary.hasOverload && summary.hasLimitReached && (
+                                    <span
+                                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                                      title={`${summary.daysAtLimit} dia(s) no limite diário máximo (100%)`}
+                                    >
+                                      <AlertCircle className="h-2.5 w-2.5" />
+                                      <span>No Limite ({summary.daysAtLimit}d)</span>
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[9px] sm:text-[10px] text-muted-foreground truncate">
+                                  {employee.role || "Especialista"} •{" "}
+                                  <span className="font-mono text-primary font-medium" title="Jornada semanal e capacidade diária">
+                                    {employee.weekly_hours || 40}h/sem ({((employee.weekly_hours || 40) / 5).toFixed(0)}h/dia)
+                                  </span>
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Quick Actions (Star, More, Expand/Collapse) */}
+                            <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
+                              <button
+                                onClick={() => toggleStar(employee.id)}
+                                className={`p-1 rounded hover:bg-muted ${
+                                  isStarred ? "text-amber-500" : "text-muted-foreground/50 hover:text-muted-foreground"
+                                }`}
+                                title="Favoritar"
+                              >
+                                <Star className="h-3 sm:h-3.5 w-3 sm:w-3.5 fill-current" />
+                              </button>
+
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground">
+                                    <MoreHorizontal className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="text-xs">
+                                  <DropdownMenuItem onClick={() => handleOpenNewTask(employee.id)}>
+                                    <Plus className="h-3.5 w-3.5 mr-2 text-primary" />
+                                    <span>Atribuir Tarefa / Projeto</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setFormTimeOffEmpId(employee.id);
+                                      setIsNewTimeOffOpen(true);
+                                    }}
+                                  >
+                                    <Palmtree className="h-3.5 w-3.5 mr-2 text-amber-600" />
+                                    <span>Adicionar Ausência (Time Off)</span>
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+
+                              <button
+                                onClick={() => toggleEmployee(employee.id)}
+                                className="p-1 rounded hover:bg-muted text-muted-foreground"
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
+                                ) : (
+                                  <ChevronRightIcon className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </td>
 
                       {/* Daily Capacity per Employee Cells - Highlights when limit is reached (100%) or overloaded */}
