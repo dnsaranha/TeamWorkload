@@ -70,6 +70,7 @@ const COLOR_PRESETS = [
 
 export const WorkGroupAdmin: React.FC = () => {
   const {
+    activeEmployee,
     activeEmployeeId,
     isSuperAdmin,
     refreshUserData,
@@ -89,9 +90,17 @@ export const WorkGroupAdmin: React.FC = () => {
   const [isClearMockDialogOpen, setIsClearMockDialogOpen] = useState<boolean>(false);
   const [isProcessingMock, setIsProcessingMock] = useState<boolean>(false);
 
-  // Modal State
+  // Group Create/Edit Modal State
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [editingGroup, setEditingGroup] = useState<WorkGroup | null>(null);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [memberError, setMemberError] = useState<string | null>(null);
+
+  // Group Delete Modal State (replaces window.confirm)
+  const [deleteTargetGroup, setDeleteTargetGroup] = useState<WorkGroup | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState<boolean>(false);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   // Form State
   const [formData, setFormData] = useState<{
@@ -162,6 +171,8 @@ export const WorkGroupAdmin: React.FC = () => {
   // Open Create Modal
   const handleOpenCreate = (prefillParentId?: string, prefillLevel?: HierarchyLevel) => {
     setEditingGroup(null);
+    setFormError(null);
+    setMemberError(null);
     let defaultLevel: HierarchyLevel = prefillLevel || 3;
     let defaultParentId: string | null = prefillParentId || null;
 
@@ -172,6 +183,23 @@ export const WorkGroupAdmin: React.FC = () => {
       }
     }
 
+    // Auto-include the active user as group leader/admin
+    const initialMembers: GroupMemberPermission[] = [];
+    if (activeEmployee) {
+      initialMembers.push({
+        employeeId: activeEmployee.id,
+        employeeName: activeEmployee.name,
+        email: activeEmployee.email || undefined,
+        roleInGroup: "Líder / Criador",
+        isAdmin: true,
+        canCreate: true,
+        canEdit: true,
+        canDelete: true,
+        canView: true,
+        joinedAt: new Date().toISOString(),
+      });
+    }
+
     setFormData({
       name: "",
       code: "",
@@ -179,7 +207,7 @@ export const WorkGroupAdmin: React.FC = () => {
       level: defaultLevel,
       parentId: defaultParentId,
       color: COLOR_PRESETS[Math.floor(Math.random() * COLOR_PRESETS.length)].value,
-      members: [],
+      members: initialMembers,
     });
     setIsDialogOpen(true);
   };
@@ -187,6 +215,8 @@ export const WorkGroupAdmin: React.FC = () => {
   // Open Edit Modal
   const handleOpenEdit = (group: WorkGroup) => {
     setEditingGroup(group);
+    setFormError(null);
+    setMemberError(null);
     setFormData({
       id: group.id,
       name: group.name,
@@ -203,51 +233,69 @@ export const WorkGroupAdmin: React.FC = () => {
   // Handle Save
   const handleSaveGroup = async () => {
     if (!formData.name.trim()) {
-      alert("Por favor, preencha o nome do grupo de trabalho.");
+      setFormError("Por favor, preencha o nome do grupo de trabalho.");
       return;
     }
 
-    const now = new Date().toISOString();
-    const id = formData.id || `group-${Date.now()}`;
-    const levelConfig = HIERARCHY_LEVELS[formData.level];
+    setIsSaving(true);
+    setFormError(null);
+    try {
+      const now = new Date().toISOString();
+      const id = formData.id || `group-${Date.now()}`;
+      const levelConfig = HIERARCHY_LEVELS[formData.level];
 
-    const groupToSave: WorkGroup = {
-      id,
-      name: formData.name.trim(),
-      code: formData.code.trim() || formData.name.substring(0, 4).toUpperCase(),
-      description: formData.description.trim(),
-      level: formData.level,
-      levelName: levelConfig?.shortTitle || "Grupo",
-      parentId: formData.parentId || null,
-      color: formData.color,
-      members: formData.members,
-      created_at: editingGroup?.created_at || now,
-      updated_at: now,
-    };
+      const groupToSave: WorkGroup = {
+        id,
+        name: formData.name.trim(),
+        code: formData.code.trim() || formData.name.substring(0, 4).toUpperCase(),
+        description: formData.description.trim(),
+        level: formData.level,
+        levelName: levelConfig?.shortTitle || "Grupo",
+        parentId: formData.parentId || null,
+        color: formData.color,
+        members: formData.members,
+        created_at: editingGroup?.created_at || now,
+        updated_at: now,
+      };
 
-    await workGroupService.save(groupToSave);
-    await loadData();
-    await refreshUserData();
-    setIsDialogOpen(false);
-  };
-
-  // Handle Delete
-  const handleDeleteGroup = async (group: WorkGroup) => {
-    const children = groups.filter((g) => g.parentId === group.id);
-    let confirmMsg = `Tem certeza que deseja excluir o grupo "${group.name}"?`;
-    if (children.length > 0) {
-      confirmMsg += `\n\nAtenção: Este grupo possui ${children.length} subgrupo(s) subordinado(s). Eles se tornarão grupos raiz se este for excluído.`;
-    }
-
-    if (window.confirm(confirmMsg)) {
-      await workGroupService.delete(group.id);
+      await workGroupService.save(groupToSave);
       await loadData();
       await refreshUserData();
+      setIsDialogOpen(false);
+    } catch (err: any) {
+      console.error("Error saving work group:", err);
+      setFormError(err.message || "Erro ao salvar grupo.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Open Delete Confirmation Dialog
+  const handleDeleteGroup = (group: WorkGroup) => {
+    setDeleteTargetGroup(group);
+    setIsDeleteDialogOpen(true);
+  };
+
+  // Confirm Delete
+  const handleConfirmDeleteGroup = async () => {
+    if (!deleteTargetGroup) return;
+    setIsDeleting(true);
+    try {
+      await workGroupService.delete(deleteTargetGroup.id);
+      await loadData();
+      await refreshUserData();
+      setIsDeleteDialogOpen(false);
+      setDeleteTargetGroup(null);
+    } catch (err: any) {
+      console.error("Error deleting group:", err);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   // Member management in modal
   const handleAddMemberToForm = () => {
+    setMemberError(null);
     if (!newMemberEmployeeId) return;
 
     const emp = employees.find((e) => e.id === newMemberEmployeeId);
@@ -255,13 +303,14 @@ export const WorkGroupAdmin: React.FC = () => {
 
     // Check if already in list
     if (formData.members.some((m) => m.employeeId === newMemberEmployeeId)) {
-      alert("Este colaborador já faz parte deste grupo.");
+      setMemberError("Este colaborador já faz parte deste grupo.");
       return;
     }
 
     const newMember: GroupMemberPermission = {
       employeeId: emp.id,
       employeeName: emp.name,
+      email: emp.email || undefined,
       roleInGroup: newMemberRole || "Membro",
       isAdmin: newMemberIsAdmin,
       canCreate: newMemberCanCreate,
@@ -983,6 +1032,13 @@ export const WorkGroupAdmin: React.FC = () => {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            {formError && (
+              <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{formError}</span>
+              </div>
+            )}
+
             {/* General Info */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1 sm:col-span-2">
@@ -1330,6 +1386,7 @@ export const WorkGroupAdmin: React.FC = () => {
               type="button"
               variant="outline"
               size="sm"
+              disabled={isSaving}
               onClick={() => setIsDialogOpen(false)}
             >
               Cancelar
@@ -1337,10 +1394,70 @@ export const WorkGroupAdmin: React.FC = () => {
             <Button
               type="button"
               size="sm"
+              disabled={isSaving}
               onClick={handleSaveGroup}
               className="bg-primary text-primary-foreground font-semibold"
             >
-              Salvar Grupo de Trabalho
+              {isSaving ? "Salvando..." : "Salvar Grupo de Trabalho"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DELETE GROUP CONFIRMATION DIALOG (replaces window.confirm) */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-destructive">
+              <Trash2 className="w-5 h-5 text-destructive" />
+              Excluir Grupo de Trabalho?
+            </DialogTitle>
+            <DialogDescription className="text-xs pt-1">
+              {deleteTargetGroup ? (
+                <>
+                  Você está prestes a excluir o grupo <strong>"{deleteTargetGroup.name}"</strong> ({deleteTargetGroup.code}).
+                </>
+              ) : (
+                "Confirme a exclusão do grupo selecionado."
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {deleteTargetGroup && (
+            <div className="p-3 bg-muted/40 rounded-lg text-xs space-y-2 border">
+              {groups.filter((g) => g.parentId === deleteTargetGroup.id).length > 0 && (
+                <div className="p-2 rounded bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 font-medium">
+                  ⚠️ Atenção: Este grupo possui {groups.filter((g) => g.parentId === deleteTargetGroup.id).length} subgrupo(s) subordinado(s). Se você excluí-lo, esses subgrupos serão desvinculados e se tornarão grupos raiz.
+                </div>
+              )}
+              <p className="text-muted-foreground text-[11px]">
+                Esta exclusão será sincronizada imediatamente no Firebase Firestore e no cache local da sua organização.
+              </p>
+            </div>
+          )}
+
+          <DialogFooter className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isDeleting}
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setDeleteTargetGroup(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={isDeleting}
+              onClick={handleConfirmDeleteGroup}
+              className="gap-1.5 font-semibold"
+            >
+              {isDeleting ? "Excluindo..." : "Confirmar e Excluir Grupo"}
             </Button>
           </DialogFooter>
         </DialogContent>

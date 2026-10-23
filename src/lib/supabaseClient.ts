@@ -1,19 +1,6 @@
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { Database } from "@/types/supabase";
 import { firestoreService } from "./firestoreService";
 import { auth } from "./firebase";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-
-const isSupabaseConfigured = Boolean(
-  supabaseUrl &&
-    supabaseAnonKey &&
-    supabaseUrl.startsWith("http") &&
-    !supabaseUrl.includes("placeholder")
-);
-
-// Types for our application
 export type Employee = {
   id: string;
   name: string;
@@ -22,6 +9,7 @@ export type Employee = {
   weekly_hours: number;
   skills: any; // Using any to match Supabase Json type
   dias_de_trabalho: string[] | null;
+  status?: "ativo" | "inativo" | string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -33,6 +21,7 @@ export type EmployeeInsert = {
   weekly_hours: number;
   skills: any;
   dias_de_trabalho?: string[] | null;
+  status?: "ativo" | "inativo" | string | null;
 };
 
 export type EmployeeUpdate = Partial<EmployeeInsert>;
@@ -45,6 +34,8 @@ export type Project = {
   end_date: string | null;
   categoria_estrategica?: string | null;
   special_marker?: string | null;
+  group_id?: string | null;
+  group_name?: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -56,6 +47,8 @@ export type ProjectInsert = {
   end_date?: string | null;
   categoria_estrategica?: string | null;
   special_marker?: string | null;
+  group_id?: string | null;
+  group_name?: string | null;
 };
 
 export type ProjectUpdate = Partial<ProjectInsert>;
@@ -88,6 +81,8 @@ export type Task = {
   parent_id?: string | null; // ID of parent task for hierarchical subtasks
   progress?: number | null; // Percentage of completion 0-100
   actual_time?: number | null; // Tracked execution time in hours
+  group_id?: string | null;
+  group_name?: string | null;
   created_at: string | null;
   updated_at: string | null;
   project?: Project | null;
@@ -113,6 +108,8 @@ export type TaskInsert = {
   parent_id?: string | null;
   progress?: number | null;
   actual_time?: number | null;
+  group_id?: string | null;
+  group_name?: string | null;
 };
 
 export type TaskUpdate = Partial<TaskInsert>;
@@ -492,313 +489,35 @@ class LocalMockDB {
 
 export const mockDB = new LocalMockDB();
 
-// Mock query builder to support supabase.from(table)... chains safely
-function createMockQueryBuilder(tableName: string) {
-  let action: "select" | "insert" | "update" | "delete" | "upsert" = "select";
-  let payload: any = null;
-  const filters: Array<{ col: string; op: string; val: any }> = [];
-  let sortCol: string | null = null;
-  let sortAscending = true;
-  let isSingle = false;
-
-  const builder: any = {
-    select(columns?: string) {
-      action = "select";
-      return builder;
-    },
-    insert(data: any) {
-      action = "insert";
-      payload = data;
-      return builder;
-    },
-    update(data: any) {
-      action = "update";
-      payload = data;
-      return builder;
-    },
-    delete() {
-      action = "delete";
-      return builder;
-    },
-    upsert(data: any) {
-      action = "upsert";
-      payload = data;
-      return builder;
-    },
-    eq(col: string, val: any) {
-      filters.push({ col, op: "eq", val });
-      return builder;
-    },
-    neq(col: string, val: any) {
-      filters.push({ col, op: "neq", val });
-      return builder;
-    },
-    gte(col: string, val: any) {
-      filters.push({ col, op: "gte", val });
-      return builder;
-    },
-    lte(col: string, val: any) {
-      filters.push({ col, op: "lte", val });
-      return builder;
-    },
-    in(col: string, vals: any[]) {
-      filters.push({ col, op: "in", val: vals });
-      return builder;
-    },
-    order(col: string, options?: { ascending?: boolean }) {
-      sortCol = col;
-      sortAscending = options?.ascending !== false;
-      return builder;
-    },
-    single() {
-      isSingle = true;
-      return builder;
-    },
-    then(onfulfilled?: (value: any) => any, onrejected?: (reason: any) => any) {
-      return executeMockQuery().then(onfulfilled, onrejected);
-    },
-  };
-
-  async function executeMockQuery(): Promise<{ data: any; error: any }> {
-    const now = new Date().toISOString();
-
-    if (tableName === "employees") {
-      let list = [...mockDB.getEmployees()];
-      if (action === "insert") {
-        const item: Employee = {
-          id: payload.id || `emp-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-          created_at: now,
-          updated_at: now,
-          ...payload,
-        };
-        list.push(item);
-        mockDB.setEmployees(list);
-        return { data: isSingle ? item : [item], error: null };
-      }
-      if (action === "update") {
-        const idFilter = filters.find((f) => f.col === "id")?.val;
-        let updatedItem: any = null;
-        list = list.map((emp) => {
-          if (idFilter && emp.id === idFilter) {
-            updatedItem = { ...emp, ...payload, updated_at: now };
-            return updatedItem;
-          }
-          return emp;
-        });
-        mockDB.setEmployees(list);
-        return { data: isSingle ? updatedItem : [updatedItem], error: null };
-      }
-      if (action === "upsert") {
-        const id = payload.id || `emp-${Date.now()}`;
-        const existingIdx = list.findIndex((e) => e.id === id);
-        const item = { ...(existingIdx >= 0 ? list[existingIdx] : {}), ...payload, id, updated_at: now };
-        if (existingIdx >= 0) list[existingIdx] = item;
-        else { item.created_at = now; list.push(item); }
-        mockDB.setEmployees(list);
-        return { data: isSingle ? item : [item], error: null };
-      }
-      if (action === "delete") {
-        const idFilter = filters.find((f) => f.col === "id")?.val;
-        list = list.filter((e) => e.id !== idFilter);
-        mockDB.setEmployees(list);
-        return { data: null, error: null };
-      }
-
-      // Select & filters
-      for (const f of filters) {
-        if (f.op === "eq") list = list.filter((i: any) => i[f.col] === f.val);
-      }
-      if (sortCol) {
-        list.sort((a: any, b: any) =>
-          sortAscending
-            ? String(a[sortCol!] || "").localeCompare(String(b[sortCol!] || ""))
-            : String(b[sortCol!] || "").localeCompare(String(a[sortCol!] || ""))
-        );
-      }
-      return { data: isSingle ? list[0] || null : list, error: null };
-    }
-
-    if (tableName === "workload_projects") {
-      let list = [...mockDB.getProjects()];
-      if (action === "insert") {
-        const item: Project = {
-          id: payload.id || `proj-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-          created_at: now,
-          updated_at: now,
-          ...payload,
-        };
-        list.push(item);
-        mockDB.setProjects(list);
-        return { data: isSingle ? item : [item], error: null };
-      }
-      if (action === "update") {
-        const idFilter = filters.find((f) => f.col === "id")?.val;
-        let updatedItem: any = null;
-        list = list.map((proj) => {
-          if (idFilter && proj.id === idFilter) {
-            updatedItem = { ...proj, ...payload, updated_at: now };
-            return updatedItem;
-          }
-          return proj;
-        });
-        mockDB.setProjects(list);
-        return { data: isSingle ? updatedItem : [updatedItem], error: null };
-      }
-      if (action === "upsert") {
-        const id = payload.id || `proj-${Date.now()}`;
-        const existingIdx = list.findIndex((p) => p.id === id);
-        const item = { ...(existingIdx >= 0 ? list[existingIdx] : {}), ...payload, id, updated_at: now };
-        if (existingIdx >= 0) list[existingIdx] = item;
-        else { item.created_at = now; list.push(item); }
-        mockDB.setProjects(list);
-        return { data: isSingle ? item : [item], error: null };
-      }
-      if (action === "delete") {
-        const idFilter = filters.find((f) => f.col === "id")?.val;
-        list = list.filter((p) => p.id !== idFilter);
-        mockDB.setProjects(list);
-        return { data: null, error: null };
-      }
-
-      for (const f of filters) {
-        if (f.op === "eq") list = list.filter((i: any) => i[f.col] === f.val);
-      }
-      if (sortCol) {
-        list.sort((a: any, b: any) =>
-          sortAscending
-            ? String(a[sortCol!] || "").localeCompare(String(b[sortCol!] || ""))
-            : String(b[sortCol!] || "").localeCompare(String(a[sortCol!] || ""))
-        );
-      }
-      return { data: isSingle ? list[0] || null : list, error: null };
-    }
-
-    if (tableName === "workload_tasks") {
-      let list = [...mockDB.getTasks()];
-      if (action === "insert") {
-        const item: Task = {
-          id: payload.id || `task-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-          created_at: now,
-          updated_at: now,
-          ...payload,
-        };
-        list.push(item);
-        mockDB.setTasks(list);
-        const fresh = mockDB.getTasks().find((t) => t.id === item.id) || item;
-        return { data: isSingle ? fresh : [fresh], error: null };
-      }
-      if (action === "update") {
-        const idFilter = filters.find((f) => f.col === "id")?.val;
-        let updatedItem: any = null;
-        list = list.map((task) => {
-          if (idFilter && task.id === idFilter) {
-            updatedItem = { ...task, ...payload, updated_at: now };
-            return updatedItem;
-          }
-          return task;
-        });
-        mockDB.setTasks(list);
-        const fresh = mockDB.getTasks().find((t) => t.id === idFilter) || updatedItem;
-        return { data: isSingle ? fresh : [fresh], error: null };
-      }
-      if (action === "upsert") {
-        const id = payload.id || `task-${Date.now()}`;
-        const existingIdx = list.findIndex((t) => t.id === id);
-        const item = { ...(existingIdx >= 0 ? list[existingIdx] : {}), ...payload, id, updated_at: now };
-        if (existingIdx >= 0) list[existingIdx] = item;
-        else { item.created_at = now; list.push(item); }
-        mockDB.setTasks(list);
-        const fresh = mockDB.getTasks().find((t) => t.id === id) || item;
-        return { data: isSingle ? fresh : [fresh], error: null };
-      }
-      if (action === "delete") {
-        const idFilter = filters.find((f) => f.col === "id")?.val;
-        list = list.filter((t) => t.id !== idFilter);
-        mockDB.setTasks(list);
-        return { data: null, error: null };
-      }
-
-      for (const f of filters) {
-        if (f.op === "eq") list = list.filter((i: any) => i[f.col] === f.val);
-      }
-      if (sortCol) {
-        list.sort((a: any, b: any) =>
-          sortAscending
-            ? String(a[sortCol!] || "").localeCompare(String(b[sortCol!] || ""))
-            : String(b[sortCol!] || "").localeCompare(String(a[sortCol!] || ""))
-        );
-      }
-      return { data: isSingle ? list[0] || null : list, error: null };
-    }
-
-    if (tableName === "profiles") {
-      const idFilter = filters.find((f) => f.col === "id")?.val || "default-user";
-      if (action === "insert" || action === "upsert" || action === "update") {
-        const saved = mockDB.saveProfile(payload.id || idFilter, payload);
-        return { data: isSingle ? saved : [saved], error: null };
-      }
-      const profile = mockDB.getProfile(idFilter);
-      return { data: isSingle ? profile : [profile], error: null };
-    }
-
-    return { data: isSingle ? null : [], error: null };
-  }
-
-  return builder;
-}
-
-// Resilient Supabase compatibility layer backed by Firestore & LocalMockDB
-export const supabase: any = {
-  auth: {
-    async getUser() {
-      const fbUser = auth.currentUser;
-      if (fbUser) {
-        return {
-          data: {
-            user: {
-              id: fbUser.uid,
-              email: fbUser.email,
-              user_metadata: { full_name: fbUser.displayName || "Usuário" },
-            },
-          },
-          error: null,
-        };
-      }
-      return {
-        data: {
-          user: {
-            id: "usr-demo-1",
-            email: "demo@cronopulse.io",
-            user_metadata: { full_name: "Alex Morgan" },
-          },
-        },
-        error: null,
-      };
-    },
-    onAuthStateChange(callback: any) {
-      return { data: { subscription: { unsubscribe: () => {} } } };
-    },
-  },
-  from(tableName: string) {
-    return createMockQueryBuilder(tableName);
-  },
-};
-
 // Helper functions for CRUD operations with Firebase Firestore as primary storage
 export const employeeService = {
   async getAll(): Promise<Employee[]> {
     try {
       const remote = await firestoreService.getEmployees();
+      const isMockCleared = localStorage.getItem("crono_pulse_mock_cleared") === "true";
+      const local = mockDB.getEmployees();
+
       if (remote && remote.length > 0) {
-        mockDB.setEmployees(remote);
-        return remote;
+        const remoteIds = new Set(remote.map((r) => r.id));
+        const extraLocal = local.filter(
+          (l) => !remoteIds.has(l.id) && (!isMockCleared || !["emp-1", "emp-2", "emp-3", "emp-4"].includes(l.id))
+        );
+        const merged = [...remote, ...extraLocal].map((e) => ({
+          ...e,
+          status: e.status || "ativo",
+        }));
+        mockDB.setEmployees(merged);
+        return merged;
       } else {
-        if (localStorage.getItem("crono_pulse_mock_cleared") === "true") {
-          mockDB.setEmployees([]);
-          return [];
+        if (isMockCleared) {
+          const nonMock = local
+            .filter((l) => !["emp-1", "emp-2", "emp-3", "emp-4"].includes(l.id))
+            .map((e) => ({ ...e, status: e.status || "ativo" }));
+          mockDB.setEmployees(nonMock);
+          return nonMock;
         }
         // Seed initial employees to Firestore
-        const initial = mockDB.getEmployees();
+        const initial = mockDB.getEmployees().map((e) => ({ ...e, status: e.status || "ativo" }));
         for (const emp of initial) {
           firestoreService.saveEmployee(emp).catch(() => {});
         }
@@ -807,20 +526,31 @@ export const employeeService = {
     } catch (err) {
       console.warn("[Employee Service] Falling back to local data:", err);
     }
-    return mockDB.getEmployees();
+    return mockDB.getEmployees().map((e) => ({ ...e, status: e.status || "ativo" }));
   },
 
-  async create(employee: EmployeeInsert): Promise<Employee> {
+  async create(employee: EmployeeInsert & { id?: string }): Promise<Employee> {
     const employees = mockDB.getEmployees();
     const now = new Date().toISOString();
     const newEmp: Employee = {
-      id: `emp-${Date.now()}`,
+      id: employee.id || `emp-${Date.now()}`,
       created_at: now,
       updated_at: now,
+      status: employee.status || "ativo",
       ...employee,
     };
-    mockDB.setEmployees([...employees, newEmp]);
-    firestoreService.saveEmployee(newEmp).catch(console.warn);
+    const existingIdx = employees.findIndex(
+      (e) => (employee.email && e.email && e.email.toLowerCase() === employee.email.toLowerCase()) || e.id === newEmp.id
+    );
+    let updatedList: Employee[];
+    if (existingIdx >= 0) {
+      updatedList = [...employees];
+      updatedList[existingIdx] = { ...updatedList[existingIdx], ...newEmp, status: newEmp.status || "ativo" };
+    } else {
+      updatedList = [...employees, newEmp];
+    }
+    mockDB.setEmployees(updatedList);
+    await firestoreService.saveEmployee(newEmp).catch(console.warn);
     return newEmp;
   },
 
@@ -830,14 +560,14 @@ export const employeeService = {
     let updatedEmp: Employee | null = null;
     const updatedList = employees.map((emp) => {
       if (emp.id === id) {
-        updatedEmp = { ...emp, ...employee, updated_at: now };
+        updatedEmp = { ...emp, ...employee, updated_at: now, status: employee.status || emp.status || "ativo" };
         return updatedEmp;
       }
       return emp;
     });
     mockDB.setEmployees(updatedList);
     if (updatedEmp) {
-      firestoreService.saveEmployee(updatedEmp).catch(console.warn);
+      await firestoreService.saveEmployee(updatedEmp).catch(console.warn);
     }
     return (
       updatedEmp || {
@@ -845,6 +575,7 @@ export const employeeService = {
         name: employee.name || "",
         role: employee.role || "",
         weekly_hours: employee.weekly_hours || 40,
+        status: employee.status || "ativo",
         skills: [],
         dias_de_trabalho: null,
         created_at: now,
@@ -856,7 +587,7 @@ export const employeeService = {
   async delete(id: string): Promise<void> {
     const employees = mockDB.getEmployees().filter((e) => e.id !== id);
     mockDB.setEmployees(employees);
-    firestoreService.deleteEmployee(id).catch(console.warn);
+    await firestoreService.deleteEmployee(id).catch(console.warn);
   },
 
   async upsert(employee: EmployeeInsert & { id?: string }): Promise<Employee> {
@@ -885,13 +616,22 @@ export const projectService = {
   async getAll(): Promise<Project[]> {
     try {
       const remote = await firestoreService.getProjects();
+      const isMockCleared = localStorage.getItem("crono_pulse_mock_cleared") === "true";
+      const local = mockDB.getProjects();
+
       if (remote && remote.length > 0) {
-        mockDB.setProjects(remote);
-        return remote;
+        const remoteIds = new Set(remote.map((r) => r.id));
+        const extraLocal = local.filter(
+          (l) => !remoteIds.has(l.id) && (!isMockCleared || !["proj-1", "proj-2", "proj-3"].includes(l.id))
+        );
+        const merged = [...remote, ...extraLocal];
+        mockDB.setProjects(merged);
+        return merged;
       } else {
-        if (localStorage.getItem("crono_pulse_mock_cleared") === "true") {
-          mockDB.setProjects([]);
-          return [];
+        if (isMockCleared) {
+          const nonMock = local.filter((l) => !["proj-1", "proj-2", "proj-3"].includes(l.id));
+          mockDB.setProjects(nonMock);
+          return nonMock;
         }
         // Seed initial projects to Firestore
         const initial = mockDB.getProjects();
@@ -906,11 +646,11 @@ export const projectService = {
     return mockDB.getProjects();
   },
 
-  async create(project: ProjectInsert): Promise<Project> {
+  async create(project: ProjectInsert & { id?: string }): Promise<Project> {
     const projects = mockDB.getProjects();
     const now = new Date().toISOString();
     const newProj: Project = {
-      id: `proj-${Date.now()}`,
+      id: project.id || `proj-${Date.now()}`,
       created_at: now,
       updated_at: now,
       name: project.name,
@@ -919,9 +659,16 @@ export const projectService = {
       end_date: project.end_date || null,
       categoria_estrategica: project.categoria_estrategica || null,
       special_marker: project.special_marker || null,
+      group_id: project.group_id || null,
+      group_name: project.group_name || null,
     };
-    mockDB.setProjects([...projects, newProj]);
-    firestoreService.saveProject(newProj).catch(console.warn);
+    const updatedList = [newProj, ...projects.filter((p) => p.id !== newProj.id)];
+    mockDB.setProjects(updatedList);
+    try {
+      await firestoreService.saveProject(newProj);
+    } catch (err) {
+      console.warn("Could not save project to remote:", err);
+    }
     return newProj;
   },
 
@@ -938,7 +685,11 @@ export const projectService = {
     });
     mockDB.setProjects(updatedList);
     if (updatedProj) {
-      firestoreService.saveProject(updatedProj).catch(console.warn);
+      try {
+        await firestoreService.saveProject(updatedProj);
+      } catch (err) {
+        console.warn("Could not update project remotely:", err);
+      }
     }
     return (
       updatedProj || {
@@ -956,7 +707,11 @@ export const projectService = {
   async delete(id: string): Promise<void> {
     const projects = mockDB.getProjects().filter((p) => p.id !== id);
     mockDB.setProjects(projects);
-    firestoreService.deleteProject(id).catch(console.warn);
+    try {
+      await firestoreService.deleteProject(id);
+    } catch (err) {
+      console.warn("Could not delete project remotely:", err);
+    }
   },
 
   async upsert(project: ProjectInsert & { id?: string }): Promise<Project> {
@@ -985,13 +740,23 @@ export const taskService = {
   async getAll(): Promise<Task[]> {
     try {
       const remote = await firestoreService.getTasks();
+      const isMockCleared = localStorage.getItem("crono_pulse_mock_cleared") === "true";
+      const local = mockDB.getTasks();
+      const mockIds = ["task-1", "task-2", "task-2-1", "task-2-2", "task-3", "task-4", "task-5", "task-6"];
+
       if (remote && remote.length > 0) {
-        mockDB.setTasks(remote);
+        const remoteIds = new Set(remote.map((r) => r.id));
+        const extraLocal = local.filter(
+          (l) => !remoteIds.has(l.id) && (!isMockCleared || !mockIds.includes(l.id))
+        );
+        const merged = [...remote, ...extraLocal];
+        mockDB.setTasks(merged);
         return mockDB.getTasks();
       } else {
-        if (localStorage.getItem("crono_pulse_mock_cleared") === "true") {
-          mockDB.setTasks([]);
-          return [];
+        if (isMockCleared) {
+          const nonMock = local.filter((l) => !mockIds.includes(l.id));
+          mockDB.setTasks(nonMock);
+          return mockDB.getTasks();
         }
         // Seed initial tasks to Firestore
         const initial = mockDB.getTasks();
@@ -1006,11 +771,11 @@ export const taskService = {
     return mockDB.getTasks();
   },
 
-  async create(task: TaskInsert): Promise<Task> {
+  async create(task: TaskInsert & { id?: string }): Promise<Task> {
     const tasks = mockDB.getTasks();
     const now = new Date().toISOString();
     const newTask: Task = {
-      id: `task-${Date.now()}`,
+      id: task.id || `task-${Date.now()}`,
       created_at: now,
       updated_at: now,
       name: task.name,
@@ -1031,10 +796,17 @@ export const taskService = {
       parent_id: task.parent_id || null,
       progress: task.progress ?? 0,
       actual_time: task.actual_time ?? 0,
+      group_id: task.group_id || null,
+      group_name: task.group_name || null,
     };
-    mockDB.setTasks([...tasks, newTask]);
+    const updatedList = [newTask, ...tasks.filter((t) => t.id !== newTask.id)];
+    mockDB.setTasks(updatedList);
     const populated = mockDB.getTasks().find((t) => t.id === newTask.id) || newTask;
-    firestoreService.saveTask(populated).catch(console.warn);
+    try {
+      await firestoreService.saveTask(newTask);
+    } catch (err) {
+      console.warn("Could not save task remotely:", err);
+    }
     return populated;
   },
 
@@ -1042,23 +814,52 @@ export const taskService = {
     const tasks = mockDB.getTasks();
     const now = new Date().toISOString();
     let updatedTask: Task | null = null;
+    let found = false;
     const updatedList = tasks.map((t) => {
       if (t.id === id) {
+        found = true;
         updatedTask = { ...t, ...task, updated_at: now };
         return updatedTask;
       }
       return t;
     });
-    mockDB.setTasks(updatedList);
-    const fresh = mockDB.getTasks().find((t) => t.id === id) || ({} as Task);
-    firestoreService.saveTask(fresh).catch(console.warn);
-    return fresh;
+
+    if (found && updatedTask) {
+      mockDB.setTasks(updatedList);
+      try {
+        await firestoreService.saveTask(updatedTask);
+      } catch (err) {
+        console.warn("Could not update task remotely:", err);
+      }
+      return updatedTask;
+    }
+
+    const fallbackTask: Task = {
+      id,
+      name: task.name || "Tarefa",
+      start_date: task.start_date || new Date().toISOString().split("T")[0],
+      end_date: task.end_date || new Date().toISOString().split("T")[0],
+      created_at: now,
+      updated_at: now,
+      ...task,
+    };
+    mockDB.setTasks([fallbackTask, ...tasks.filter((t) => t.id !== id)]);
+    try {
+      await firestoreService.saveTask(fallbackTask);
+    } catch (err) {
+      console.warn("Could not save fallback task remotely:", err);
+    }
+    return fallbackTask;
   },
 
   async delete(id: string): Promise<void> {
     const tasks = mockDB.getTasks().filter((t) => t.id !== id);
     mockDB.setTasks(tasks);
-    firestoreService.deleteTask(id).catch(console.warn);
+    try {
+      await firestoreService.deleteTask(id);
+    } catch (err) {
+      console.warn("Could not delete task remotely:", err);
+    }
   },
 
   async upsert(task: TaskInsert & { id?: string }): Promise<Task> {

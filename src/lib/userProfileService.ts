@@ -1,5 +1,8 @@
 import { auth, db, signInWithGoogle, logoutUser } from "./firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { deleteUser } from "firebase/auth";
+import { doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
+import { firestoreService } from "./firestoreService";
+import { workGroupService } from "./workGroupService";
 
 export interface UserProfile {
   id: string;
@@ -115,5 +118,64 @@ export const userProfileService = {
   async logout(): Promise<void> {
     await logoutUser();
     localStorage.removeItem("crono_pulse_active_user");
+  },
+
+  // Limpa todos os dados pessoais do usuário no Firestore e no cache local
+  async purgeAllUserData(): Promise<void> {
+    const fbUser = auth.currentUser;
+    const userId = fbUser?.uid;
+
+    // 1. Purge remote Firestore documents (tasks, projects, employees, time entries, invitations)
+    await firestoreService.purgeAllCollections(userId);
+
+    // 2. Purge work groups
+    await workGroupService.clearAll();
+
+    // 3. Clear local storage items
+    localStorage.setItem("crono_pulse_mock_cleared", "true");
+    localStorage.setItem("teamworkload_mock_cleared", "true");
+    localStorage.setItem("crono_pulse_employees", "[]");
+    localStorage.setItem("crono_pulse_projects", "[]");
+    localStorage.setItem("crono_pulse_tasks", "[]");
+    localStorage.setItem("crono_pulse_time_entries", "[]");
+    localStorage.setItem("crono_pulse_work_groups", "[]");
+    localStorage.removeItem("crono_pulse_active_timer");
+    localStorage.removeItem("crono_pulse_active_time_entry");
+    localStorage.removeItem("crono_pulse_timeoffs");
+    localStorage.removeItem("teamworkload_timeoffs");
+    localStorage.removeItem("crono_pulse_task_order");
+  },
+
+  // Exclui a conta do usuário no Firebase Auth e remove todos os dados
+  async deleteAccount(): Promise<void> {
+    const fbUser = auth.currentUser;
+
+    // First purge all data and profile in Firestore
+    await this.purgeAllUserData();
+
+    // Delete Firestore profile if exists
+    if (fbUser) {
+      try {
+        await deleteDoc(doc(db, "profiles", fbUser.uid));
+      } catch (e) {
+        console.warn("Error deleting profile document:", e);
+      }
+
+      // Delete Firebase Auth user
+      try {
+        await deleteUser(fbUser);
+      } catch (err: any) {
+        console.warn("DeleteUser Firebase Auth notice:", err);
+        // If reauthentication is needed, still logout and let user know
+        if (err.code === "auth/requires-recent-login") {
+          throw new Error("REQUIRES_RECENT_LOGIN");
+        }
+        throw err;
+      }
+    }
+
+    // Clear session
+    localStorage.clear();
+    await logoutUser().catch(() => {});
   },
 };

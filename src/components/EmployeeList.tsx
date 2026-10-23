@@ -73,6 +73,7 @@ const EmployeeList = () => {
   const [viewMode, setViewMode] = useState<"employees" | "invitations">("employees");
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
+  const [activatingId, setActivatingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -92,7 +93,19 @@ const EmployeeList = () => {
   // Load employees & invitations from database
   useEffect(() => {
     loadEmployees();
-  }, []);
+  }, [viewMode]);
+
+  const handleActivateInvitation = async (inv: CollaboratorInvitation) => {
+    try {
+      setActivatingId(inv.id);
+      await invitationService.acceptInvitation(inv.id);
+      await loadEmployees();
+    } catch (error) {
+      console.error("Error activating invitation:", error);
+    } finally {
+      setActivatingId(null);
+    }
+  };
 
   const loadEmployees = async () => {
     try {
@@ -479,22 +492,60 @@ const EmployeeList = () => {
                       Cadastre diretamente no sistema ou prefira enviar um convite para acesso próprio.
                     </DialogDescription>
                   </DialogHeader>
+
+                  {/* Suggest Invite Banner */}
+                  <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-primary shrink-0" />
+                      <span className="text-muted-foreground">
+                        Prefere que o colaborador acesse com seu próprio login?
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7 shrink-0 text-primary border-primary/30 hover:bg-primary/10"
+                      onClick={() => {
+                        setIsAddDialogOpen(false);
+                        setIsInviteModalOpen(true);
+                      }}
+                    >
+                      Enviar Convite
+                    </Button>
+                  </div>
+
                   <div className="grid gap-4 py-2">
                     <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
                       <Label htmlFor="name" className="text-left sm:text-right text-xs sm:text-sm font-medium">
-                        Nome
+                        Nome *
                       </Label>
                       <Input
                         id="name"
                         name="name"
                         value={formData.name}
                         onChange={handleInputChange}
+                        placeholder="Ex: Carlos Eduardo"
+                        className="sm:col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                      <Label htmlFor="email" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                        E-mail
+                      </Label>
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={handleInputChange}
+                        placeholder="colaborador@empresa.com"
                         className="sm:col-span-3"
                       />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
                       <Label htmlFor="role" className="text-left sm:text-right text-xs sm:text-sm font-medium">
-                        Cargo / Função
+                        Cargo / Função *
                       </Label>
                       <Input
                         id="role"
@@ -571,119 +622,331 @@ const EmployeeList = () => {
           </div>
         </CardHeader>
         <CardContent className="p-0 sm:p-6">
-          <div className="overflow-x-auto">
-            <Table className="min-w-[620px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Cargo</TableHead>
-                  <TableHead>Horas Semanais</TableHead>
-                  <TableHead>Dias de Trabalho</TableHead>
-                  <TableHead>Habilidades</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
+          {viewMode === "employees" ? (
+            <div className="overflow-x-auto">
+              <Table className="min-w-[620px]">
+                <TableHeader>
                   <TableRow>
-                    <TableCell
-                      colSpan={6}
-                      className="text-center py-6 text-muted-foreground"
-                    >
-                      Carregando colaboradores...
-                    </TableCell>
+                    <TableHead>Colaborador</TableHead>
+                    <TableHead>Cargo</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Horas Semanais</TableHead>
+                    <TableHead>Dias de Trabalho</TableHead>
+                    <TableHead>Habilidades</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
-                ) : filteredEmployees.length > 0 ? (
-                  filteredEmployees.map((employee) => (
-                    <TableRow key={employee.id}>
-                      <TableCell className="font-medium">
-                        {employee.name}
-                      </TableCell>
-                      <TableCell>{employee.role}</TableCell>
-                      <TableCell>{employee.weekly_hours}h</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1 max-w-[200px]">
-                          {(employee.dias_de_trabalho || []).map((day) => (
-                            <Badge key={day} variant="outline" className="text-[11px] px-1.5 py-0">
-                              {
-                                daysOfWeek.find((d) => d.id === day)?.label || day
-                              }
-                            </Badge>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1 max-w-[200px]">
-                          {Array.isArray(employee.skills) &&
-                            employee.skills.map((skill, index) => (
-                              <Badge key={index} variant="secondary" className="text-[11px] px-1.5 py-0">
-                                {skill}
-                              </Badge>
-                            ))}
-                          {typeof employee.skills === "string" &&
-                            employee.skills.split(",").map((skill, index) => (
-                              <Badge key={index} variant="secondary" className="text-[11px] px-1.5 py-0">
-                                {skill.trim()}
-                              </Badge>
-                            ))}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openEditDialog(employee)}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent className="w-[calc(100%-2rem)] max-w-md">
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                  Excluir Colaborador
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Tem certeza que deseja excluir {employee.name}?
-                                  Esta ação não pode ser desfeita.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-0">
-                                <AlertDialogCancel className="w-full sm:w-auto">Cancelar</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() =>
-                                    handleDeleteEmployee(employee.id)
-                                  }
-                                  className="bg-destructive text-destructive-foreground w-full sm:w-auto"
-                                >
-                                  Excluir
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={7}
+                        className="text-center py-6 text-muted-foreground"
+                      >
+                        Carregando colaboradores...
                       </TableCell>
                     </TableRow>
-                  ))
-                ) : (
+                  ) : filteredEmployees.length > 0 ? (
+                    filteredEmployees.map((employee) => (
+                      <TableRow key={employee.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-foreground">
+                              {employee.name}
+                            </span>
+                            {(employee as any).email && (
+                              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                <Mail className="w-3 h-3" />
+                                {(employee as any).email}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>{employee.role}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className="text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 gap-1 inline-flex items-center"
+                          >
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                            {employee.status === "inativo" ? "Inativo" : "Ativo"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{employee.weekly_hours}h</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1 max-w-[200px]">
+                            {(employee.dias_de_trabalho || []).map((day) => (
+                              <Badge key={day} variant="outline" className="text-[11px] px-1.5 py-0">
+                                {
+                                  daysOfWeek.find((d) => d.id === day)?.label || day
+                                }
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1 max-w-[200px]">
+                            {Array.isArray(employee.skills) &&
+                              employee.skills.map((skill, index) => (
+                                <Badge key={index} variant="secondary" className="text-[11px] px-1.5 py-0">
+                                  {skill}
+                                </Badge>
+                              ))}
+                            {typeof employee.skills === "string" &&
+                              employee.skills.split(",").map((skill, index) => (
+                                <Badge key={index} variant="secondary" className="text-[11px] px-1.5 py-0">
+                                  {skill.trim()}
+                                </Badge>
+                              ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEditDialog(employee)}
+                              className="h-8 w-8 p-0"
+                              title="Editar colaborador"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Excluir colaborador">
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent className="w-[calc(100%-2rem)] max-w-md">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>
+                                    Excluir Colaborador
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Tem certeza que deseja excluir {employee.name}?
+                                    Esta ação não pode ser desfeita.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-0">
+                                  <AlertDialogCancel className="w-full sm:w-auto">Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() =>
+                                      handleDeleteEmployee(employee.id)
+                                    }
+                                    className="bg-destructive text-destructive-foreground w-full sm:w-auto"
+                                  >
+                                    Excluir
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={7}
+                        className="text-center py-8 text-muted-foreground"
+                      >
+                        <p className="text-sm">Nenhum colaborador encontrado</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Cadastre um novo colaborador ou envie um convite por e-mail.
+                        </p>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table className="min-w-[680px]">
+                <TableHeader>
                   <TableRow>
-                    <TableCell
-                      colSpan={6}
-                      className="text-center py-6 text-muted-foreground"
-                    >
-                      Nenhum colaborador encontrado
-                    </TableCell>
+                    <TableHead>Colaborador Convidado</TableHead>
+                    <TableHead>Cargo & Carga</TableHead>
+                    <TableHead>Grupo de Trabalho</TableHead>
+                    <TableHead>Status do Convite</TableHead>
+                    <TableHead>Convidado Por</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={6}
+                        className="text-center py-6 text-muted-foreground"
+                      >
+                        Carregando convites...
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredInvitations.length > 0 ? (
+                    filteredInvitations.map((inv) => (
+                      <TableRow key={inv.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-xs shrink-0">
+                              {inv.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-semibold text-sm leading-tight text-foreground">
+                                {inv.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Mail className="w-3 h-3 text-muted-foreground/70" />
+                                {inv.email}
+                              </p>
+                            </div>
+                          </div>
+                        </TableCell>
+
+                        <TableCell>
+                          <div>
+                            <span className="font-medium text-xs text-foreground block">
+                              {inv.role}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {inv.weekly_hours}h semanais
+                            </span>
+                          </div>
+                        </TableCell>
+
+                        <TableCell>
+                          {inv.groupName ? (
+                            <Badge
+                              variant="outline"
+                              className="text-[11px] font-semibold text-purple-700 bg-purple-50 dark:bg-purple-950 dark:text-purple-300"
+                            >
+                              <Building2 className="w-3 h-3 mr-1" />
+                              {inv.groupName}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              Geral (Sem Grupo)
+                            </span>
+                          )}
+                        </TableCell>
+
+                        <TableCell>
+                          {inv.status === "pending" && (
+                            <Badge
+                              variant="outline"
+                              className="text-[11px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 gap-1"
+                            >
+                              <Clock className="w-3 h-3" />
+                              Pendente (Aguardando Acesso)
+                            </Badge>
+                          )}
+                          {inv.status === "accepted" && (
+                            <Badge
+                              variant="outline"
+                              className="text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 gap-1"
+                            >
+                              <CheckCircle2 className="w-3 h-3" />
+                              Aceito (Ativo)
+                            </Badge>
+                          )}
+                          {inv.status === "declined" && (
+                            <Badge
+                              variant="outline"
+                              className="text-[11px] font-medium bg-destructive/10 text-destructive border-destructive/30 gap-1"
+                            >
+                              <XCircle className="w-3 h-3" />
+                              Recusado
+                            </Badge>
+                          )}
+                        </TableCell>
+
+                        <TableCell>
+                          <div className="text-xs">
+                            <span className="text-foreground font-medium block">
+                              {inv.invitedBy}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {new Date(inv.invitedAt).toLocaleDateString("pt-BR")}
+                            </span>
+                          </div>
+                        </TableCell>
+
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {inv.status === "pending" && (
+                              <Button
+                                size="sm"
+                                onClick={() => handleActivateInvitation(inv)}
+                                disabled={activatingId === inv.id}
+                                className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs"
+                                title="Aprovar e ativar este colaborador imediatamente"
+                              >
+                                <UserCheck className="w-3.5 h-3.5" />
+                                <span>{activatingId === inv.id ? "Ativando..." : "Ativar Colaborador"}</span>
+                              </Button>
+                            )}
+
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => copyInviteLink(inv)}
+                              className="h-8 text-xs gap-1.5"
+                              title="Copiar link com mensagem para enviar ao colaborador"
+                            >
+                              {copiedInviteId === inv.id ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span className="text-emerald-600 font-semibold">Copiado!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3.5 h-3.5" />
+                                  <span>Copiar Link</span>
+                                </>
+                              )}
+                            </Button>
+
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteInvitation(inv.id)}
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                              title="Cancelar / Excluir convite"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={6}
+                        className="text-center py-10 text-muted-foreground"
+                      >
+                        <Mail className="w-8 h-8 text-muted-foreground/50 mx-auto mb-2" />
+                        <p className="text-sm font-semibold text-foreground">
+                          Nenhum convite encontrado
+                        </p>
+                        <p className="text-xs text-muted-foreground max-w-sm mx-auto mt-1 mb-3">
+                          Você pode enviar convites para que os colaboradores acessem o sistema com seus próprios logins e aceitem automaticamente ao entrar.
+                        </p>
+                        <Button
+                          size="sm"
+                          onClick={() => setIsInviteModalOpen(true)}
+                          className="bg-primary text-xs gap-1.5 font-semibold"
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                          Convidar Primeiro Colaborador
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -706,6 +969,20 @@ const EmployeeList = () => {
                 name="name"
                 value={formData.name}
                 onChange={handleInputChange}
+                className="sm:col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+              <Label htmlFor="edit-email" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                E-mail
+              </Label>
+              <Input
+                id="edit-email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                placeholder="colaborador@empresa.com"
                 className="sm:col-span-3"
               />
             </div>
@@ -782,6 +1059,16 @@ const EmployeeList = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal for inviting new collaborators */}
+      <InviteCollaboratorModal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+        onInviteSent={() => {
+          loadEmployees();
+          setViewMode("invitations");
+        }}
+      />
     </div>
   );
 };

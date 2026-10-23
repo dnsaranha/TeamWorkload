@@ -46,6 +46,8 @@ import {
   Info,
   Table as TableIcon,
   LayoutGrid,
+  Building2,
+  Users,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
@@ -59,6 +61,7 @@ import {
   type Project,
   type Employee,
 } from "@/lib/supabaseClient";
+import { useAuth } from "@/lib/authContext";
 
 type TaskWithRelations = Task & {
   project: Project | null;
@@ -66,6 +69,7 @@ type TaskWithRelations = Task & {
 };
 
 const TaskManagement = () => {
+  const { allGroups, userGroups, isSuperAdmin } = useAuth();
   const [tasks, setTasks] = useState<TaskWithRelations[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -76,6 +80,7 @@ const TaskManagement = () => {
   const [filters, setFilters] = useState({
     project: "all",
     employee: "all",
+    group: "all",
     status: "all",
   });
   const [searchTerm, setSearchTerm] = useState("");
@@ -98,6 +103,7 @@ const TaskManagement = () => {
     start_date: new Date().toISOString().split("T")[0],
     end_date: new Date().toISOString().split("T")[0],
     project_id: "none",
+    group_id: "none",
     assigned_employee_id: "none",
     status: "pending" as "pending" | "in_progress" | "completed",
     completion_date: "",
@@ -190,28 +196,69 @@ const TaskManagement = () => {
 
   const loadTasks = loadData;
 
+  // Auto-default newTask group when userGroups is loaded
+  useEffect(() => {
+    if (userGroups.length > 0 && newTask.group_id === "none") {
+      setNewTask((prev) => ({
+        ...prev,
+        group_id: userGroups[0].id,
+      }));
+    }
+  }, [userGroups]);
+
   const handleCreateTask = async () => {
     try {
+      const selectedGroup = allGroups.find((g) => g.id === newTask.group_id);
+
+      const defaultDays =
+        newTask.repeat_days && newTask.repeat_days.length > 0
+          ? newTask.repeat_days
+          : ["monday", "tuesday", "wednesday", "thursday", "friday"];
+      const defaultHours =
+        newTask.hours_per_day && newTask.hours_per_day > 0
+          ? newTask.hours_per_day
+          : 2;
+
+      let finalEndDate = newTask.end_date;
+      if (newTask.repeats_weekly) {
+        const s = new Date(
+          newTask.start_date || new Date().toISOString().split("T")[0],
+        );
+        const e = new Date(newTask.end_date || newTask.start_date);
+        if (e <= s) {
+          const future = new Date(s);
+          future.setDate(future.getDate() + 90);
+          finalEndDate = future.toISOString().split("T")[0];
+        }
+      }
+
+      const calcEstimated = newTask.repeats_weekly
+        ? defaultDays.length * defaultHours
+        : newTask.estimated_time || 8;
+
       const taskData = {
         name: newTask.name,
         description: newTask.description,
-        estimated_time: newTask.estimated_time,
+        estimated_time: calcEstimated,
         start_date: newTask.start_date,
-        end_date: newTask.end_date,
+        end_date: finalEndDate,
         project_id:
           newTask.project_id === "none" ? null : newTask.project_id || null,
         assigned_employee_id:
           newTask.assigned_employee_id === "none"
             ? null
             : newTask.assigned_employee_id || null,
+        group_id:
+          newTask.group_id === "none" ? null : newTask.group_id || null,
+        group_name: selectedGroup ? selectedGroup.name : null,
         status: newTask.status,
         completion_date:
           newTask.status === "completed" && newTask.completion_date
             ? newTask.completion_date
             : null,
-        repeats_weekly: newTask.repeats_weekly,
-        repeat_days: newTask.repeats_weekly ? newTask.repeat_days : null,
-        hours_per_day: newTask.repeats_weekly ? newTask.hours_per_day : null,
+        repeats_weekly: !!newTask.repeats_weekly,
+        repeat_days: newTask.repeats_weekly ? defaultDays : null,
+        hours_per_day: newTask.repeats_weekly ? defaultHours : null,
         special_marker:
           newTask.special_marker === "none" ? null : newTask.special_marker,
       };
@@ -226,6 +273,7 @@ const TaskManagement = () => {
         start_date: new Date().toISOString().split("T")[0],
         end_date: new Date().toISOString().split("T")[0],
         project_id: "none",
+        group_id: userGroups[0]?.id || "none",
         assigned_employee_id: "none",
         status: "pending" as "pending" | "in_progress" | "completed",
         completion_date: "",
@@ -244,30 +292,61 @@ const TaskManagement = () => {
     if (!currentTask) return;
 
     try {
+      const selectedGroup = allGroups.find(
+        (g) => g.id === currentTask.group_id,
+      );
+
+      const defaultDays =
+        currentTask.repeat_days && currentTask.repeat_days.length > 0
+          ? currentTask.repeat_days
+          : ["monday", "tuesday", "wednesday", "thursday", "friday"];
+      const defaultHours =
+        currentTask.hours_per_day && currentTask.hours_per_day > 0
+          ? currentTask.hours_per_day
+          : 2;
+
+      let finalEndDate = currentTask.end_date;
+      if (currentTask.repeats_weekly) {
+        const s = new Date(currentTask.start_date);
+        const e = new Date(currentTask.end_date || currentTask.start_date);
+        if (e <= s) {
+          const future = new Date(s);
+          future.setDate(future.getDate() + 90);
+          finalEndDate = future.toISOString().split("T")[0];
+        }
+      }
+
+      const calcEstimated = currentTask.repeats_weekly
+        ? defaultDays.length * defaultHours
+        : currentTask.estimated_time || 8;
+
       const updateData: any = {
         name: currentTask.name,
         description: currentTask.description || null,
-        estimated_time: currentTask.estimated_time,
+        estimated_time: calcEstimated,
         start_date: currentTask.start_date,
-        end_date: currentTask.end_date,
+        end_date: finalEndDate,
         project_id:
           currentTask.project_id === "none" ? null : currentTask.project_id,
         assigned_employee_id:
           currentTask.assigned_employee_id === "none"
             ? null
             : currentTask.assigned_employee_id,
+        group_id:
+          currentTask.group_id === "none" ? null : currentTask.group_id || null,
+        group_name: selectedGroup
+          ? selectedGroup.name
+          : currentTask.group_id === "none"
+            ? null
+            : currentTask.group_name || null,
         status: currentTask.status,
         completion_date:
           currentTask.status === "completed" && currentTask.completion_date
             ? currentTask.completion_date
             : null,
-        repeats_weekly: currentTask.repeats_weekly || false,
-        repeat_days: currentTask.repeats_weekly
-          ? currentTask.repeat_days
-          : null,
-        hours_per_day: currentTask.repeats_weekly
-          ? currentTask.hours_per_day
-          : null,
+        repeats_weekly: !!currentTask.repeats_weekly,
+        repeat_days: currentTask.repeats_weekly ? defaultDays : null,
+        hours_per_day: currentTask.repeats_weekly ? defaultHours : null,
         special_marker:
           currentTask.special_marker === "none"
             ? null
@@ -411,7 +490,10 @@ const TaskManagement = () => {
   };
 
   const openEditDialog = (task: TaskWithRelations) => {
-    setCurrentTask(task);
+    setCurrentTask({
+      ...task,
+      group_id: task.group_id || "none",
+    });
     setIsEditTaskDialogOpen(true);
   };
 
@@ -458,6 +540,10 @@ const TaskManagement = () => {
     const employeeMatch =
       filters.employee === "all" ||
       task.assigned_employee_id === filters.employee;
+    const groupMatch =
+      filters.group === "all" ||
+      (filters.group === "none" && !task.group_id) ||
+      task.group_id === filters.group;
     const statusMatch =
       filters.status === "all" ||
       (filters.status === "assigned" && task.assigned_employee_id) ||
@@ -478,12 +564,13 @@ const TaskManagement = () => {
             ${task.name}
             ${task.description || ""}
             ${task.project?.name || ""}
+            ${task.group_name || ""}
             ${task.assigned_employee?.name || ""}
           `.toLowerCase();
           return taskText.includes(word);
         });
 
-    return projectMatch && employeeMatch && statusMatch && searchMatch;
+    return projectMatch && employeeMatch && groupMatch && statusMatch && searchMatch;
   });
 
   // Export to Excel
@@ -616,6 +703,7 @@ const TaskManagement = () => {
     setFilters({
       project: "all",
       employee: "all",
+      group: "all",
       status: "all",
     });
   };
@@ -1226,9 +1314,18 @@ const TaskManagement = () => {
                       Project
                     </Label>
                     <Select
-                      onValueChange={(value) =>
-                        setNewTask({ ...newTask, project_id: value })
-                      }
+                      onValueChange={(value) => {
+                        const proj = projects.find((p) => p.id === value);
+                        setNewTask((prev) => ({
+                          ...prev,
+                          project_id: value,
+                          group_id:
+                            proj?.group_id ||
+                            (prev.group_id !== "none"
+                              ? prev.group_id
+                              : userGroups[0]?.id || "none"),
+                        }));
+                      }}
                       value={newTask.project_id}
                     >
                       <SelectTrigger className="col-span-3">
@@ -1243,6 +1340,42 @@ const TaskManagement = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="task-group" className="text-right">
+                      Grupo / Equipe
+                    </Label>
+                    <div className="col-span-3 space-y-1">
+                      <Select
+                        onValueChange={(value) =>
+                          setNewTask({ ...newTask, group_id: value })
+                        }
+                        value={newTask.group_id}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Selecione o grupo responsável" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Geral (Sem Grupo Específico)</SelectItem>
+                          {allGroups.map((group) => (
+                            <SelectItem key={group.id} value={group.id}>
+                              {group.name} (Nível {group.level})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {userGroups.length > 0 && newTask.group_id === userGroups[0].id && (
+                        <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                          <Building2 className="w-3 h-3 text-primary shrink-0" />
+                          Associado automaticamente ao seu grupo ({userGroups[0].name}).
+                        </p>
+                      )}
+                      {(isSuperAdmin || userGroups.some((g) => g.level <= 2)) && (
+                        <p className="text-[10px] text-muted-foreground">
+                          Como gestor de nível superior, você pode direcionar para qualquer equipe.
+                        </p>
+                      )}
+                    </div>
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="assigned_employee" className="text-right">
@@ -1342,18 +1475,42 @@ const TaskManagement = () => {
                         id="repeats_weekly"
                         type="checkbox"
                         checked={newTask.repeats_weekly}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const isChecked = e.target.checked;
+                          const defaultDays =
+                            newTask.repeat_days && newTask.repeat_days.length > 0
+                              ? newTask.repeat_days
+                              : ["monday", "tuesday", "wednesday", "thursday", "friday"];
+                          const defaultHours =
+                            newTask.hours_per_day && newTask.hours_per_day > 0
+                              ? newTask.hours_per_day
+                              : 2;
+
+                          let targetEndDate = newTask.end_date;
+                          const s = new Date(
+                            newTask.start_date ||
+                              new Date().toISOString().split("T")[0],
+                          );
+                          const curEnd = new Date(
+                            newTask.end_date || newTask.start_date,
+                          );
+                          if (curEnd <= s) {
+                            const future = new Date(s);
+                            future.setDate(future.getDate() + 90);
+                            targetEndDate = future.toISOString().split("T")[0];
+                          }
+
                           setNewTask({
                             ...newTask,
-                            repeats_weekly: e.target.checked,
-                            repeat_days: e.target.checked
-                              ? newTask.repeat_days
-                              : [],
-                            hours_per_day: e.target.checked
-                              ? newTask.hours_per_day
-                              : 0,
-                          })
-                        }
+                            repeats_weekly: isChecked,
+                            repeat_days: isChecked ? defaultDays : [],
+                            hours_per_day: isChecked ? defaultHours : 0,
+                            end_date: isChecked ? targetEndDate : newTask.end_date,
+                            estimated_time: isChecked
+                              ? defaultDays.length * defaultHours
+                              : newTask.estimated_time,
+                          });
+                        }}
                         className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
                       />
                       <Label htmlFor="repeats_weekly" className="text-sm">
@@ -1519,6 +1676,29 @@ const TaskManagement = () => {
               </div>
 
               <div>
+                <Label htmlFor="group-filter">Grupo / Equipe</Label>
+                <Select
+                  value={filters.group}
+                  onValueChange={(value) =>
+                    setFilters({ ...filters, group: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos os Grupos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os Grupos</SelectItem>
+                    <SelectItem value="none">Geral (Sem Grupo)</SelectItem>
+                    {allGroups.map((g) => (
+                      <SelectItem key={g.id} value={g.id}>
+                        {g.name} (Nível {g.level})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
                 <Label htmlFor="status-filter">Status</Label>
                 <Select
                   value={filters.status}
@@ -1563,6 +1743,19 @@ const TaskManagement = () => {
                   />
                 </Badge>
               )}
+              {filters.group !== "all" && (
+                <Badge variant="secondary" className="flex items-center gap-1">
+                  Grupo:{" "}
+                  {filters.group === "none"
+                    ? "Geral"
+                    : allGroups.find((g) => g.id === filters.group)?.name}
+                  <X
+                    size={12}
+                    className="cursor-pointer"
+                    onClick={() => setFilters({ ...filters, group: "all" })}
+                  />
+                </Badge>
+              )}
               {filters.employee !== "all" && (
                 <Badge variant="secondary" className="flex items-center gap-1">
                   Employee:{" "}
@@ -1604,6 +1797,7 @@ const TaskManagement = () => {
                 <TableRow>
                   <TableHead>Tarefa</TableHead>
                   <TableHead>Projeto</TableHead>
+                  <TableHead>Grupo</TableHead>
                   <TableHead>Horas Estimadas</TableHead>
                   <TableHead>Período</TableHead>
                   <TableHead>Status</TableHead>
@@ -1614,13 +1808,13 @@ const TaskManagement = () => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-6">
+                    <TableCell colSpan={8} className="text-center py-6">
                       Carregando tarefas...
                     </TableCell>
                   </TableRow>
                 ) : filteredTasks.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-6 text-muted-foreground">
                       {tasks.length === 0
                         ? "Nenhuma tarefa encontrada"
                         : "Nenhuma tarefa corresponde aos filtros"}
@@ -1631,6 +1825,19 @@ const TaskManagement = () => {
                     <TableRow key={task.id}>
                       <TableCell className="font-medium">{task.name}</TableCell>
                       <TableCell className="max-w-[150px] truncate">{task.project?.name || "-"}</TableCell>
+                      <TableCell>
+                        {task.group_name ? (
+                          <Badge
+                            variant="outline"
+                            className="text-[11px] font-semibold text-purple-700 bg-purple-50 dark:bg-purple-950 dark:text-purple-300 border-purple-200 dark:border-purple-800 gap-1 inline-flex items-center"
+                          >
+                            <Building2 className="w-3 h-3" />
+                            {task.group_name}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Geral</span>
+                        )}
+                      </TableCell>
                       <TableCell>{task.estimated_time}h</TableCell>
                       <TableCell className="whitespace-nowrap">
                         {format(new Date(task.start_date + "T00:00:00"), "dd/MM")}{" "}
@@ -1878,6 +2085,36 @@ const TaskManagement = () => {
                       </Select>
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="edit-group" className="text-right">
+                        Grupo / Equipe
+                      </Label>
+                      <div className="col-span-3 space-y-1">
+                        <Select
+                          onValueChange={(value) =>
+                            setCurrentTask({ ...currentTask, group_id: value })
+                          }
+                          value={currentTask.group_id || "none"}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Selecione o grupo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Geral (Sem Grupo Específico)</SelectItem>
+                            {allGroups.map((group) => (
+                              <SelectItem key={group.id} value={group.id}>
+                                {group.name} (Nível {group.level})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {(isSuperAdmin || userGroups.some((g) => g.level <= 2)) && (
+                          <p className="text-[10px] text-muted-foreground">
+                            Você pode re-direcionar a tarefa para outra equipe responsável.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="edit-status" className="text-right">
                         Status
                       </Label>
@@ -1966,18 +2203,36 @@ const TaskManagement = () => {
                           id="edit-repeats_weekly"
                           type="checkbox"
                           checked={currentTask.repeats_weekly || false}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const isChecked = e.target.checked;
+                            const currentDays =
+                              currentTask.repeat_days && currentTask.repeat_days.length > 0
+                                ? currentTask.repeat_days
+                                : ["monday", "tuesday", "wednesday", "thursday", "friday"];
+                            const currentHours =
+                              currentTask.hours_per_day && currentTask.hours_per_day > 0
+                                ? currentTask.hours_per_day
+                                : 2;
+
+                            let targetEndDate = currentTask.end_date;
+                            if (currentTask.start_date) {
+                              const s = new Date(currentTask.start_date);
+                              const curEnd = new Date(currentTask.end_date || currentTask.start_date);
+                              if (curEnd <= s) {
+                                const future = new Date(s);
+                                future.setDate(future.getDate() + 90);
+                                targetEndDate = future.toISOString().split("T")[0];
+                              }
+                            }
+
                             setCurrentTask({
                               ...currentTask,
-                              repeats_weekly: e.target.checked,
-                              repeat_days: e.target.checked
-                                ? currentTask.repeat_days || []
-                                : null,
-                              hours_per_day: e.target.checked
-                                ? currentTask.hours_per_day || 0
-                                : null,
-                            })
-                          }
+                              repeats_weekly: isChecked,
+                              repeat_days: isChecked ? currentDays : null,
+                              hours_per_day: isChecked ? currentHours : null,
+                              end_date: isChecked ? targetEndDate : currentTask.end_date,
+                            });
+                          }}
                           className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
                         />
                         <Label

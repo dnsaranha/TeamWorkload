@@ -9,6 +9,7 @@ import {
 import { db, OperationType, handleFirestoreError } from "./firebase";
 import { employeeService, Employee } from "./supabaseClient";
 import { workGroupService } from "./workGroupService";
+import { sanitizeForFirestore } from "./firestoreService";
 
 export interface CollaboratorInvitation {
   id: string;
@@ -78,7 +79,7 @@ export const invitationService = {
 
     try {
       const docRef = doc(db, INVITATIONS_COL, id);
-      await setDoc(docRef, newInv);
+      await setDoc(docRef, sanitizeForFirestore(newInv));
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `${INVITATIONS_COL}/${id}`);
     }
@@ -107,21 +108,23 @@ export const invitationService = {
     target.status = "accepted";
     target.acceptedAt = now;
 
-    // 1. Ensure employee record exists
+    // 1. Ensure employee record exists with status 'ativo'
     const employees = await employeeService.getAll();
     let emp = employees.find(
       (e) =>
-        (e as any).email?.toLowerCase() === target.email.toLowerCase() ||
+        (e.email && e.email.toLowerCase() === target.email.toLowerCase()) ||
         e.name.toLowerCase() === target.name.toLowerCase()
     );
 
     if (!emp) {
       emp = await employeeService.create({
+        id: userId ? userId : undefined,
         name: target.name,
         role: target.role,
         email: target.email,
+        status: "ativo",
         weekly_hours: target.weekly_hours || 40,
-        skills: ["Trabalho em Equipe"],
+        skills: ["Colaborador Ativo"],
         dias_de_trabalho: [
           "monday",
           "tuesday",
@@ -130,9 +133,12 @@ export const invitationService = {
           "friday",
         ],
       });
-    } else if (!(emp as any).email) {
+    } else {
       emp = await employeeService.update(emp.id, {
         email: target.email,
+        status: "ativo",
+        role: target.role || emp.role,
+        weekly_hours: target.weekly_hours || emp.weekly_hours || 40,
       });
     }
 
@@ -162,7 +168,7 @@ export const invitationService = {
 
     try {
       const docRef = doc(db, INVITATIONS_COL, id);
-      await setDoc(docRef, target, { merge: true });
+      await setDoc(docRef, sanitizeForFirestore(target), { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `${INVITATIONS_COL}/${id}`);
     }
@@ -181,7 +187,7 @@ export const invitationService = {
 
     try {
       const docRef = doc(db, INVITATIONS_COL, id);
-      await setDoc(docRef, target, { merge: true });
+      await setDoc(docRef, sanitizeForFirestore(target), { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `${INVITATIONS_COL}/${id}`);
     }

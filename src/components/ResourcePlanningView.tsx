@@ -19,6 +19,8 @@ import {
   BarChart2,
   TrendingUp,
   AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
   Sparkles,
   X,
   Palmtree,
@@ -95,6 +97,8 @@ import {
   employeeService,
   projectService,
 } from "@/lib/supabaseClient";
+import { mockDataManager } from "@/lib/mockDataManager";
+import { useToast } from "@/components/ui/use-toast";
 
 interface TimeOffEntry {
   id: string;
@@ -107,29 +111,24 @@ interface TimeOffEntry {
 }
 
 export const ResourcePlanningView: React.FC = () => {
+  const { toast } = useToast();
+
   // Data state
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Time off state (with persistent fallback in localStorage)
+  // Time off state (with persistent fallback in localStorage, respecting mock clearance)
   const [timeOffs, setTimeOffs] = useState<TimeOffEntry[]>(() => {
     try {
-      const saved = localStorage.getItem("crono_pulse_timeoffs");
+      if (mockDataManager.isMockCleared()) {
+        return [];
+      }
+      const saved = localStorage.getItem("crono_pulse_timeoffs") || localStorage.getItem("teamworkload_timeoffs");
       if (saved) return JSON.parse(saved);
     } catch {}
-    return [
-      {
-        id: "to-1",
-        employee_id: "emp-1",
-        employee_name: "Denis Aranha",
-        type: "vacation",
-        description: "Férias Programadas",
-        start_date: format(addDays(new Date(), 12), "yyyy-MM-dd"),
-        end_date: format(addDays(new Date(), 16), "yyyy-MM-dd"),
-      },
-    ];
+    return [];
   });
 
   // Navigation & View state
@@ -155,6 +154,10 @@ export const ResourcePlanningView: React.FC = () => {
   const [isNewTimeOffOpen, setIsNewTimeOffOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
+  // Drag and Drop allocation state
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [dragOverCell, setDragOverCell] = useState<{ employeeId: string; dateStr: string } | null>(null);
+
   // Form states
   const [formTaskName, setFormTaskName] = useState("");
   const [formProjectId, setFormProjectId] = useState("");
@@ -164,6 +167,14 @@ export const ResourcePlanningView: React.FC = () => {
   const [formHoursPerDay, setFormHoursPerDay] = useState(1);
   const [formEstimatedHours, setFormEstimatedHours] = useState(8);
   const [formIsTentative, setFormIsTentative] = useState(false);
+  const [formRepeatsWeekly, setFormRepeatsWeekly] = useState(false);
+  const [formRepeatDays, setFormRepeatDays] = useState<string[]>([
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+  ]);
   const [formDescription, setFormDescription] = useState("");
 
   // Person form
@@ -192,161 +203,21 @@ export const ResourcePlanningView: React.FC = () => {
         taskService.getAll(),
       ]);
 
-      // If no employee named Denis Aranha exists, let's ensure Denis Aranha is included to match screenshot!
-      let employeesList = empData;
-      if (!employeesList.some((e) => e.name.toLowerCase().includes("denis aranha"))) {
-        const denisEmp: Employee = {
-          id: "emp-denis",
-          name: "Denis Aranha",
-          role: "Especialista",
-          weekly_hours: 40,
-          skills: ["Planejamento", "Gestão de Projetos", "Liderança"],
-          dias_de_trabalho: ["monday", "tuesday", "wednesday", "thursday", "friday"],
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        employeesList = [denisEmp, ...employeesList];
-      }
+      setEmployees(empData);
+      setProjects(projData);
+      setTasks(taskData);
 
-      // If Denis has no tasks, seed matching demo tasks
-      const denis = employeesList.find((e) => e.name.toLowerCase().includes("denis aranha"));
-      let currentTasks = taskData;
-      let currentProjects = projData;
-
-      if (denis && !currentTasks.some((t) => t.assigned_employee_id === denis.id)) {
-        const todayStr = format(new Date(), "yyyy-MM-dd");
-        const nextMonthStr = format(addDays(new Date(), 28), "yyyy-MM-dd");
-        
-        // Ensure projects exist
-        const defaultProjects = [
-          { id: "proj-ctrl", name: "Controle" },
-          { id: "proj-int", name: "Interno" },
-          { id: "proj-lbw", name: "LBW7" },
-          { id: "proj-ped", name: "PED" },
-        ];
-
-        defaultProjects.forEach((dp) => {
-          if (!currentProjects.some((p) => p.name.toLowerCase() === dp.name.toLowerCase())) {
-            currentProjects = [
-              ...currentProjects,
-              {
-                id: dp.id,
-                name: dp.name,
-                description: "Categoria de Projeto",
-                start_date: todayStr,
-                end_date: nextMonthStr,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              },
-            ];
-          }
-        });
-
-        const projCtrl = currentProjects.find((p) => p.name.toLowerCase() === "controle") || currentProjects[0];
-        const projInt = currentProjects.find((p) => p.name.toLowerCase() === "interno") || currentProjects[0];
-        const projLbw = currentProjects.find((p) => p.name.toLowerCase() === "lbw7") || currentProjects[0];
-        const projPed = currentProjects.find((p) => p.name.toLowerCase() === "ped") || currentProjects[0];
-
-        const denisTasks: Task[] = [
-          {
-            id: "task-cad",
-            name: "Cadastro",
-            project_id: projCtrl?.id || null,
-            assigned_employee_id: denis.id,
-            start_date: format(subDays(new Date(), 3), "yyyy-MM-dd"),
-            end_date: format(addDays(new Date(), 25), "yyyy-MM-dd"),
-            hours_per_day: 1,
-            estimated_time: 20,
-            status: "in_progress",
-            description: "Atividades contínuas de cadastro",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            id: "task-aval",
-            name: "Avaliação de impacto",
-            project_id: projInt?.id || null,
-            assigned_employee_id: denis.id,
-            start_date: format(subDays(new Date(), 3), "yyyy-MM-dd"),
-            end_date: format(addDays(new Date(), 25), "yyyy-MM-dd"),
-            hours_per_day: 0.5,
-            estimated_time: 10,
-            status: "in_progress",
-            description: "Análise técnica interna",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            id: "task-gest",
-            name: "Gestão de Lotes",
-            project_id: projInt?.id || null,
-            assigned_employee_id: denis.id,
-            start_date: format(subDays(new Date(), 3), "yyyy-MM-dd"),
-            end_date: format(addDays(new Date(), 25), "yyyy-MM-dd"),
-            hours_per_day: 3.5,
-            estimated_time: 70,
-            status: "in_progress",
-            description: "Gestão operacional e controle de lotes",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            id: "task-sup",
-            name: "Suporte",
-            project_id: projInt?.id || null,
-            assigned_employee_id: denis.id,
-            start_date: format(subDays(new Date(), 3), "yyyy-MM-dd"),
-            end_date: format(addDays(new Date(), 25), "yyyy-MM-dd"),
-            hours_per_day: 1,
-            estimated_time: 20,
-            status: "in_progress",
-            description: "Suporte interno e atendimento",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            id: "task-lbw",
-            name: "LBW 7",
-            project_id: projLbw?.id || null,
-            assigned_employee_id: denis.id,
-            start_date: format(addDays(new Date(), 2), "yyyy-MM-dd"),
-            end_date: format(addDays(new Date(), 2), "yyyy-MM-dd"),
-            hours_per_day: 1,
-            estimated_time: 1,
-            status: "pending",
-            description: "Alocação pontual",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            id: "task-lims",
-            name: "LIMS PDC",
-            project_id: projPed?.id || null,
-            assigned_employee_id: denis.id,
-            start_date: format(addDays(new Date(), 2), "yyyy-MM-dd"),
-            end_date: format(addDays(new Date(), 2), "yyyy-MM-dd"),
-            hours_per_day: 0.5,
-            estimated_time: 0.5,
-            status: "pending",
-            description: "Acompanhamento PED",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ];
-
-        currentTasks = [...currentTasks, ...denisTasks];
-      }
-
-      setEmployees(employeesList);
-      setProjects(currentProjects);
-      setTasks(currentTasks);
-
-      // Expand first 3 employees by default
-      const initialExpanded: Record<string, boolean> = {};
-      employeesList.slice(0, 3).forEach((e) => {
-        initialExpanded[e.id] = true;
+      // Expand first 3 employees by default if not already configured
+      setExpandedEmployees((prev) => {
+        if (Object.keys(prev).length === 0) {
+          const initialExpanded: Record<string, boolean> = {};
+          empData.slice(0, 3).forEach((e) => {
+            initialExpanded[e.id] = true;
+          });
+          return initialExpanded;
+        }
+        return prev;
       });
-      setExpandedEmployees(initialExpanded);
     } catch (err) {
       console.error("Error loading resource planning data:", err);
     } finally {
@@ -518,6 +389,13 @@ export const ResourcePlanningView: React.FC = () => {
             const end = parseISO(t.end_date);
 
             if (isWithinInterval(day, { start, end })) {
+              if (t.repeats_weekly) {
+                const dayName = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][day.getDay()];
+                const daysList = (t.repeat_days && t.repeat_days.length > 0)
+                  ? t.repeat_days
+                  : ["monday", "tuesday", "wednesday", "thursday", "friday"];
+                if (!daysList.includes(dayName)) return;
+              }
               const spanDays = Math.max(1, differenceInCalendarDays(end, start) + 1);
               // Calculate daily effort: either explicit hours_per_day or total / span
               const taskDailyHours = t.hours_per_day || (t.estimated_time || 8) / spanDays;
@@ -656,6 +534,13 @@ export const ResourcePlanningView: React.FC = () => {
         const start = parseISO(t.start_date);
         const end = parseISO(t.end_date);
         if (isWithinInterval(day, { start, end })) {
+          if (t.repeats_weekly) {
+            const dayName = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][day.getDay()];
+            const daysList = (t.repeat_days && t.repeat_days.length > 0)
+              ? t.repeat_days
+              : ["monday", "tuesday", "wednesday", "thursday", "friday"];
+            if (!daysList.includes(dayName)) return;
+          }
           const spanDays = Math.max(1, differenceInCalendarDays(end, start) + 1);
           assignedHours += t.hours_per_day || (t.estimated_time || 8) / spanDays;
         }
@@ -664,13 +549,40 @@ export const ResourcePlanningView: React.FC = () => {
 
     const freeHours = Math.max(0, capacity - assignedHours);
     const isOverloaded = assignedHours > capacity;
+    const isLimitReached = assignedHours >= capacity;
+    const utilization = capacity > 0 ? Math.round((assignedHours / capacity) * 100) : 0;
 
     return {
       capacity,
+      weeklyHours: emp?.weekly_hours || 40,
       assignedHours: Number(assignedHours.toFixed(1)),
       freeHours: Number(freeHours.toFixed(1)),
       hasTimeOff,
       isOverloaded,
+      isLimitReached,
+      utilization,
+    };
+  };
+
+  // Helper to summarize capacity status across the current period for an employee
+  const getEmployeePeriodCapacitySummary = (employeeId: string) => {
+    let maxUtil = 0;
+    let daysAtLimit = 0;
+    let daysOverloaded = 0;
+
+    timelineDays.forEach((day) => {
+      const stats = getEmployeeDailyStats(employeeId, day);
+      if (stats.isOverloaded) daysOverloaded++;
+      else if (stats.isLimitReached && stats.assignedHours > 0) daysAtLimit++;
+      if (stats.utilization > maxUtil) maxUtil = stats.utilization;
+    });
+
+    return {
+      maxUtil,
+      daysAtLimit,
+      daysOverloaded,
+      hasLimitReached: daysAtLimit > 0 || daysOverloaded > 0,
+      hasOverload: daysOverloaded > 0,
     };
   };
 
@@ -698,6 +610,83 @@ export const ResourcePlanningView: React.FC = () => {
   // Today reference
   const today = useMemo(() => startOfDay(new Date()), []);
 
+  // Move Task Allocation via Drag & Drop
+  const handleMoveTaskAllocation = async (
+    taskId: string,
+    targetEmployeeId: string,
+    targetDateStr: string
+  ) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    try {
+      setLoading(true);
+      let newStart = targetDateStr;
+      let newEnd = targetDateStr;
+
+      try {
+        const originalStart = parseISO(task.start_date);
+        const originalEnd = parseISO(task.end_date);
+        const durationDays = Math.max(0, differenceInCalendarDays(originalEnd, originalStart));
+        const targetDate = parseISO(targetDateStr);
+
+        newStart = targetDateStr;
+        newEnd = format(addDays(targetDate, durationDays), "yyyy-MM-dd");
+
+        // If it's a recurring task and the horizon was collapsed, ensure a minimum 90-day horizon
+        if (task.repeats_weekly && durationDays <= 1) {
+          newEnd = format(addDays(targetDate, 90), "yyyy-MM-dd");
+        }
+      } catch (dateErr) {
+        console.error("Error calculating target dates for drag:", dateErr);
+      }
+
+      await taskService.update(task.id, {
+        assigned_employee_id: targetEmployeeId,
+        start_date: newStart,
+        end_date: newEnd,
+      });
+
+      const targetEmp = employees.find((e) => e.id === targetEmployeeId);
+      const targetDailyCap = targetEmp ? (targetEmp.weekly_hours || 40) / 5 : 8;
+      const targetStats = getEmployeeDailyStats(targetEmployeeId, parseISO(newStart));
+      const totalDayHours = targetStats.assignedHours;
+
+      if (totalDayHours > targetDailyCap) {
+        toast({
+          title: "Limite diário ultrapassado!",
+          description: `"${task.name}" foi movida para ${format(parseISO(newStart), "dd/MM/yyyy")}. Atenção: ${targetEmp?.name} está com ${totalDayHours}h alocadas (+${(totalDayHours - targetDailyCap).toFixed(1)}h acima do limite diário de ${targetDailyCap}h).`,
+          variant: "destructive",
+        });
+      } else if (totalDayHours === targetDailyCap) {
+        toast({
+          title: "Limite diário atingido (100%)",
+          description: `"${task.name}" foi movida para ${format(parseISO(newStart), "dd/MM/yyyy")}. ${targetEmp?.name} atingiu a capacidade máxima de ${targetDailyCap}h/dia nesta data.`,
+        });
+      } else {
+        toast({
+          title: "Alocação realocada",
+          description: `"${task.name}" foi movida para ${format(parseISO(newStart), "dd/MM/yyyy")}${
+            targetEmp ? ` (${targetEmp.name})` : ""
+          }.`,
+        });
+      }
+
+      await loadData();
+    } catch (err: any) {
+      console.error("Error moving task allocation:", err);
+      toast({
+        title: "Erro ao mover",
+        description: "Não foi possível mover a tarefa. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+      setDraggingTaskId(null);
+      setDragOverCell(null);
+    }
+  };
+
   // Handlers for Task Creation & Editing
   const handleOpenNewTask = (employeeId?: string, defaultDate?: Date) => {
     setEditingTask(null);
@@ -711,6 +700,8 @@ export const ResourcePlanningView: React.FC = () => {
     setFormHoursPerDay(1);
     setFormEstimatedHours(8);
     setFormIsTentative(false);
+    setFormRepeatsWeekly(false);
+    setFormRepeatDays(["monday", "tuesday", "wednesday", "thursday", "friday"]);
     setFormDescription("");
     setIsNewTaskOpen(true);
   };
@@ -725,73 +716,144 @@ export const ResourcePlanningView: React.FC = () => {
     setFormHoursPerDay(task.hours_per_day || 1);
     setFormEstimatedHours(task.estimated_time || 8);
     setFormIsTentative(task.special_marker === "tentative");
+    setFormRepeatsWeekly(Boolean(task.repeats_weekly));
+    setFormRepeatDays(
+      task.repeat_days && task.repeat_days.length > 0
+        ? task.repeat_days
+        : ["monday", "tuesday", "wednesday", "thursday", "friday"]
+    );
     setFormDescription(task.description || "");
     setIsNewTaskOpen(true);
   };
 
   const handleSaveTask = async () => {
-    if (!formTaskName.trim() || !formProjectId) {
-      alert("Por favor, preencha o nome da tarefa e selecione o projeto.");
+    if (!formTaskName.trim()) {
+      toast({
+        title: "Nome obrigatório",
+        description: "Por favor, preencha o nome da tarefa ou alocação.",
+        variant: "destructive",
+      });
       return;
     }
 
     try {
+      setLoading(true);
+
+      // Ensure a valid project_id exists
+      let targetProjectId = formProjectId;
+      if (!targetProjectId) {
+        if (projects.length > 0) {
+          targetProjectId = projects[0].id;
+        } else {
+          const newProj = await projectService.create({
+            name: "Geral",
+            description: "Projeto padrão para alocações",
+          });
+          targetProjectId = newProj.id;
+        }
+      }
+
+      // Calculate final end date and repeat days if repeating weekly
+      let finalEndDate = formEndDate;
+      if (formRepeatsWeekly) {
+        try {
+          const s = parseISO(formStartDate);
+          const e = parseISO(formEndDate);
+          if (isBefore(e, s) || isSameDay(e, s)) {
+            finalEndDate = format(addDays(s, 90), "yyyy-MM-dd");
+          }
+        } catch {}
+      }
+
+      const finalRepeatDays = formRepeatsWeekly
+        ? formRepeatDays.length > 0
+          ? formRepeatDays
+          : ["monday", "tuesday", "wednesday", "thursday", "friday"]
+        : null;
+
       if (editingTask) {
-        // Update
-        const updated = await taskService.update(editingTask.id, {
+        // Update existing task
+        await taskService.update(editingTask.id, {
           name: formTaskName,
-          project_id: formProjectId,
+          project_id: targetProjectId,
           assigned_employee_id: formEmployeeId || null,
           start_date: formStartDate,
-          end_date: formEndDate,
+          end_date: finalEndDate,
           hours_per_day: Number(formHoursPerDay) || 1,
           estimated_time: Number(formEstimatedHours) || 8,
           special_marker: formIsTentative ? "tentative" : null,
+          repeats_weekly: formRepeatsWeekly,
+          repeat_days: finalRepeatDays,
           description: formDescription,
         });
 
-        setTasks((prev) =>
-          prev.map((t) => (t.id === editingTask.id ? { ...t, ...updated } : t))
-        );
+        toast({
+          title: "Alocação atualizada",
+          description: "Os dados foram salvos com sucesso.",
+        });
       } else {
-        // Create
-        const created = await taskService.create({
+        // Create new task
+        await taskService.create({
           name: formTaskName,
-          project_id: formProjectId,
+          project_id: targetProjectId,
           assigned_employee_id: formEmployeeId || null,
           start_date: formStartDate,
-          end_date: formEndDate,
+          end_date: finalEndDate,
           hours_per_day: Number(formHoursPerDay) || 1,
           estimated_time: Number(formEstimatedHours) || 8,
           status: "pending",
           special_marker: formIsTentative ? "tentative" : null,
+          repeats_weekly: formRepeatsWeekly,
+          repeat_days: finalRepeatDays,
           description: formDescription,
         });
 
-        if (created) {
-          setTasks((prev) => [...prev, created]);
-        }
+        toast({
+          title: "Alocação criada",
+          description: "Novo registro salvo com sucesso.",
+        });
       }
+
       setIsNewTaskOpen(false);
-    } catch (err) {
+      await loadData();
+    } catch (err: any) {
       console.error("Error saving task:", err);
+      toast({
+        title: "Erro ao salvar",
+        description: err.message || "Não foi possível salvar a alocação.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    if (!confirm("Tem certeza que deseja excluir esta alocação?")) return;
     try {
+      setLoading(true);
       await taskService.delete(taskId);
-      setTasks((prev) => prev.filter((t) => t.id !== taskId));
       setIsNewTaskOpen(false);
-    } catch (err) {
+      await loadData();
+      toast({
+        title: "Alocação removida",
+        description: "O registro foi excluído do banco de dados com sucesso.",
+      });
+    } catch (err: any) {
       console.error("Error deleting task:", err);
+      toast({
+        title: "Erro ao excluir",
+        description: err.message || "Não foi possível excluir a alocação.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleSavePerson = async () => {
     if (!formPersonName.trim()) return;
     try {
+      setLoading(true);
       const created = await employeeService.create({
         name: formPersonName,
         role: formPersonRole,
@@ -799,13 +861,22 @@ export const ResourcePlanningView: React.FC = () => {
         skills: ["Planejamento"],
         dias_de_trabalho: ["monday", "tuesday", "wednesday", "thursday", "friday"],
       });
-      if (created) {
-        setEmployees((prev) => [...prev, created]);
-      }
       setIsNewPersonOpen(false);
       setFormPersonName("");
-    } catch (err) {
+      await loadData();
+      toast({
+        title: "Colaborador cadastrado",
+        description: `${created.name} adicionado com sucesso.`,
+      });
+    } catch (err: any) {
       console.error("Error creating employee:", err);
+      toast({
+        title: "Erro ao cadastrar",
+        description: err.message || "Não foi possível cadastrar o colaborador.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1678,13 +1749,44 @@ export const ResourcePlanningView: React.FC = () => {
                             <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-[10px] sm:text-xs flex-shrink-0 border border-primary/20">
                               {initials}
                             </div>
-                            {/* Name & Role */}
+                            {/* Name, Role & Capacity Badges */}
                             <div className="min-w-0">
-                              <p className="font-bold text-foreground truncate text-xs flex items-center gap-1">
-                                <span className="truncate">{employee.name}</span>
-                              </p>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <p className="font-bold text-foreground truncate text-xs">
+                                  {employee.name}
+                                </p>
+                                {(() => {
+                                  const summary = getEmployeePeriodCapacitySummary(employee.id);
+                                  if (summary.hasOverload) {
+                                    return (
+                                      <span
+                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
+                                        title={`${summary.daysOverloaded} dia(s) com sobrecarga acima da capacidade`}
+                                      >
+                                        <AlertTriangle className="h-2.5 w-2.5" />
+                                        <span>Sobrecarga ({summary.daysOverloaded}d)</span>
+                                      </span>
+                                    );
+                                  }
+                                  if (summary.hasLimitReached) {
+                                    return (
+                                      <span
+                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                                        title={`${summary.daysAtLimit} dia(s) no limite diário máximo (100%)`}
+                                      >
+                                        <AlertCircle className="h-2.5 w-2.5" />
+                                        <span>No Limite ({summary.daysAtLimit}d)</span>
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
                               <p className="text-[9px] sm:text-[10px] text-muted-foreground truncate">
-                                {employee.role || "Especialista"}
+                                {employee.role || "Especialista"} •{" "}
+                                <span className="font-mono text-primary font-medium" title="Jornada semanal e capacidade diária">
+                                  {employee.weekly_hours || 40}h/sem ({((employee.weekly_hours || 40) / 5).toFixed(0)}h/dia)
+                                </span>
                               </p>
                             </div>
                           </div>
@@ -1738,17 +1840,63 @@ export const ResourcePlanningView: React.FC = () => {
                         </div>
                       </td>
 
-                      {/* Weekly Free Capacity per Employee Cell Headers */}
-                      {headerWeeks.map((week) => {
-                        const freeLabel = getEmployeeWeeklyFreeHours(employee.id, week.days);
+                      {/* Daily Capacity per Employee Cells - Highlights when limit is reached (100%) or overloaded */}
+                      {timelineDays.map((day) => {
+                        const stats = getEmployeeDailyStats(employee.id, day);
+                        const isToday = isSameDay(day, today);
+
+                        let cellBg = "bg-muted/10 text-muted-foreground";
+                        if (stats.hasTimeOff) {
+                          cellBg = "bg-amber-500/10 text-amber-700 dark:text-amber-300";
+                        } else if (stats.isOverloaded) {
+                          cellBg = "bg-rose-500/20 text-rose-700 dark:text-rose-300 font-bold border-x border-rose-500/40";
+                        } else if (stats.isLimitReached && stats.assignedHours > 0) {
+                          cellBg = "bg-amber-500/20 text-amber-800 dark:text-amber-300 font-bold border-x border-amber-500/40";
+                        } else if (stats.assignedHours > 0) {
+                          cellBg = "bg-blue-500/10 text-blue-700 dark:text-blue-300";
+                        }
 
                         return (
                           <td
-                            key={week.weekKey}
-                            colSpan={week.days.length}
-                            className="px-1 sm:px-2 py-1.5 text-center font-mono text-[10px] sm:text-[11px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50/20 dark:bg-blue-950/10 border-r border-border whitespace-nowrap"
+                            key={day.toISOString()}
+                            onClick={() => handleOpenNewTask(employee.id, day)}
+                            className={`px-0.5 sm:px-1 py-1.5 text-center font-mono text-[9px] sm:text-[10px] border-r border-border transition-colors cursor-pointer hover:bg-primary/10 ${cellBg} ${
+                              isToday ? "ring-1 ring-primary/40 ring-inset" : ""
+                            }`}
+                            title={`${format(day, "dd/MM/yyyy")}: ${stats.assignedHours}h alocadas de ${stats.capacity}h diárias (${stats.weeklyHours}h semanais)${
+                              stats.isOverloaded
+                                ? ` - SOBRECARGA: +${(stats.assignedHours - stats.capacity).toFixed(1)}h acima do limite diário!`
+                                : stats.isLimitReached && stats.assignedHours > 0
+                                ? " - LIMITE DA CAPACIDADE DIÁRIA ATINGIDO (100%)"
+                                : ` - ${stats.freeHours}h livres restantes`
+                            }`}
                           >
-                            {freeLabel}
+                            {stats.hasTimeOff ? (
+                              <span className="text-[9px] text-amber-600 font-sans font-medium">Ausente</span>
+                            ) : stats.isOverloaded ? (
+                              <div className="flex flex-col items-center leading-tight">
+                                <span className="flex items-center gap-0.5 text-rose-600 dark:text-rose-400 font-extrabold text-[10px]">
+                                  <AlertTriangle className="h-2.5 w-2.5 inline shrink-0" />
+                                  <span>{stats.assignedHours}h</span>
+                                </span>
+                                <span className="text-[8px] text-rose-600/90 font-bold">limite: {stats.capacity}h</span>
+                              </div>
+                            ) : stats.isLimitReached && stats.assignedHours > 0 ? (
+                              <div className="flex flex-col items-center leading-tight">
+                                <span className="flex items-center gap-0.5 text-amber-700 dark:text-amber-300 font-bold text-[10px]">
+                                  <AlertCircle className="h-2.5 w-2.5 inline shrink-0" />
+                                  <span>{stats.assignedHours}h</span>
+                                </span>
+                                <span className="text-[8px] text-amber-700/90 dark:text-amber-300 font-bold">100% limite</span>
+                              </div>
+                            ) : stats.assignedHours > 0 ? (
+                              <div className="flex flex-col items-center leading-tight">
+                                <span className="text-blue-700 dark:text-blue-300 font-semibold">{stats.assignedHours}h</span>
+                                <span className="text-[8px] text-muted-foreground/70">{stats.freeHours}h livre</span>
+                              </div>
+                            ) : (
+                              <span className="text-[9px] text-muted-foreground/40 font-mono">0h</span>
+                            )}
                           </td>
                         );
                       })}
@@ -1797,17 +1945,41 @@ export const ResourcePlanningView: React.FC = () => {
                             <td className="px-2 sm:px-3 py-2 sticky left-0 z-20 bg-background border-r border-border pl-6 sm:pl-10 text-muted-foreground italic text-xs">
                               Nenhuma alocação ativa.
                             </td>
-                            <td colSpan={timelineDays.length} className="px-3 py-2 text-center text-muted-foreground">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleOpenNewTask(employee.id)}
-                                className="h-6 text-[10px] gap-1"
-                              >
-                                <Plus className="h-3 w-3" />
-                                <span>Atribuir Primeiro Projeto</span>
-                              </Button>
-                            </td>
+                            {timelineDays.map((day) => {
+                              const dStr = format(day, "yyyy-MM-dd");
+                              const isToday = isSameDay(day, today);
+                              const isOverThisCell =
+                                dragOverCell?.employeeId === employee.id && dragOverCell?.dateStr === dStr;
+
+                              return (
+                                <td
+                                  key={day.toISOString()}
+                                  onDragOver={(e) => {
+                                    e.preventDefault();
+                                    e.dataTransfer.dropEffect = "move";
+                                    if (dragOverCell?.employeeId !== employee.id || dragOverCell?.dateStr !== dStr) {
+                                      setDragOverCell({ employeeId: employee.id, dateStr: dStr });
+                                    }
+                                  }}
+                                  onDragLeave={() => {
+                                    if (dragOverCell?.employeeId === employee.id && dragOverCell?.dateStr === dStr) {
+                                      setDragOverCell(null);
+                                    }
+                                  }}
+                                  onDrop={(e) => {
+                                    e.preventDefault();
+                                    const droppedTaskId = e.dataTransfer.getData("text/plain") || draggingTaskId;
+                                    if (droppedTaskId) {
+                                      handleMoveTaskAllocation(droppedTaskId, employee.id, dStr);
+                                    }
+                                  }}
+                                  onClick={() => handleOpenNewTask(employee.id, day)}
+                                  className={`px-0.5 py-1 border-r border-border/30 relative cursor-pointer hover:bg-primary/5 transition-colors ${
+                                    isToday ? "bg-primary/5" : ""
+                                  } ${isOverThisCell ? "bg-primary/20 ring-2 ring-primary ring-inset z-10" : ""}`}
+                                />
+                              );
+                            })}
                           </tr>
                         ) : (
                           empTasks.map((task) => {
@@ -1844,33 +2016,82 @@ export const ResourcePlanningView: React.FC = () => {
                                       <p className="text-[9px] sm:text-[10px] text-muted-foreground truncate flex items-center gap-1">
                                         <Briefcase className="h-2.5 w-2.5 opacity-60 flex-shrink-0" />
                                         <span className="truncate">{project?.name || "Geral"}</span>
+                                        {task.repeats_weekly && (
+                                          <Repeat className="h-2.5 w-2.5 text-blue-500 ml-1 inline" />
+                                        )}
                                       </p>
                                     </div>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => handleEditTask(task)}
-                                      className="h-5 w-5 sm:h-6 sm:w-6 opacity-0 group-hover/task:opacity-100 transition-opacity flex-shrink-0"
-                                      title="Editar Tarefa"
-                                    >
-                                      <Edit2 className="h-3 w-3 text-muted-foreground" />
-                                    </Button>
+                                    <div className="flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-opacity flex-shrink-0">
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => handleEditTask(task)}
+                                        className="h-5 w-5 sm:h-6 sm:w-6 hover:bg-muted"
+                                        title="Editar Alocação"
+                                      >
+                                        <Edit2 className="h-3 w-3 text-muted-foreground" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteTask(task.id);
+                                        }}
+                                        className="h-5 w-5 sm:h-6 sm:w-6 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                                        title="Excluir Alocação"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </div>
                                   </div>
                                 </td>
 
                                 {/* Allocation Bars across the Timeline Days */}
                                 {timelineDays.map((day) => {
+                                  const dStr = format(day, "yyyy-MM-dd");
                                   const isToday = isSameDay(day, today);
-                                  const isAssigned = isWithinInterval(day, {
+                                  const inInterval = isWithinInterval(day, {
                                     start: taskStart,
                                     end: taskEnd,
                                   });
+
+                                  let isAssigned = inInterval;
+                                  if (task.repeats_weekly && inInterval) {
+                                    const dayName = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][day.getDay()];
+                                    const daysList = (task.repeat_days && task.repeat_days.length > 0)
+                                      ? task.repeat_days
+                                      : ["monday", "tuesday", "wednesday", "thursday", "friday"];
+                                    isAssigned = daysList.includes(dayName);
+                                  }
+
                                   const isFirstDay = isSameDay(day, taskStart);
                                   const isLastDay = isSameDay(day, taskEnd);
+                                  const isOverThisCell =
+                                    dragOverCell?.employeeId === employee.id && dragOverCell?.dateStr === dStr;
 
                                   return (
                                     <td
                                       key={day.toISOString()}
+                                      onDragOver={(e) => {
+                                        e.preventDefault();
+                                        e.dataTransfer.dropEffect = "move";
+                                        if (dragOverCell?.employeeId !== employee.id || dragOverCell?.dateStr !== dStr) {
+                                          setDragOverCell({ employeeId: employee.id, dateStr: dStr });
+                                        }
+                                      }}
+                                      onDragLeave={() => {
+                                        if (dragOverCell?.employeeId === employee.id && dragOverCell?.dateStr === dStr) {
+                                          setDragOverCell(null);
+                                        }
+                                      }}
+                                      onDrop={(e) => {
+                                        e.preventDefault();
+                                        const droppedTaskId = e.dataTransfer.getData("text/plain") || draggingTaskId;
+                                        if (droppedTaskId) {
+                                          handleMoveTaskAllocation(droppedTaskId, employee.id, dStr);
+                                        }
+                                      }}
                                       onClick={() => {
                                         if (!isAssigned) {
                                           handleOpenNewTask(employee.id, day);
@@ -1878,32 +2099,78 @@ export const ResourcePlanningView: React.FC = () => {
                                           handleEditTask(task);
                                         }
                                       }}
-                                      className={`px-0.5 py-1 border-r border-border/30 relative cursor-pointer hover:bg-primary/5 ${
+                                      className={`px-0.5 py-1 border-r border-border/30 relative cursor-pointer hover:bg-primary/5 transition-colors ${
                                         isToday ? "bg-primary/5" : ""
-                                      }`}
+                                      } ${isOverThisCell ? "bg-primary/20 ring-2 ring-primary ring-inset z-10" : ""}`}
                                     >
-                                      {isAssigned && (
-                                        <div
-                                          className={`h-5 sm:h-7 bg-blue-500/20 dark:bg-blue-950/40 border-y border-blue-500/40 flex items-center justify-center px-0.5 sm:px-1 text-blue-700 dark:text-blue-300 font-bold text-[9px] sm:text-[10px] shadow-2xs relative overflow-hidden ${
-                                            isFirstDay ? "rounded-l-md border-l" : ""
-                                          } ${isLastDay ? "rounded-r-md border-r" : ""}`}
-                                        >
-                                          {/* Pink / Coral Cap Accent Line (Matching Screenshot 1) */}
-                                          <div className="absolute top-0 left-0 right-0 h-0.5 bg-rose-500" />
+                                      {isAssigned && (() => {
+                                        const dayStats = getEmployeeDailyStats(employee.id, day);
+                                        const isOver = dayStats.isOverloaded;
+                                        const isLimit = dayStats.isLimitReached && dayStats.assignedHours > 0;
 
-                                          {/* Label on first day or middle day */}
-                                          {isFirstDay ? (
-                                            <span className="flex items-center gap-0.5 sm:gap-1 truncate font-mono text-[9px] sm:text-[10px]">
-                                              <Clock className="h-2 sm:h-2.5 w-2 sm:w-2.5 opacity-70 flex-shrink-0" />
-                                              <span className="truncate">{hoursLabel}</span>
-                                            </span>
-                                          ) : isSingleDay ? (
-                                            <span className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-blue-600 text-white font-bold text-[8px] sm:text-[9px] flex items-center justify-center">
-                                              {task.hours_per_day || task.estimated_time || 1}h
-                                            </span>
-                                          ) : null}
-                                        </div>
-                                      )}
+                                        return (
+                                          <div
+                                            draggable={true}
+                                            onDragStart={(e) => {
+                                              e.stopPropagation();
+                                              e.dataTransfer.setData("text/plain", task.id);
+                                              e.dataTransfer.effectAllowed = "move";
+                                              setDraggingTaskId(task.id);
+                                            }}
+                                            onDragEnd={() => {
+                                              setDraggingTaskId(null);
+                                              setDragOverCell(null);
+                                            }}
+                                            className={`h-5 sm:h-7 border-y flex items-center justify-center px-0.5 sm:px-1 font-bold text-[9px] sm:text-[10px] shadow-2xs relative overflow-hidden cursor-grab active:cursor-grabbing select-none transition-transform hover:scale-[1.02] ${
+                                              isFirstDay ? "rounded-l-md border-l" : ""
+                                            } ${isLastDay ? "rounded-r-md border-r" : ""} ${
+                                              draggingTaskId === task.id ? "opacity-50 ring-2 ring-primary" : ""
+                                            } ${
+                                              isOver
+                                                ? "bg-rose-500/25 dark:bg-rose-950/50 border-rose-500/50 text-rose-700 dark:text-rose-300"
+                                                : isLimit
+                                                ? "bg-amber-500/25 dark:bg-amber-950/50 border-amber-500/50 text-amber-800 dark:text-amber-200"
+                                                : "bg-blue-500/20 dark:bg-blue-950/40 border-blue-500/40 text-blue-700 dark:text-blue-300"
+                                            }`}
+                                            title={`${task.name} (${hoursLabel}) | ${employee.name}: ${dayStats.assignedHours}h de ${dayStats.capacity}h/dia (${dayStats.weeklyHours}h/sem)${
+                                              isOver
+                                                ? " - SOBRECARGA DIÁRIA!"
+                                                : isLimit
+                                                ? " - LIMITE DA CAPACIDADE DIÁRIA ATINGIDO (100%)"
+                                                : ` - ${dayStats.freeHours}h livres`
+                                            }`}
+                                          >
+                                            {/* Pink / Coral / Amber Accent Line */}
+                                            <div
+                                              className={`absolute top-0 left-0 right-0 h-0.5 ${
+                                                isOver ? "bg-rose-600" : isLimit ? "bg-amber-500" : "bg-rose-500"
+                                              }`}
+                                            />
+
+                                            {/* Label on first day or middle day */}
+                                            {isFirstDay ? (
+                                              <span className="flex items-center gap-0.5 sm:gap-1 truncate font-mono text-[9px] sm:text-[10px]">
+                                                {isOver ? (
+                                                  <AlertTriangle className="h-2.5 w-2.5 text-rose-600 shrink-0" />
+                                                ) : isLimit ? (
+                                                  <AlertCircle className="h-2.5 w-2.5 text-amber-600 shrink-0" />
+                                                ) : (
+                                                  <Clock className="h-2 sm:h-2.5 w-2 sm:w-2.5 opacity-70 flex-shrink-0" />
+                                                )}
+                                                <span className="truncate">{hoursLabel}</span>
+                                              </span>
+                                            ) : isSingleDay ? (
+                                              <span
+                                                className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full font-bold text-[8px] sm:text-[9px] flex items-center justify-center text-white ${
+                                                  isOver ? "bg-rose-600" : isLimit ? "bg-amber-600" : "bg-blue-600"
+                                                }`}
+                                              >
+                                                {task.hours_per_day || task.estimated_time || 1}h
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                        );
+                                      })()}
                                     </td>
                                   );
                                 })}
@@ -1925,7 +2192,40 @@ export const ResourcePlanningView: React.FC = () => {
                               <span>Atribuir Projeto / Tarefa</span>
                             </Button>
                           </td>
-                          <td colSpan={timelineDays.length} className="bg-background/40" />
+                          {timelineDays.map((day) => {
+                            const dStr = format(day, "yyyy-MM-dd");
+                            const isToday = isSameDay(day, today);
+                            const isOverThisCell =
+                              dragOverCell?.employeeId === employee.id && dragOverCell?.dateStr === dStr;
+                            return (
+                              <td
+                                key={day.toISOString()}
+                                onDragOver={(e) => {
+                                  e.preventDefault();
+                                  e.dataTransfer.dropEffect = "move";
+                                  if (dragOverCell?.employeeId !== employee.id || dragOverCell?.dateStr !== dStr) {
+                                    setDragOverCell({ employeeId: employee.id, dateStr: dStr });
+                                  }
+                                }}
+                                onDragLeave={() => {
+                                  if (dragOverCell?.employeeId === employee.id && dragOverCell?.dateStr === dStr) {
+                                    setDragOverCell(null);
+                                  }
+                                }}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  const droppedTaskId = e.dataTransfer.getData("text/plain") || draggingTaskId;
+                                  if (droppedTaskId) {
+                                    handleMoveTaskAllocation(droppedTaskId, employee.id, dStr);
+                                  }
+                                }}
+                                onClick={() => handleOpenNewTask(employee.id, day)}
+                                className={`px-0.5 py-1 border-r border-border/30 cursor-pointer hover:bg-primary/5 transition-colors ${
+                                  isToday ? "bg-primary/5" : ""
+                                } ${isOverThisCell ? "bg-primary/20 ring-2 ring-primary ring-inset z-10" : ""}`}
+                              />
+                            );
+                          })}
                         </tr>
                       </>
                     )}
@@ -2061,6 +2361,74 @@ export const ResourcePlanningView: React.FC = () => {
               </div>
             </div>
 
+            {/* Live Daily Capacity Limit Indicator */}
+            {(() => {
+              const selectedEmp = employees.find((e) => e.id === formEmployeeId);
+              if (!selectedEmp) return null;
+              const weeklyHours = selectedEmp.weekly_hours || 40;
+              const dailyCap = weeklyHours / 5;
+              const hPerDay = Number(formHoursPerDay) || 0;
+              const percentage = dailyCap > 0 ? Math.round((hPerDay / dailyCap) * 100) : 0;
+              const isOver = hPerDay > dailyCap;
+              const isLimit = hPerDay === dailyCap && dailyCap > 0;
+
+              return (
+                <div
+                  className={`p-2.5 rounded-lg border text-xs transition-colors ${
+                    isOver
+                      ? "bg-rose-500/10 border-rose-500/40 text-rose-900 dark:text-rose-200"
+                      : isLimit
+                      ? "bg-amber-500/10 border-amber-500/40 text-amber-900 dark:text-amber-200"
+                      : "bg-muted/40 border-border text-foreground"
+                  }`}
+                >
+                  <div className="flex items-center justify-between font-medium">
+                    <span className="flex items-center gap-1.5">
+                      {isOver ? (
+                        <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                      ) : isLimit ? (
+                        <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                      ) : (
+                        <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      )}
+                      <span>
+                        Capacidade diária de {selectedEmp.name.split(" ")[0]}:{" "}
+                        <strong className="font-semibold">{dailyCap}h/dia</strong>{" "}
+                        <span className="text-[10px] text-muted-foreground">({weeklyHours}h semanais)</span>
+                      </span>
+                    </span>
+                    <span
+                      className={`font-mono text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                        isOver
+                          ? "bg-rose-500/20 text-rose-700 dark:text-rose-300"
+                          : isLimit
+                          ? "bg-amber-500/20 text-amber-700 dark:text-amber-300"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {percentage}%
+                    </span>
+                  </div>
+
+                  {isOver && (
+                    <p className="mt-1.5 text-[11px] text-rose-700 dark:text-rose-300 font-medium">
+                      ⚠️ <strong>Sobrecarga:</strong> Esta dedicação ({hPerDay}h/dia) ultrapassa o limite diário contratual de {dailyCap}h/dia.
+                    </p>
+                  )}
+                  {isLimit && (
+                    <p className="mt-1.5 text-[11px] text-amber-700 dark:text-amber-300 font-medium">
+                      ⚠️ <strong>Limite Atingido:</strong> Esta tarefa consome 100% da capacidade diária do colaborador ({dailyCap}h/dia).
+                    </p>
+                  )}
+                  {!isOver && !isLimit && hPerDay > 0 && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Resta {(dailyCap - hPerDay).toFixed(1)}h/dia disponível para outras tarefas.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Tentative Toggle */}
             <div className="flex items-center justify-between p-2 rounded-lg border border-border bg-muted/30">
               <div>
@@ -2071,6 +2439,79 @@ export const ResourcePlanningView: React.FC = () => {
                 checked={formIsTentative}
                 onCheckedChange={setFormIsTentative}
               />
+            </div>
+
+            {/* Repeating Weekly Section */}
+            <div className="space-y-2 p-2.5 rounded-lg border border-border bg-muted/30">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Repeat className="h-4 w-4 text-primary" />
+                  <div>
+                    <p className="font-semibold text-xs text-foreground">Repetir Semanalmente</p>
+                    <p className="text-[10px] text-muted-foreground">Distribui as horas nos dias selecionados da semana</p>
+                  </div>
+                </div>
+                <Switch
+                  checked={formRepeatsWeekly}
+                  onCheckedChange={(checked) => {
+                    setFormRepeatsWeekly(checked);
+                    if (checked) {
+                      if (formRepeatDays.length === 0) {
+                        setFormRepeatDays(["monday", "tuesday", "wednesday", "thursday", "friday"]);
+                      }
+                      if (!formHoursPerDay || formHoursPerDay === 0) {
+                        setFormHoursPerDay(2);
+                      }
+                      try {
+                        const s = parseISO(formStartDate);
+                        const e = parseISO(formEndDate);
+                        if (isBefore(e, s) || isSameDay(e, s)) {
+                          setFormEndDate(format(addDays(s, 90), "yyyy-MM-dd"));
+                        }
+                      } catch {}
+                    }
+                  }}
+                />
+              </div>
+
+              {formRepeatsWeekly && (
+                <div className="pt-2 border-t border-border/50 space-y-1.5">
+                  <Label className="text-[11px] font-semibold text-muted-foreground">Dias da semana:</Label>
+                  <div className="grid grid-cols-7 gap-1">
+                    {[
+                      { key: "monday", label: "Seg" },
+                      { key: "tuesday", label: "Ter" },
+                      { key: "wednesday", label: "Qua" },
+                      { key: "thursday", label: "Qui" },
+                      { key: "friday", label: "Sex" },
+                      { key: "saturday", label: "Sáb" },
+                      { key: "sunday", label: "Dom" },
+                    ].map((d) => {
+                      const isSelected = formRepeatDays.includes(d.key);
+                      return (
+                        <button
+                          key={d.key}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              setFormRepeatDays(formRepeatDays.filter((k) => k !== d.key));
+                            } else {
+                              setFormRepeatDays([...formRepeatDays, d.key]);
+                            }
+                          }}
+                          className={`h-7 rounded text-xs font-semibold border transition-colors ${
+                            isSelected
+                              ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                              : "bg-background text-muted-foreground border-border hover:bg-muted"
+                          }`}
+                        >
+                          {d.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

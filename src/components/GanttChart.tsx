@@ -1423,14 +1423,12 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    if (confirm("Tem certeza que deseja excluir esta tarefa?")) {
-      try {
-        await taskService.delete(taskId);
-        await loadData();
-        if (onTaskChange) onTaskChange();
-      } catch (err) {
-        console.error("Error deleting task:", err);
-      }
+    try {
+      await taskService.delete(taskId);
+      await loadData();
+      if (onTaskChange) onTaskChange();
+    } catch (err) {
+      console.error("Error deleting task:", err);
     }
   };
 

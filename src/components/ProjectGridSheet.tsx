@@ -542,15 +542,12 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
   };
 
   const handleDeleteProject = async (projId: string) => {
-    if (confirm("Deseja realmente excluir este projeto? As tarefas associadas permanecerão na lista.")) {
-      try {
-        await projectService.delete(projId);
-        await loadData();
-        if (onDataChange) onDataChange();
-      } catch (err) {
-        console.error("Error deleting project:", err);
-        alert("Erro ao excluir projeto.");
-      }
+    try {
+      await projectService.delete(projId);
+      await loadData();
+      if (onDataChange) onDataChange();
+    } catch (err) {
+      console.error("Error deleting project:", err);
     }
   };
 
@@ -697,15 +694,13 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
 
   // Delete Task
   const handleDeleteTask = async (taskId: string) => {
-    if (confirm("Deseja realmente excluir esta tarefa?")) {
-      setTasks((prev) => prev.filter((t) => t.id !== taskId));
-      try {
-        await taskService.delete(taskId);
-        if (onDataChange) onDataChange();
-      } catch (err) {
-        console.error("Error deleting task:", err);
-        loadData();
-      }
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    try {
+      await taskService.delete(taskId);
+      if (onDataChange) onDataChange();
+    } catch (err) {
+      console.error("Error deleting task:", err);
+      loadData();
     }
   };
 
@@ -714,6 +709,7 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
     const today = new Date().toISOString().split("T")[0];
     const defaultEnd = addDays(new Date(), 3).toISOString().split("T")[0];
 
+    const parentProj = projectId ? projects.find((p) => p.id === projectId) : null;
     const newTaskData: TaskInsert = {
       name: "Nova Tarefa",
       description: null,
@@ -722,6 +718,8 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
       estimated_time: 8,
       status: "pending",
       project_id: projectId,
+      group_id: parentProj?.group_id || null,
+      group_name: parentProj?.group_name || null,
       assigned_employee_id: null,
       dependencies: [],
     };

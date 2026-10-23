@@ -967,7 +967,7 @@ export const XiaomiCalendar: React.FC<XiaomiCalendarProps> = ({ onTaskChange }) 
       : employees.find((e) => e.id === selectedEmployeeFilter)?.name || "Colaborador";
 
   return (
-    <div className="w-full max-w-4xl mx-auto rounded-none sm:rounded-2xl bg-card text-card-foreground shadow-2xl border border-border flex flex-col overflow-hidden select-none font-sans h-full max-h-full flex-1 relative transition-colors duration-200">
+    <div className="w-full max-w-full mx-auto rounded-none lg:rounded-xl bg-card text-card-foreground shadow-sm border border-border flex flex-col overflow-hidden select-none font-sans h-full max-h-full flex-1 relative transition-colors duration-200">
       {/* Top Header matching Xiaomi Calendar with App-wide Theme support */}
       <div className="flex-shrink-0 px-3 sm:px-4 pt-3 pb-2 flex items-center justify-between border-b border-border/80 bg-card">
         <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
@@ -1094,59 +1094,63 @@ export const XiaomiCalendar: React.FC<XiaomiCalendarProps> = ({ onTaskChange }) 
         </div>
       </div>
 
-      {/* Weekday Headers */}
-      <div className="flex-shrink-0 grid grid-cols-[24px_repeat(7,minmax(0,1fr))] sm:grid-cols-[36px_repeat(7,minmax(0,1fr))] px-1.5 pt-2 text-center text-xs font-semibold border-b border-border/50">
-        <div className="text-[11px] text-muted-foreground/60 flex items-center justify-center">#</div>
-        {weekdayNames.map((day, idx) => (
-          <div
-            key={day}
-            className={`py-1 ${
-              idx === 0 ? "text-rose-500" : idx === 6 ? "text-muted-foreground" : "text-muted-foreground"
-            }`}
-          >
-            {day}
+      {/* RESPONSIVE LAYOUT CONTAINER (2 Columns on Desktop, Stacked on Mobile) */}
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
+        {/* LEFT COLUMN: CALENDAR GRID */}
+        <div className="flex-1 flex flex-col min-h-0 lg:overflow-y-auto lg:border-r lg:border-border">
+          {/* Weekday Headers */}
+          <div className="flex-shrink-0 grid grid-cols-[24px_repeat(7,minmax(0,1fr))] sm:grid-cols-[36px_repeat(7,minmax(0,1fr))] px-1.5 pt-2 text-center text-xs font-semibold border-b border-border/50">
+            <div className="text-[11px] text-muted-foreground/60 flex items-center justify-center">#</div>
+            {weekdayNames.map((day, idx) => (
+              <div
+                key={day}
+                className={`py-1 ${
+                  idx === 0 ? "text-rose-500" : idx === 6 ? "text-muted-foreground" : "text-muted-foreground"
+                }`}
+              >
+                {day}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {/* CALENDAR BODY */}
-      <div
-        ref={calendarBodyRef}
-        style={{
-          ...(isDragging && liveHeight !== null
-            ? {
-                height: `${liveHeight}px`,
-                maxHeight: `${liveHeight}px`,
-                overflowY:
-                  (liveHeight < 150 ? "week" : liveHeight < 350 ? "standard" : "expanded") === "expanded"
-                    ? "auto"
-                    : "hidden",
-                transition: "none",
-              }
-            : viewMode === "week"
-            ? {
-                height: "72px",
-                maxHeight: "72px",
-                overflowY: "hidden",
-                transition: "height 0.32s cubic-bezier(0.16, 1, 0.3, 1)",
-              }
-            : viewMode === "standard"
-            ? {
-                height: "276px",
-                maxHeight: "276px",
-                overflowY: "hidden",
-                transition: "height 0.32s cubic-bezier(0.16, 1, 0.3, 1)",
-              }
-            : {
-                flex: "1 1 0%",
-                minHeight: "360px",
-                maxHeight: "100%",
-                overflowY: "auto",
-                transition: "all 0.32s cubic-bezier(0.16, 1, 0.3, 1)",
-              }),
-        }}
-        className="p-1.5 sm:p-2 select-none"
-      >
+          {/* CALENDAR BODY */}
+          <div
+            ref={calendarBodyRef}
+            style={{
+              ...(isDragging && liveHeight !== null
+                ? {
+                    height: `${liveHeight}px`,
+                    maxHeight: `${liveHeight}px`,
+                    overflowY:
+                      (liveHeight < 150 ? "week" : liveHeight < 350 ? "standard" : "expanded") === "expanded"
+                        ? "auto"
+                        : "hidden",
+                    transition: "none",
+                  }
+                : viewMode === "week"
+                ? {
+                    height: "72px",
+                    maxHeight: "72px",
+                    overflowY: "hidden",
+                    transition: "height 0.32s cubic-bezier(0.16, 1, 0.3, 1)",
+                  }
+                : viewMode === "standard"
+                ? {
+                    height: "276px",
+                    maxHeight: "276px",
+                    overflowY: "hidden",
+                    transition: "height 0.32s cubic-bezier(0.16, 1, 0.3, 1)",
+                  }
+                : {
+                    flex: "1 1 0%",
+                    minHeight: "360px",
+                    maxHeight: "100%",
+                    overflowY: "auto",
+                    transition: "all 0.32s cubic-bezier(0.16, 1, 0.3, 1)",
+                  }),
+            }}
+            className="p-1.5 sm:p-2 lg:p-3 select-none flex-1 lg:!h-full lg:!max-h-full lg:!overflow-y-auto"
+          >
         {/* VIEW MODE 1: WEEK VIEW */}
         {(isDragging && liveHeight !== null
           ? liveHeight < 150
@@ -1378,29 +1382,30 @@ export const XiaomiCalendar: React.FC<XiaomiCalendarProps> = ({ onTaskChange }) 
           </div>
         )}
       </div>
+    </div>
 
-      {/* DRAG HANDLE BAR `_` (Interactive Xiaomi Style with real-time gesture feedback) */}
+    {/* DRAG HANDLE BAR `_` (Visible on Mobile/Tablet Only) */}
+    <div
+      className="lg:hidden flex-shrink-0 w-full flex flex-col items-center justify-center py-2.5 cursor-row-resize touch-none select-none hover:bg-muted/60 active:bg-muted transition-colors border-t border-b border-border group"
+      onPointerDown={handleDragPointerDown}
+      onPointerMove={handleDragPointerMove}
+      onPointerUp={handleDragPointerUp}
+      onPointerCancel={handleDragPointerUp}
+      title="Arraste para cima/baixo para expandir ou recolher o calendário"
+    >
       <div
-        className="flex-shrink-0 w-full flex flex-col items-center justify-center py-2.5 cursor-row-resize touch-none select-none hover:bg-muted/60 active:bg-muted transition-colors border-t border-b border-border group"
-        onPointerDown={handleDragPointerDown}
-        onPointerMove={handleDragPointerMove}
-        onPointerUp={handleDragPointerUp}
-        onPointerCancel={handleDragPointerUp}
-        title="Arraste para cima/baixo para expandir ou recolher o calendário"
-      >
-        <div
-          className={`h-1 rounded-full transition-all duration-200 ${
-            isDragging
-              ? "w-16 bg-primary scale-110 shadow-[0_0_8px_rgba(59,130,246,0.6)]"
-              : "w-12 bg-muted-foreground/60 group-hover:bg-foreground/60"
-          }`}
-        />
-      </div>
+        className={`h-1 rounded-full transition-all duration-200 ${
+          isDragging
+            ? "w-16 bg-primary scale-110 shadow-[0_0_8px_rgba(59,130,246,0.6)]"
+            : "w-12 bg-muted-foreground/60 group-hover:bg-foreground/60"
+        }`}
+      />
+    </div>
 
-      {/* BOTTOM AGENDA / TASKS & NOTES CARD */}
-      <div className="flex-1 min-h-0 p-3 sm:p-4 bg-muted/20 overflow-y-auto space-y-3 relative pb-20">
-        {/* Daily Capacity Overview Banner for Selected Date */}
-        <div className="p-3 rounded-xl border border-border bg-card shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+    {/* RIGHT COLUMN: AGENDA / TASKS & NOTES */}
+    <div className="flex-1 lg:flex-initial lg:w-[420px] xl:w-[480px] min-h-0 p-3 sm:p-4 bg-muted/20 overflow-y-auto space-y-3 relative pb-20 lg:pb-6">
+      {/* Daily Capacity Overview Banner for Selected Date */}
+      <div className="p-3 rounded-xl border border-border bg-card shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           <div className="space-y-0.5">
             <div className="flex items-center gap-2">
               <Activity className="h-4 w-4 text-primary" />
@@ -2424,8 +2429,9 @@ export const XiaomiCalendar: React.FC<XiaomiCalendarProps> = ({ onTaskChange }) 
           </div>
         </div>
       </div>
+    </div>
 
-      {/* FLOATING ACTION BUTTONS (Matching Xiaomi Fig 1 & Fig 3) */}
+    {/* FLOATING ACTION BUTTONS (Matching Xiaomi Fig 1 & Fig 3) */}
       <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 flex items-center space-x-3 z-30 pointer-events-auto">
         {/* Today Badge Button */}
         <button

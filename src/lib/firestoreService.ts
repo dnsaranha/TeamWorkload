@@ -18,6 +18,23 @@ const PROJECTS_COL = "projects";
 const TASKS_COL = "tasks";
 const TIME_ENTRIES_COL = "time_entries";
 
+export function sanitizeForFirestore(obj: any): any {
+  if (obj === undefined) return null;
+  if (obj === null) return null;
+  if (Array.isArray(obj)) return obj.map(sanitizeForFirestore);
+  if (typeof obj === "object" && !(obj instanceof Date)) {
+    const clean: any = {};
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (val !== undefined) {
+        clean[key] = sanitizeForFirestore(val);
+      }
+    }
+    return clean;
+  }
+  return obj;
+}
+
 export const firestoreService = {
   // --- EMPLOYEES ---
   async getEmployees(): Promise<Employee[]> {
@@ -40,7 +57,8 @@ export const firestoreService = {
   async saveEmployee(emp: Employee): Promise<void> {
     try {
       const docRef = doc(db, EMPLOYEES_COL, emp.id);
-      await setDoc(docRef, emp, { merge: true });
+      const cleanData = sanitizeForFirestore(emp);
+      await setDoc(docRef, cleanData, { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `${EMPLOYEES_COL}/${emp.id}`);
       throw err;
@@ -78,7 +96,8 @@ export const firestoreService = {
   async saveProject(proj: Project): Promise<void> {
     try {
       const docRef = doc(db, PROJECTS_COL, proj.id);
-      await setDoc(docRef, proj, { merge: true });
+      const cleanData = sanitizeForFirestore(proj);
+      await setDoc(docRef, cleanData, { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `${PROJECTS_COL}/${proj.id}`);
       throw err;
@@ -118,7 +137,8 @@ export const firestoreService = {
       // Exclude populated objects before saving to Firestore
       const { project, assigned_employee, ...cleanTask } = task;
       const docRef = doc(db, TASKS_COL, task.id);
-      await setDoc(docRef, cleanTask, { merge: true });
+      const cleanData = sanitizeForFirestore(cleanTask);
+      await setDoc(docRef, cleanData, { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `${TASKS_COL}/${task.id}`);
       throw err;
@@ -159,7 +179,8 @@ export const firestoreService = {
   async saveTimeEntry(entry: TimeEntry): Promise<void> {
     try {
       const docRef = doc(db, TIME_ENTRIES_COL, entry.id);
-      await setDoc(docRef, entry, { merge: true });
+      const cleanData = sanitizeForFirestore(entry);
+      await setDoc(docRef, cleanData, { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `${TIME_ENTRIES_COL}/${entry.id}`);
       throw err;
@@ -173,6 +194,37 @@ export const firestoreService = {
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `${TIME_ENTRIES_COL}/${id}`);
       throw err;
+    }
+  },
+
+  // Wipes all application collections in Firestore for total personal data cleanup
+  async purgeAllCollections(userId?: string): Promise<void> {
+    const collectionsToPurge = [
+      EMPLOYEES_COL,
+      PROJECTS_COL,
+      TASKS_COL,
+      TIME_ENTRIES_COL,
+      "work_groups",
+      "invitations",
+    ];
+
+    for (const colName of collectionsToPurge) {
+      try {
+        const snap = await getDocs(collection(db, colName));
+        for (const docSnap of snap.docs) {
+          await deleteDoc(docSnap.ref).catch(() => {});
+        }
+      } catch (e) {
+        console.warn(`Error purging collection ${colName}:`, e);
+      }
+    }
+
+    if (userId) {
+      try {
+        await deleteDoc(doc(db, "profiles", userId)).catch(() => {});
+      } catch (e) {
+        console.warn(`Error deleting user profile ${userId}:`, e);
+      }
     }
   },
 };

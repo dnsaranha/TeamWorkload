@@ -71,8 +71,6 @@ const HomePage = () => {
   } = useAuth();
 
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [isClearMockDialogOpen, setIsClearMockDialogOpen] = useState(false);
-  const [isProcessingMock, setIsProcessingMock] = useState(false);
   const [totalEmployees, setTotalEmployees] = useState(0);
   const [activeTasks, setActiveTasks] = useState(0);
   const [avgWorkload, setAvgWorkload] = useState(0);
@@ -356,11 +354,11 @@ const HomePage = () => {
             } text-blue-600 dark:text-blue-400 font-semibold`}
             onClick={() => setActiveTab("xiaomi-calendar")}
           >
-            <Smartphone
+            <Calendar
               className={`${isMobile ? "h-4 w-4" : sidebarCollapsed ? "h-4 w-4" : "mr-2 h-4 w-4"}`}
             />
-            {!sidebarCollapsed && !isMobile && "Cal. Xiaomi"}
-            {isMobile && <span className="text-[10px] font-medium leading-tight">Xiaomi</span>}
+            {!sidebarCollapsed && !isMobile && "Calendário"}
+            {isMobile && <span className="text-[10px] font-medium leading-tight">Calendário</span>}
           </Button>
 
           <Button
@@ -526,38 +524,6 @@ const HomePage = () => {
                   ))}
                 </select>
               </div>
-
-              {!isMockCleared ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsClearMockDialogOpen(true)}
-                  className="h-8 text-xs gap-1.5 text-destructive hover:bg-destructive/10 border-destructive/30"
-                  title="Limpar dados mock e iniciar com base vazia"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Limpar Mock
-                </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
-                    setIsProcessingMock(true);
-                    try {
-                      await restoreMockData();
-                    } finally {
-                      setIsProcessingMock(false);
-                    }
-                  }}
-                  disabled={isProcessingMock}
-                  className="h-8 text-xs gap-1.5 text-primary hover:bg-primary/10"
-                  title="Restaurar dados de exemplo"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                  Restaurar Mock
-                </Button>
-              )}
 
               <Button
                 variant={activeTab === "groups" ? "default" : "outline"}
@@ -754,60 +720,6 @@ const HomePage = () => {
           onOpenTimesheet={() => setActiveTab("timesheet")}
         />
       </div>
-
-      {/* CLEAR MOCK DATA CONFIRMATION DIALOG */}
-      <Dialog open={isClearMockDialogOpen} onOpenChange={setIsClearMockDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold flex items-center gap-2 text-destructive">
-              <Trash2 className="w-5 h-5 text-destructive" />
-              Limpar Dados de Demonstração?
-            </DialogTitle>
-            <DialogDescription className="text-xs pt-1">
-              Deseja remover todos os dados pré-carregados (colaboradores mock, tarefas e projetos de exemplo) para iniciar o sistema com uma base 100% limpa?
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="p-3 bg-muted/40 rounded-lg text-xs space-y-1.5 border">
-            <p className="font-semibold text-foreground">Aviso:</p>
-            <ul className="list-disc list-inside text-muted-foreground space-y-1 text-[11px]">
-              <li>A base de tarefas, projetos e colaboradores ficará vazia.</li>
-              <li>Você poderá cadastrar sua própria equipe e projetos reais.</li>
-              <li>Você poderá restaurar os dados de demonstração a qualquer momento.</li>
-            </ul>
-          </div>
-
-          <DialogFooter className="pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsClearMockDialogOpen(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              disabled={isProcessingMock}
-              onClick={async () => {
-                setIsProcessingMock(true);
-                try {
-                  await clearMockData();
-                  setIsClearMockDialogOpen(false);
-                  loadDashboardData();
-                } finally {
-                  setIsProcessingMock(false);
-                }
-              }}
-              className="gap-1.5 font-semibold"
-            >
-              {isProcessingMock ? "Limpando..." : "Sim, Limpar Dados Mock"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

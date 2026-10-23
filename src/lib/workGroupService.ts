@@ -298,17 +298,73 @@ export const getSeedGroups = (): WorkGroup[] => {
   ];
 };
 
+export function sanitizeForFirestore(obj: any): any {
+  if (obj === undefined) return null;
+  if (obj === null) return null;
+  if (Array.isArray(obj)) return obj.map(sanitizeForFirestore);
+  if (typeof obj === "object" && !(obj instanceof Date)) {
+    const clean: any = {};
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (val !== undefined) {
+        clean[key] = sanitizeForFirestore(val);
+      } else {
+        clean[key] = null;
+      }
+    }
+    return clean;
+  }
+  return obj;
+}
+
+export const SEED_GROUP_IDS = [
+  "group-dir-corp",
+  "group-dep-tech",
+  "group-dep-ops",
+  "group-crd-eng",
+  "group-sqd-front",
+  "group-sqd-back",
+];
+
 export const workGroupService = {
   // Get all groups (with Firestore priority and local cache fallback)
   async getAll(): Promise<WorkGroup[]> {
+    const isMockCleared = localStorage.getItem("crono_pulse_mock_cleared") === "true";
+
     try {
       const colRef = collection(db, WORK_GROUPS_COL);
       const snap = await getDocs(colRef);
       if (!snap.empty) {
-        const groups = snap.docs.map((d) => ({
+        let groups = snap.docs.map((d) => ({
           id: d.id,
           ...(d.data() as any),
         })) as WorkGroup[];
+
+        // If mock data was cleared by user, filter out the default demo groups
+        if (isMockCleared) {
+          groups = groups.filter((g) => !SEED_GROUP_IDS.includes(g.id));
+        }
+
+        // Merge with local storage if local has freshly created groups not yet indexed
+        const local = localStorage.getItem(STORAGE_KEY);
+        if (local) {
+          try {
+            const localParsed: WorkGroup[] = JSON.parse(local);
+            for (const lg of localParsed) {
+              if (!groups.some((g) => g.id === lg.id)) {
+                if (!isMockCleared || !SEED_GROUP_IDS.includes(lg.id)) {
+                  groups.push(lg);
+                  // Push to Firestore in background to heal sync
+                  const docRef = doc(db, WORK_GROUPS_COL, lg.id);
+                  setDoc(docRef, sanitizeForFirestore(lg), { merge: true }).catch(() => {});
+                }
+              }
+            }
+          } catch (e) {
+            console.error("Error parsing local work groups:", e);
+          }
+        }
+
         localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
         return groups;
       }
@@ -316,12 +372,13 @@ export const workGroupService = {
       handleFirestoreError(err, OperationType.GET, WORK_GROUPS_COL);
     }
 
-    // If user cleared mock data, do not re-seed defaults
-    if (localStorage.getItem("crono_pulse_mock_cleared") === "true") {
+    // If user cleared mock data, return only local non-mock groups
+    if (isMockCleared) {
       const local = localStorage.getItem(STORAGE_KEY);
       if (local) {
         try {
-          return JSON.parse(local);
+          const parsed: WorkGroup[] = JSON.parse(local);
+          return parsed.filter((g) => !SEED_GROUP_IDS.includes(g.id));
         } catch (e) {
           console.error("Error parsing local work groups:", e);
         }
@@ -351,7 +408,7 @@ export const workGroupService = {
     try {
       for (const g of seed) {
         const docRef = doc(db, WORK_GROUPS_COL, g.id);
-        await setDoc(docRef, g, { merge: true });
+        await setDoc(docRef, sanitizeForFirestore(g), { merge: true });
       }
     } catch (e) {
       console.warn("Could not seed groups to Firestore:", e);
@@ -376,24 +433,38 @@ export const workGroupService = {
       }
     } else {
       group.parentName = "Raiz Organizacional";
+      group.parentId = null;
     }
 
     group.levelName = `Nível ${group.level}`;
     group.updated_at = now;
+    group.created_at = group.created_at || now;
+    group.color = group.color || "#2563eb";
+    group.members = (group.members || []).map((m) => ({
+      ...m,
+      email: m.email || null,
+      roleInGroup: m.roleInGroup || "Membro",
+      isAdmin: Boolean(m.isAdmin),
+      canCreate: Boolean(m.canCreate),
+      canEdit: Boolean(m.canEdit),
+      canDelete: Boolean(m.canDelete),
+      canView: m.canView !== false,
+      joinedAt: m.joinedAt || now,
+    }));
 
     if (existingIndex >= 0) {
       groups[existingIndex] = group;
     } else {
-      group.created_at = group.created_at || now;
       groups.push(group);
     }
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
 
-    // Save to Firestore
+    // Save sanitized copy to Firestore
     try {
       const docRef = doc(db, WORK_GROUPS_COL, group.id);
-      await setDoc(docRef, group, { merge: true });
+      const cleanGroup = sanitizeForFirestore(group);
+      await setDoc(docRef, cleanGroup, { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `${WORK_GROUPS_COL}/${group.id}`);
     }
@@ -421,6 +492,19 @@ export const workGroupService = {
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `${WORK_GROUPS_COL}/${id}`);
     }
+  },
+
+  async clearAll(): Promise<void> {
+    try {
+      const groups = await this.getAll();
+      for (const g of groups) {
+        const docRef = doc(db, WORK_GROUPS_COL, g.id);
+        await deleteDoc(docRef).catch(() => {});
+      }
+    } catch (e) {
+      console.warn("Error deleting work groups from Firestore:", e);
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
   },
 
   // Member management

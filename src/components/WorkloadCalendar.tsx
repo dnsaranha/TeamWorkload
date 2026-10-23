@@ -15,13 +15,14 @@ import {
   Trash2,
   ChevronsUpDown,
 } from "lucide-react";
-import { supabase } from "../lib/supabaseClient";
 import {
   type Task,
   type Employee,
   type Project,
   type TaskException,
   taskService,
+  employeeService,
+  projectService,
 } from "@/lib/supabaseClient";
 import { format } from "date-fns";
 import { Input } from "./ui/input";
@@ -90,25 +91,39 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   const [selectedExceptionDate, setSelectedExceptionDate] = useState<
     string | null
   >(null);
-  const [isMainTaskCollapsed, setIsMainTaskCollapsed] = useState(true);
+  const [isMainTaskOpen, setIsMainTaskOpen] = useState(true);
+
+  // Robust parser for recurring instance IDs (handles any ID format, not just 36-char UUIDs)
+  const parseTaskIdAndDate = (taskId: string) => {
+    const match = taskId.match(/^(.*)-(\d{4}-\d{2}-\d{2})$/);
+    if (match) {
+      const candidateOriginalId = match[1];
+      const dateStr = match[2];
+      const originalTask = tasks.find((t) => t.id === candidateOriginalId);
+      if (originalTask) {
+        return { originalId: candidateOriginalId, dateStr, isRecurring: true, originalTask };
+      }
+    }
+    const regularTask = tasks.find((t) => t.id === taskId);
+    return { originalId: taskId, dateStr: null, isRecurring: false, originalTask: regularTask };
+  };
 
   const openEditDialog = (task: Task & { is_recurring_instance?: boolean }) => {
     if (task.is_recurring_instance) {
-      const originalId = task.id.substring(0, 36);
-      const originalTask = tasks.find((t) => t.id === originalId);
+      const { originalTask, dateStr } = parseTaskIdAndDate(task.id);
       if (originalTask) {
         setCurrentTask(originalTask);
-        // Extract the date from the recurring instance ID
-        const dateStr = task.id.substring(37); // After the original ID and dash
         setSelectedExceptionDate(dateStr);
       } else {
-        alert("Could not find the original recurring task to edit.");
-        return;
+        console.warn("Could not find the original recurring task to edit for id:", task.id);
+        setCurrentTask(task);
+        setSelectedExceptionDate(null);
       }
     } else {
       setCurrentTask(task);
       setSelectedExceptionDate(null);
     }
+    setIsMainTaskOpen(true);
     setIsEditTaskDialogOpen(true);
   };
 
@@ -140,21 +155,16 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
   const loadTasks = async () => {
     try {
-      let query = supabase
-        .from("workload_tasks")
-        .select("*")
-        .order("start_date", { ascending: true });
-
+      const allTasks = await taskService.getAll();
+      let list = allTasks;
       if (selectedEmployeeId) {
-        query = query.eq("assigned_employee_id", selectedEmployeeId);
+        list = list.filter((t) => t.assigned_employee_id === selectedEmployeeId);
       }
-
-      const { data, error } = await query;
-      if (error) throw error;
+      list.sort((a, b) => (a.start_date || "").localeCompare(b.start_date || ""));
 
       const validStatusValues = ["pending", "in_progress", "completed"];
-      const cleanedData = (data || []).map((task) => {
-        if (!validStatusValues.includes(task.status)) {
+      const cleanedData = list.map((task) => {
+        if (!validStatusValues.includes(task.status || "")) {
           return { ...task, status: "pending" };
         }
         return task;
@@ -168,13 +178,9 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
   const loadEmployees = async () => {
     try {
-      const { data, error } = await supabase
-        .from("employees")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (error) throw error;
-      setEmployees(data || []);
+      const data = await employeeService.getAll();
+      const sorted = [...data].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      setEmployees(sorted);
     } catch (error) {
       console.error("Error loading employees:", error);
     }
@@ -182,13 +188,9 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
   const loadProjects = async () => {
     try {
-      const { data, error } = await supabase
-        .from("workload_projects")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (error) throw error;
-      setProjects(data || []);
+      const data = await projectService.getAll();
+      const sorted = [...data].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      setProjects(sorted);
     } catch (error) {
       console.error("Error loading projects:", error);
     }
@@ -496,30 +498,26 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
     newStartDate: Date,
     employeeId?: string,
   ) => {
-    // Check if this is a recurring instance being moved
-    if (taskId.includes("-") && taskId.length > 36) {
-      const originalId = taskId.substring(0, 36);
-      const oldDateStr = taskId.substring(37);
-      const newDateStr = newStartDate.toISOString().split("T")[0];
+    const { originalId, dateStr: oldDateStr, isRecurring, originalTask } = parseTaskIdAndDate(taskId);
+    const newDateStr = newStartDate.toISOString().split("T")[0];
 
-      const originalTask = tasks.find((task) => task.id === originalId);
-      if (originalTask && originalTask.repeats_weekly) {
-        await handleMoveException(
-          originalId,
-          oldDateStr,
-          newDateStr,
-          employeeId,
-        );
-        return;
-      }
-    }
+    // Determine target employee: use provided employeeId, or fallback to current task's employee
+    const targetEmployeeId = employeeId || originalTask?.assigned_employee_id || null;
 
-    if (!employeeId) {
-      console.warn("No employee selected to assign the task to.");
+    if (isRecurring && originalTask && originalTask.repeats_weekly && oldDateStr) {
+      await handleMoveException(
+        originalId,
+        oldDateStr,
+        newDateStr,
+        targetEmployeeId || undefined,
+      );
       return;
     }
 
-    const originalTask = tasks.find((task) => task.id === taskId);
+    if (!targetEmployeeId) {
+      console.warn("No employee available to assign the task to.");
+      return;
+    }
 
     const formattedStartDate = newStartDate.toISOString().split("T")[0];
     let formattedEndDate = formattedStartDate; // Default for new tasks
@@ -531,18 +529,18 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
         originalTask.start_date + "T00:00:00Z",
       );
       const originalEndDate = new Date(originalTask.end_date + "T00:00:00Z");
-      const durationInMillis =
-        originalEndDate.getTime() - originalStartDate.getTime();
+      const durationInMillis = Math.max(
+        0,
+        originalEndDate.getTime() - originalStartDate.getTime(),
+      );
 
       const newEndDate = new Date(newStartDate.getTime() + durationInMillis);
       formattedEndDate = newEndDate.toISOString().split("T")[0];
     }
-    // If originalTask is not found, it's a new allocation.
-    // The default formattedEndDate (same as start date) will be used.
 
     try {
-      await taskService.update(taskId, {
-        assigned_employee_id: employeeId,
+      await taskService.update(originalId, {
+        assigned_employee_id: targetEmployeeId,
         start_date: formattedStartDate,
         end_date: formattedEndDate,
       });
@@ -605,20 +603,14 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
   };
 
   const handleDeallocateTask = async (taskId: string) => {
-    // Check if this is a recurring instance
-    if (taskId.includes("-") && taskId.length > 36) {
-      const originalId = taskId.substring(0, 36);
-      const dateStr = taskId.substring(37);
-
-      const originalTask = tasks.find((task) => task.id === originalId);
-      if (originalTask && originalTask.repeats_weekly) {
-        await handleRemoveException(originalId, dateStr);
-        return;
-      }
+    const { originalId, dateStr, isRecurring, originalTask } = parseTaskIdAndDate(taskId);
+    if (isRecurring && originalTask && originalTask.repeats_weekly && dateStr) {
+      await handleRemoveException(originalId, dateStr);
+      return;
     }
 
     try {
-      await taskService.update(taskId, {
+      await taskService.update(originalId, {
         assigned_employee_id: null,
       });
       onTaskAssigned();
@@ -1041,35 +1033,54 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
           setIsEditTaskDialogOpen(open);
           if (!open) {
             setSelectedExceptionDate(null);
-            setIsMainTaskCollapsed(true);
+            setIsMainTaskOpen(true);
           }
         }}
       >
-        <DialogContent className="max-w-2xl w-[calc(100%-2rem)]">
+        <DialogContent className="max-w-2xl w-[calc(100%-2rem)] bg-card text-foreground border-border">
           <DialogHeader>
-            <DialogTitle>
-              {currentTask?.repeats_weekly
-                ? "Editar Tarefa Recorrente"
-                : "Editar Tarefa"}
+            <DialogTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
+              {currentTask?.repeats_weekly ? (
+                <>
+                  <Repeat className="h-5 w-5 text-primary" />
+                  <span>Editar Tarefa Recorrente</span>
+                </>
+              ) : (
+                <span>Editar Tarefa</span>
+              )}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-xs text-muted-foreground">
               {currentTask?.repeats_weekly
-                ? "Gerenciar exceções e detalhes para tarefa recorrente."
+                ? "Gerencie exceções diárias e configurações gerais desta tarefa recorrente."
                 : "Atualize os detalhes da tarefa e estimativas de tempo."}
             </DialogDescription>
           </DialogHeader>
           {currentTask && (
             <ScrollArea className="max-h-[75vh]">
-              <div className="space-y-6 p-4">
-                {/* Single Day Exception Section - Only for recurring tasks */}
+              <div className="space-y-5 p-2 sm:p-4">
+                {/* Single Day Exception Section - Only for recurring tasks when a day was clicked */}
                 {currentTask.repeats_weekly && selectedExceptionDate && (
-                  <div className="border border-blue-200 rounded-lg p-4 bg-blue-50">
-                    <h4 className="text-lg font-semibold mb-4 text-blue-900">
-                      Registro do Dia -{" "}
-                      {new Date(
-                        selectedExceptionDate + "T00:00:00",
-                      ).toLocaleDateString("pt-BR")}
-                    </h4>
+                  <div className="border border-primary/25 rounded-xl p-3.5 sm:p-4 bg-primary/5 dark:bg-primary/10 shadow-2xs space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <CalendarIcon className="h-4 w-4 text-primary" />
+                        <h4 className="text-sm font-bold text-foreground">
+                          Registro do Dia:{" "}
+                          <span className="text-primary font-mono">
+                            {new Date(
+                              selectedExceptionDate + "T00:00:00",
+                            ).toLocaleDateString("pt-BR")}
+                          </span>
+                        </h4>
+                      </div>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25">
+                        Ajuste Deste Dia
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
+                      Modifique as horas, o colaborador ou marque como realizado apenas para esta data específica.
+                    </p>
 
                     {(() => {
                       // Find or create exception for the selected date
@@ -1085,9 +1096,9 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                       };
 
                       return (
-                        <div className="grid grid-cols-12 gap-4 items-center p-4 bg-white border border-gray-200 rounded-lg">
-                          <div className="col-span-3">
-                            <Label className="text-sm font-medium text-gray-700">
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end p-3.5 bg-background border border-border rounded-lg shadow-2xs">
+                          <div className="sm:col-span-3 space-y-1">
+                            <Label className="text-xs font-semibold text-foreground">
                               Data de Execução
                             </Label>
                             <Input
@@ -1121,17 +1132,18 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                                 });
                                 setSelectedExceptionDate(newDate);
                               }}
-                              className="mt-1"
+                              className="h-9 text-xs font-mono bg-background text-foreground border-input"
                             />
                           </div>
-                          <div className="col-span-2 w-[80px]">
-                            <Label className="text-sm font-medium text-gray-700">
+                          <div className="sm:col-span-2 space-y-1">
+                            <Label className="text-xs font-semibold text-foreground">
                               Horas
                             </Label>
                             <Input
                               type="number"
                               step="0.5"
-                              value={exception.estimated_hours || ""}
+                              min="0"
+                              value={exception.estimated_hours ?? ""}
                               onChange={(e) => {
                                 const updatedExceptions = [
                                   ...(currentTask.exceptions || []),
@@ -1160,11 +1172,11 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                                   exceptions: updatedExceptions,
                                 });
                               }}
-                              className="mt-1"
+                              className="h-9 text-xs font-mono bg-background text-foreground border-input"
                             />
                           </div>
-                          <div className="col-span-3">
-                            <Label className="text-sm font-medium text-gray-700">
+                          <div className="sm:col-span-3 space-y-1">
+                            <Label className="text-xs font-semibold text-foreground">
                               Responsável
                             </Label>
                             <Select
@@ -1198,11 +1210,11 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                                 });
                               }}
                             >
-                              <SelectTrigger className="mt-1">
-                                <SelectValue />
+                              <SelectTrigger className="h-9 text-xs bg-background text-foreground border-input">
+                                <SelectValue placeholder="Padrão da Tarefa" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="none">Padrão</SelectItem>
+                                <SelectItem value="none">Padrão da Tarefa</SelectItem>
                                 {employees.map((employee) => (
                                   <SelectItem
                                     key={employee.id}
@@ -1214,8 +1226,8 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                               </SelectContent>
                             </Select>
                           </div>
-                          <div className="col-span-2 text-center">
-                            <Label className="text-sm font-medium text-gray-700 block mb-2">
+                          <div className="sm:col-span-2 flex flex-col items-center justify-center space-y-1 pb-1">
+                            <Label className="text-xs font-semibold text-foreground">
                               Realizado
                             </Label>
                             <input
@@ -1247,10 +1259,10 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                                   exceptions: updatedExceptions,
                                 });
                               }}
-                              className="h-5 w-5"
+                              className="h-5 w-5 rounded border-input text-primary focus:ring-primary cursor-pointer accent-primary"
                             />
                           </div>
-                          <div className="col-span-2">
+                          <div className="sm:col-span-2">
                             <Button
                               variant="destructive"
                               size="sm"
@@ -1280,10 +1292,10 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                                   exceptions: updatedExceptions,
                                 });
                               }}
-                              className="w-full mt-6 flex flex-wrap h-[40px]"
+                              className="w-full h-9 text-xs gap-1 font-semibold"
                             >
-                              <Trash2 size={14} className="mr-1" />
-                              Remover
+                              <Trash2 size={14} />
+                              <span>Remover</span>
                             </Button>
                           </div>
                         </div>
@@ -1292,30 +1304,44 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                   </div>
                 )}
 
-                {/* Main Task Details - Collapsible for recurring tasks */}
+                {/* Main Task Details - Collapsible for recurring tasks, always open by default */}
                 <Collapsible
-                  open={!currentTask.repeats_weekly || !isMainTaskCollapsed}
-                  onOpenChange={setIsMainTaskCollapsed}
+                  open={!currentTask.repeats_weekly || isMainTaskOpen}
+                  onOpenChange={setIsMainTaskOpen}
+                  className="border border-border rounded-xl p-3.5 sm:p-4 bg-muted/20 space-y-4"
                 >
-                  <CollapsibleTrigger asChild>
-                    {currentTask.repeats_weekly ? (
+                  {currentTask.repeats_weekly ? (
+                    <CollapsibleTrigger asChild>
                       <Button
                         variant="ghost"
-                        className="w-full justify-between p-0 h-auto"
+                        type="button"
+                        className="w-full justify-between p-2 h-auto hover:bg-muted/60 rounded-lg group text-foreground"
                       >
-                        <h4 className="text-lg font-semibold text-gray-900">
-                          Detalhes da Tarefa
-                        </h4>
-                        <ChevronsUpDown className="h-4 w-4" />
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 rounded-md bg-primary/10 text-primary">
+                            <Repeat className="h-4 w-4" />
+                          </div>
+                          <div className="text-left">
+                            <h4 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                              Detalhes Gerais da Tarefa Recorrente
+                            </h4>
+                            <p className="text-[11px] text-muted-foreground">
+                              Nome, projeto, datas limite, dias da semana e responsável geral
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
+                          <span>{isMainTaskOpen ? "Ocultar" : "Expandir"}</span>
+                          <ChevronsUpDown className="h-4 w-4" />
+                        </div>
                       </Button>
-                    ) : (
-                      <div className="hidden" />
-                    )}
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="space-y-4 mt-4">
+                    </CollapsibleTrigger>
+                  ) : null}
+
+                  <CollapsibleContent className="space-y-4 pt-1">
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="edit-name" className="text-right">
-                        Task Name
+                      <Label htmlFor="edit-name" className="text-right text-xs font-semibold text-foreground">
+                        Nome da Tarefa
                       </Label>
                       <Input
                         id="edit-name"
@@ -1326,12 +1352,12 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                             name: e.target.value,
                           })
                         }
-                        className="col-span-3"
+                        className="col-span-3 h-9 text-xs bg-background text-foreground border-input"
                       />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="edit-description" className="text-right">
-                        Description
+                      <Label htmlFor="edit-description" className="text-right text-xs font-semibold text-foreground">
+                        Descrição
                       </Label>
                       <Textarea
                         id="edit-description"
@@ -1342,15 +1368,15 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                             description: e.target.value,
                           })
                         }
-                        className="col-span-3"
+                        className="col-span-3 text-xs bg-background text-foreground border-input min-h-[70px]"
                       />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label
                         htmlFor="edit-estimatedTime"
-                        className="text-right"
+                        className="text-right text-xs font-semibold text-foreground"
                       >
-                        Est. Hours
+                        Horas Totais
                       </Label>
                       <Input
                         id="edit-estimated_time"
@@ -1364,23 +1390,23 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                             estimated_time: Number(e.target.value),
                           })
                         }
-                        className={`col-span-3 ${
+                        className={`col-span-3 h-9 text-xs bg-background text-foreground border-input ${
                           currentTask.repeats_weekly
-                            ? "bg-gray-100 cursor-not-allowed"
+                            ? "bg-muted cursor-not-allowed opacity-80"
                             : ""
                         }`}
                       />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="edit-startDate" className="text-right">
-                        Start Date
+                      <Label htmlFor="edit-startDate" className="text-right text-xs font-semibold text-foreground">
+                        Data de Início
                       </Label>
                       <div className="col-span-3">
                         <Popover>
                           <PopoverTrigger asChild>
                             <Button
                               variant={"outline"}
-                              className="w-full justify-start text-left font-normal"
+                              className="w-full justify-start text-left font-normal h-9 text-xs bg-background text-foreground border-input"
                             >
                               <CalendarIcon className="mr-2 h-4 w-4" />
                               {format(
@@ -1409,15 +1435,15 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                       </div>
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="edit-endDate" className="text-right">
-                        End Date
+                      <Label htmlFor="edit-endDate" className="text-right text-xs font-semibold text-foreground">
+                        Data de Término
                       </Label>
                       <div className="col-span-3">
                         <Popover>
                           <PopoverTrigger asChild>
                             <Button
                               variant={"outline"}
-                              className="w-full justify-start text-left font-normal"
+                              className="w-full justify-start text-left font-normal h-9 text-xs bg-background text-foreground border-input"
                             >
                               <CalendarIcon className="mr-2 h-4 w-4" />
                               {format(
@@ -1446,8 +1472,8 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                       </div>
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="edit-project" className="text-right">
-                        Project
+                      <Label htmlFor="edit-project" className="text-right text-xs font-semibold text-foreground">
+                        Projeto
                       </Label>
                       <Select
                         onValueChange={(value) =>
@@ -1455,11 +1481,11 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                         }
                         value={currentTask.project_id || "none"}
                       >
-                        <SelectTrigger className="col-span-3">
-                          <SelectValue placeholder="Select a project" />
+                        <SelectTrigger className="col-span-3 h-9 text-xs bg-background text-foreground border-input">
+                          <SelectValue placeholder="Selecione um projeto" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">No project</SelectItem>
+                          <SelectItem value="none">Sem projeto</SelectItem>
                           {projects.map((project) => (
                             <SelectItem key={project.id} value={project.id}>
                               {project.name}
@@ -1469,7 +1495,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                       </Select>
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="edit-status" className="text-right">
+                      <Label htmlFor="edit-status" className="text-right text-xs font-semibold text-foreground">
                         Status
                       </Label>
                       <Select
@@ -1478,8 +1504,8 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                         ) => setCurrentTask({ ...currentTask, status: value })}
                         value={currentTask.status}
                       >
-                        <SelectTrigger className="col-span-3">
-                          <SelectValue placeholder="Select status" />
+                        <SelectTrigger className="col-span-3 h-9 text-xs bg-background text-foreground border-input">
+                          <SelectValue placeholder="Selecione o status" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="pending">Pendente</SelectItem>
@@ -1494,7 +1520,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                       <div className="grid grid-cols-4 items-center gap-4">
                         <Label
                           htmlFor="edit-completion_date"
-                          className="text-right"
+                          className="text-right text-xs font-semibold text-foreground"
                         >
                           Data de Conclusão
                         </Label>
@@ -1508,14 +1534,14 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                               completion_date: e.target.value,
                             })
                           }
-                          className="col-span-3"
+                          className="col-span-3 h-9 text-xs bg-background text-foreground border-input"
                         />
                       </div>
                     )}
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label
                         htmlFor="edit-special_marker"
-                        className="text-right"
+                        className="text-right text-xs font-semibold text-foreground"
                       >
                         Marcador Especial
                       </Label>
@@ -1528,7 +1554,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                         }
                         value={currentTask.special_marker || "none"}
                       >
-                        <SelectTrigger className="col-span-3">
+                        <SelectTrigger className="col-span-3 h-9 text-xs bg-background text-foreground border-input">
                           <SelectValue placeholder="Selecione um marcador" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1548,9 +1574,9 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label
                         htmlFor="edit-repeats_weekly"
-                        className="text-right"
+                        className="text-right text-xs font-semibold text-foreground"
                       >
-                        Repetição Semanal
+                        Repetição
                       </Label>
                       <div className="col-span-3 flex items-center space-x-2">
                         <input
@@ -1562,18 +1588,18 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                               ...currentTask,
                               repeats_weekly: e.target.checked,
                               repeat_days: e.target.checked
-                                ? currentTask.repeat_days || []
+                                ? currentTask.repeat_days || ["monday", "tuesday", "wednesday", "thursday", "friday"]
                                 : null,
                               hours_per_day: e.target.checked
-                                ? currentTask.hours_per_day || 0
+                                ? currentTask.hours_per_day || 2
                                 : null,
                             })
                           }
-                          className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                          className="h-4 w-4 text-primary focus:ring-primary border-border rounded cursor-pointer accent-primary"
                         />
                         <Label
                           htmlFor="edit-repeats_weekly"
-                          className="text-sm"
+                          className="text-xs text-foreground cursor-pointer font-medium"
                         >
                           Esta tarefa se repete semanalmente
                         </Label>
@@ -1582,10 +1608,10 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                     {currentTask.repeats_weekly && (
                       <>
                         <div className="grid grid-cols-4 items-start gap-4">
-                          <Label className="text-right pt-2">
+                          <Label className="text-right text-xs font-semibold text-foreground pt-2">
                             Dias da Semana
                           </Label>
-                          <div className="col-span-3 grid grid-cols-2 gap-2">
+                          <div className="col-span-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
                             {[
                               { value: "monday", label: "Segunda" },
                               { value: "tuesday", label: "Terça" },
@@ -1611,11 +1637,11 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                                       e.target.checked,
                                     )
                                   }
-                                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                                  className="h-4 w-4 text-primary focus:ring-primary border-border rounded cursor-pointer accent-primary"
                                 />
                                 <Label
                                   htmlFor={`edit-day-${day.value}`}
-                                  className="text-sm"
+                                  className="text-xs text-foreground cursor-pointer"
                                 >
                                   {day.label}
                                 </Label>
@@ -1626,7 +1652,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                         <div className="grid grid-cols-4 items-center gap-4">
                           <Label
                             htmlFor="edit-hours_per_day"
-                            className="text-right"
+                            className="text-right text-xs font-semibold text-foreground"
                           >
                             Horas por Dia
                           </Label>
@@ -1642,7 +1668,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                                 hours_per_day: parseFloat(e.target.value) || 0,
                               })
                             }
-                            className="col-span-3"
+                            className="col-span-3 h-9 text-xs bg-background text-foreground border-input"
                             placeholder="Ex: 2.5"
                           />
                         </div>
@@ -1651,9 +1677,9 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label
                         htmlFor="edit-assigned-employee"
-                        className="text-right"
+                        className="text-right text-xs font-semibold text-foreground"
                       >
-                        Responsável
+                        Responsável Geral
                       </Label>
                       <Select
                         onValueChange={(value) =>
@@ -1664,8 +1690,8 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                         }
                         value={currentTask.assigned_employee_id || "none"}
                       >
-                        <SelectTrigger className="col-span-3">
-                          <SelectValue placeholder="Select an employee" />
+                        <SelectTrigger className="col-span-3 h-9 text-xs bg-background text-foreground border-input">
+                          <SelectValue placeholder="Selecione um colaborador" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Não atribuído</SelectItem>
@@ -1682,9 +1708,22 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
               </div>
             </ScrollArea>
           )}
-          <DialogFooter>
-            <Button type="submit" onClick={handleUpdateTask}>
-              Update Task
+          <DialogFooter className="flex items-center justify-between gap-2 pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditTaskDialogOpen(false)}
+              className="text-xs"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              onClick={handleUpdateTask}
+              className="font-semibold text-xs"
+            >
+              Salvar Alterações
             </Button>
           </DialogFooter>
         </DialogContent>

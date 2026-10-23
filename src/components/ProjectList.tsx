@@ -46,14 +46,20 @@ import {
   Search,
   Download,
   Upload,
+  Building2,
+  Users,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { projectService, type Project, type ProjectInsert } from "@/lib/supabaseClient";
+import { useAuth } from "@/lib/authContext";
+import { Badge } from "@/components/ui/badge";
 
 const ProjectList = () => {
+  const { allGroups, userGroups, isSuperAdmin } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
@@ -65,6 +71,7 @@ const ProjectList = () => {
     end_date: new Date().toISOString().split("T")[0],
     categoria_estrategica: "",
     special_marker: "none",
+    group_id: "none",
   });
 
   useEffect(() => {
@@ -103,10 +110,10 @@ const ProjectList = () => {
   const handleAddProject = async () => {
     try {
       if (!formData.name.trim()) {
-        alert("Name is required");
         return;
       }
 
+      const selectedGroup = allGroups.find((g) => g.id === formData.group_id);
       const newProject = await projectService.create({
         name: formData.name.trim(),
         description: formData.description.trim(),
@@ -115,6 +122,8 @@ const ProjectList = () => {
         categoria_estrategica: formData.categoria_estrategica.trim(),
         special_marker:
           formData.special_marker === "none" ? null : formData.special_marker,
+        group_id: formData.group_id === "none" ? null : formData.group_id,
+        group_name: selectedGroup ? selectedGroup.name : null,
       });
 
       setProjects([...projects, newProject]);
@@ -122,7 +131,6 @@ const ProjectList = () => {
       setIsAddDialogOpen(false);
     } catch (error) {
       console.error("Error adding project:", error);
-      alert("Failed to add project. Please try again.");
     }
   };
 
@@ -131,10 +139,10 @@ const ProjectList = () => {
 
     try {
       if (!formData.name.trim()) {
-        alert("Name is required");
         return;
       }
 
+      const selectedGroup = allGroups.find((g) => g.id === formData.group_id);
       const updatedProject = await projectService.update(currentProject.id, {
         name: formData.name.trim(),
         description: formData.description.trim(),
@@ -143,6 +151,8 @@ const ProjectList = () => {
         categoria_estrategica: formData.categoria_estrategica.trim(),
         special_marker:
           formData.special_marker === "none" ? null : formData.special_marker,
+        group_id: formData.group_id === "none" ? null : formData.group_id,
+        group_name: selectedGroup ? selectedGroup.name : null,
       });
 
       const updatedProjects = projects.map((proj) =>
@@ -154,7 +164,6 @@ const ProjectList = () => {
       setIsEditDialogOpen(false);
     } catch (error) {
       console.error("Error updating project:", error);
-      alert("Failed to update project. Please try again.");
     }
   };
 
@@ -176,6 +185,7 @@ const ProjectList = () => {
       end_date: project.end_date || "",
       categoria_estrategica: project.categoria_estrategica || "",
       special_marker: project.special_marker || "none",
+      group_id: project.group_id || "none",
     });
     setIsEditDialogOpen(true);
   };
@@ -188,15 +198,24 @@ const ProjectList = () => {
       end_date: new Date().toISOString().split("T")[0],
       categoria_estrategica: "",
       special_marker: "none",
+      group_id: userGroups[0]?.id || "none",
     });
     setCurrentProject(null);
   };
 
-  const filteredProjects = projects.filter(
-    (project) =>
+  const filteredProjects = projects.filter((project) => {
+    const matchesSearch =
       project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      project.description?.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+      project.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (project.group_name && project.group_name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const matchesGroup =
+      selectedGroupFilter === "all" ||
+      (selectedGroupFilter === "none" && !project.group_id) ||
+      project.group_id === selectedGroupFilter;
+
+    return matchesSearch && matchesGroup;
+  });
 
   const exportToExcel = () => {
     const exportData = filteredProjects.map((project) => ({
@@ -292,6 +311,24 @@ const ProjectList = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
+
+            {allGroups.length > 0 && (
+              <Select value={selectedGroupFilter} onValueChange={setSelectedGroupFilter}>
+                <SelectTrigger className="w-full sm:w-44 h-9 text-xs">
+                  <SelectValue placeholder="Todos os Grupos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os Grupos</SelectItem>
+                  <SelectItem value="none">Geral (Sem Grupo)</SelectItem>
+                  {allGroups.map((g) => (
+                    <SelectItem key={g.id} value={g.id}>
+                      {g.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
             <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
               <Button
                 variant="outline"
@@ -339,15 +376,51 @@ const ProjectList = () => {
                   <div className="grid gap-4 py-2">
                     <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
                       <Label htmlFor="name" className="text-left sm:text-right text-xs sm:text-sm font-medium">
-                        Nome
+                        Nome *
                       </Label>
                       <Input
                         id="name"
                         name="name"
                         value={formData.name}
                         onChange={handleInputChange}
+                        placeholder="Nome do projeto"
                         className="sm:col-span-3"
                       />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+                      <Label htmlFor="group_id" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                        Grupo
+                      </Label>
+                      <div className="sm:col-span-3 space-y-1">
+                        <Select
+                          name="group_id"
+                          onValueChange={(value) => handleSelectChange("group_id", value)}
+                          value={formData.group_id}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Selecione um grupo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Geral (Sem Grupo Específico)</SelectItem>
+                            {allGroups.map((g) => (
+                              <SelectItem key={g.id} value={g.id}>
+                                {g.name} (Nível {g.level})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {userGroups.length > 0 && formData.group_id === userGroups[0].id && (
+                          <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                            <Building2 className="w-3 h-3 text-primary shrink-0" />
+                            Associado automaticamente ao seu grupo ({userGroups[0].name}).
+                          </p>
+                        )}
+                        {(isSuperAdmin || userGroups.some(g => g.level <= 2)) && (
+                          <p className="text-[10px] text-muted-foreground">
+                            Como gestor de nível superior, você pode direcionar para qualquer equipe.
+                          </p>
+                        )}
+                      </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
                       <Label htmlFor="description" className="text-left sm:text-right text-xs sm:text-sm font-medium">
@@ -447,10 +520,11 @@ const ProjectList = () => {
         </CardHeader>
         <CardContent className="p-0 sm:p-6">
           <div className="overflow-x-auto">
-            <Table className="min-w-[620px]">
+            <Table className="min-w-[680px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
+                  <TableHead>Grupo</TableHead>
                   <TableHead>Descrição</TableHead>
                   <TableHead>Data de Início</TableHead>
                   <TableHead>Data de Término</TableHead>
@@ -463,7 +537,7 @@ const ProjectList = () => {
                 {loading ? (
                   <TableRow>
                     <TableCell
-                      colSpan={7}
+                      colSpan={8}
                       className="text-center py-6 text-muted-foreground"
                     >
                       Carregando projetos...
@@ -474,6 +548,19 @@ const ProjectList = () => {
                     <TableRow key={project.id}>
                       <TableCell className="font-medium">
                         {project.name}
+                      </TableCell>
+                      <TableCell>
+                        {project.group_name ? (
+                          <Badge
+                            variant="outline"
+                            className="text-[11px] font-semibold text-purple-700 bg-purple-50 dark:bg-purple-950 dark:text-purple-300 border-purple-200 dark:border-purple-800 gap-1 inline-flex items-center"
+                          >
+                            <Building2 className="w-3 h-3" />
+                            {project.group_name}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Geral</span>
+                        )}
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate">
                         {project.description || "-"}
@@ -536,7 +623,7 @@ const ProjectList = () => {
                 ) : (
                   <TableRow>
                     <TableCell
-                      colSpan={7}
+                      colSpan={8}
                       className="text-center py-6 text-muted-foreground"
                     >
                       Nenhum projeto encontrado
@@ -569,6 +656,35 @@ const ProjectList = () => {
                 onChange={handleInputChange}
                 className="sm:col-span-3"
               />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
+              <Label htmlFor="edit-group_id" className="text-left sm:text-right text-xs sm:text-sm font-medium">
+                Grupo
+              </Label>
+              <div className="sm:col-span-3 space-y-1">
+                <Select
+                  name="group_id"
+                  onValueChange={(value) => handleSelectChange("group_id", value)}
+                  value={formData.group_id}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecione um grupo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Geral (Sem Grupo Específico)</SelectItem>
+                    {allGroups.map((g) => (
+                      <SelectItem key={g.id} value={g.id}>
+                        {g.name} (Nível {g.level})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(isSuperAdmin || userGroups.some((g) => g.level <= 2)) && (
+                  <p className="text-[10px] text-muted-foreground">
+                    Você pode alterar a equipe responsável por este projeto.
+                  </p>
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-1 sm:gap-4">
               <Label htmlFor="edit-description" className="text-left sm:text-right text-xs sm:text-sm font-medium">

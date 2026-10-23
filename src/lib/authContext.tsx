@@ -15,6 +15,8 @@ import {
   HIERARCHY_LEVELS,
 } from "./workGroupService";
 import { mockDataManager } from "./mockDataManager";
+import { invitationService } from "./invitationService";
+import { userProfileService } from "./userProfileService";
 
 export interface CurrentUserPermissions {
   canCreate: boolean;
@@ -48,6 +50,8 @@ interface AuthContextType {
   refreshUserData: () => Promise<void>;
   clearMockData: () => Promise<void>;
   restoreMockData: () => Promise<void>;
+  purgeAllUserData: () => Promise<void>;
+  deleteUserAccount: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -70,7 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [allGroups, setAllGroups] = useState<WorkGroup[]>([]);
   const [activeEmployeeId, setActiveEmployeeId] = useState<string>(() => {
-    return localStorage.getItem(ACTIVE_PERSONA_KEY) || "emp-4"; // Default to Lucas Mendes
+    return localStorage.getItem(ACTIVE_PERSONA_KEY) || "emp-4";
   });
   const [isSuperAdmin, setIsSuperAdminState] = useState<boolean>(() => {
     const val = localStorage.getItem(SUPER_ADMIN_KEY);
@@ -93,6 +97,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     localStorage.setItem(AUTH_SESSION_KEY, "true");
   };
 
+  // Auto-sync employee for logged-in user
+  const ensureEmployeeForAuthUser = async (currentUser: User, currentEmps: Employee[]): Promise<Employee[]> => {
+    // Check if user has any pending invitation and auto-accept it
+    if (currentUser.email) {
+      try {
+        const pending = await invitationService.getPendingByEmail(currentUser.email);
+        for (const inv of pending) {
+          await invitationService.acceptInvitation(inv.id, currentUser.uid);
+        }
+      } catch (err) {
+        console.warn("Could not auto-process invitations for user:", err);
+      }
+    }
+
+    const refreshedEmps = await employeeService.getAll();
+    const existing = refreshedEmps.find(
+      (e) => e.id === currentUser.uid || (currentUser.email && e.email === currentUser.email)
+    );
+    if (existing) {
+      if (existing.status !== "ativo") {
+        await employeeService.update(existing.id, { status: "ativo" });
+      }
+      if (activeEmployeeId === "emp-4" || !activeEmployeeId) {
+        switchPersona(existing.id);
+      }
+      return refreshedEmps;
+    }
+
+    // Auto-create employee record for authenticated user
+    const now = new Date().toISOString();
+    const newEmp: Employee = {
+      id: currentUser.uid,
+      name: currentUser.displayName || currentUser.email?.split("@")[0] || "Administrador",
+      email: currentUser.email || null,
+      role: "Diretor / Gestor",
+      status: "ativo",
+      weekly_hours: 40,
+      skills: ["Gestão", "Planejamento"],
+      dias_de_trabalho: ["monday", "tuesday", "wednesday", "thursday", "friday"],
+      created_at: now,
+      updated_at: now,
+    };
+
+    try {
+      await employeeService.create(newEmp);
+      const updated = [...refreshedEmps, newEmp];
+      setAllEmployees(updated);
+      switchPersona(newEmp.id);
+      return updated;
+    } catch (e) {
+      console.warn("Could not auto-create employee record for user:", e);
+      return refreshedEmps;
+    }
+  };
+
   // Load data
   const refreshUserData = async () => {
     try {
@@ -103,6 +162,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       setAllEmployees(emps);
       setAllGroups(groups);
       setIsMockCleared(mockDataManager.isMockCleared());
+
+      if (auth.currentUser) {
+        await ensureEmployeeForAuthUser(auth.currentUser, emps);
+      }
     } catch (e) {
       console.error("Error refreshing auth user data:", e);
     }
@@ -120,14 +183,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     await refreshUserData();
   };
 
+  const purgeAllUserData = async () => {
+    await userProfileService.purgeAllUserData();
+    setIsMockCleared(true);
+    setAllEmployees([]);
+    setAllGroups([]);
+    await refreshUserData();
+  };
+
+  const deleteUserAccount = async () => {
+    await userProfileService.deleteAccount();
+    setUser(null);
+    setIsAuthenticated(false);
+    setAllEmployees([]);
+    setAllGroups([]);
+    localStorage.clear();
+  };
+
   useEffect(() => {
     refreshUserData();
 
-    const unsubscribe = subscribeToAuth((currentUser) => {
+    const unsubscribe = subscribeToAuth(async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
         setIsAuthenticated(true);
         localStorage.setItem(AUTH_SESSION_KEY, "true");
+        setIsSuperAdminState(true);
+        localStorage.setItem(SUPER_ADMIN_KEY, "true");
+        const emps = await employeeService.getAll();
+        await ensureEmployeeForAuthUser(currentUser, emps);
       }
       setLoading(false);
     });
@@ -136,23 +220,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const activeEmployee =
-    allEmployees.find((e) => e.id === activeEmployeeId) || allEmployees[0] || null;
+    allEmployees.find((e) => e.id === activeEmployeeId) ||
+    allEmployees.find((e) => user?.email && e.email === user.email) ||
+    allEmployees[0] ||
+    null;
 
   // Groups this user belongs to
   const userGroups = allGroups.filter((g) =>
-    g.members.some((m) => m.employeeId === activeEmployeeId)
+    g.members.some((m) => m.employeeId === (activeEmployee?.id || activeEmployeeId))
   );
 
   // Group IDs visible to this user by hierarchy rules
   const visibleGroupIds = workGroupService.getVisibleGroupIdsForEmployee(
-    activeEmployeeId,
+    activeEmployee?.id || activeEmployeeId,
     allGroups,
-    isSuperAdmin
+    isSuperAdmin || Boolean(user)
   );
 
   // Aggregate user permissions across visible groups
   const permissions: CurrentUserPermissions = React.useMemo(() => {
-    if (isSuperAdmin) {
+    // Authenticated users or super admins have full administrative control
+    if (isSuperAdmin || Boolean(user)) {
       return {
         canCreate: true,
         canEdit: true,
@@ -167,38 +255,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       return {
         canCreate: true,
         canEdit: true,
-        canDelete: false,
-        isAdmin: false,
+        canDelete: true,
+        isAdmin: true,
         isSuperAdmin: false,
-        hierarchyTitle: "Nível 4",
+        hierarchyTitle: "Gestor",
       };
     }
 
     // Find highest level among user groups (1 is highest)
     const minLevel = Math.min(...userGroups.map((g) => g.level));
+    const targetEmpId = activeEmployee?.id || activeEmployeeId;
 
     const canCreate = userGroups.some((g) =>
-      g.members.some((m) => m.employeeId === activeEmployeeId && (m.canCreate || m.isAdmin))
+      g.members.some((m) => m.employeeId === targetEmpId && (m.canCreate || m.isAdmin))
     );
     const canEdit = userGroups.some((g) =>
-      g.members.some((m) => m.employeeId === activeEmployeeId && (m.canEdit || m.isAdmin))
+      g.members.some((m) => m.employeeId === targetEmpId && (m.canEdit || m.isAdmin))
     );
     const canDelete = userGroups.some((g) =>
-      g.members.some((m) => m.employeeId === activeEmployeeId && (m.canDelete || m.isAdmin))
+      g.members.some((m) => m.employeeId === targetEmpId && (m.canDelete || m.isAdmin))
     );
     const isAdmin = userGroups.some((g) =>
-      g.members.some((m) => m.employeeId === activeEmployeeId && m.isAdmin)
+      g.members.some((m) => m.employeeId === targetEmpId && m.isAdmin)
     );
 
     return {
-      canCreate,
-      canEdit,
-      canDelete,
+      canCreate: canCreate || isAdmin,
+      canEdit: canEdit || isAdmin,
+      canDelete: canDelete || isAdmin,
       isAdmin,
       isSuperAdmin: false,
       hierarchyTitle: `Nível ${minLevel}`,
     };
-  }, [isSuperAdmin, userGroups, activeEmployeeId]);
+  }, [isSuperAdmin, user, userGroups, activeEmployee, activeEmployeeId]);
 
   const loginGoogle = async () => {
     setLoading(true);
@@ -208,6 +297,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         setUser(u);
         setIsAuthenticated(true);
         localStorage.setItem(AUTH_SESSION_KEY, "true");
+        setIsSuperAdminState(true);
+        localStorage.setItem(SUPER_ADMIN_KEY, "true");
+        await refreshUserData();
       }
     } finally {
       setLoading(false);
@@ -222,6 +314,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         setUser(u);
         setIsAuthenticated(true);
         localStorage.setItem(AUTH_SESSION_KEY, "true");
+        setIsSuperAdminState(true);
+        localStorage.setItem(SUPER_ADMIN_KEY, "true");
+        await refreshUserData();
       }
     } finally {
       setLoading(false);
@@ -236,6 +331,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         setUser(u);
         setIsAuthenticated(true);
         localStorage.setItem(AUTH_SESSION_KEY, "true");
+        setIsSuperAdminState(true);
+        localStorage.setItem(SUPER_ADMIN_KEY, "true");
+        await refreshUserData();
       }
     } finally {
       setLoading(false);
@@ -279,6 +377,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         refreshUserData,
         clearMockData,
         restoreMockData,
+        purgeAllUserData,
+        deleteUserAccount,
       }}
     >
       {children}
