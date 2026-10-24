@@ -2135,9 +2135,9 @@ export const ResourcePlanningView: React.FC = () => {
                       <>
                         {/* Time off row under employee */}
                         <tr className="border-b border-border/30 bg-background/50 text-[10px] sm:text-[11px]">
-                          <td className="px-2 sm:px-3 py-1.5 sticky left-0 z-20 bg-background border-r border-border pl-6 sm:pl-10 text-muted-foreground flex items-center gap-1.5">
-                            <Palmtree className="h-3 sm:h-3.5 w-3 sm:w-3.5 text-amber-500 flex-shrink-0" />
-                            <span className="truncate">Time Off</span>
+                          <td className={`${sidebarWidthClass} ${isSidebarMinimized ? "px-1 justify-center" : "px-2 sm:px-3 pl-6 sm:pl-10"} py-1.5 sticky left-0 z-20 bg-background border-r border-border text-muted-foreground flex items-center gap-1.5 transition-all duration-200 overflow-hidden`}>
+                            <Palmtree className="h-3 sm:h-3.5 w-3 sm:w-3.5 text-amber-500 flex-shrink-0 mx-auto" />
+                            {!isSidebarMinimized && <span className="truncate">Time Off</span>}
                           </td>
                           {timelineDays.map((day) => {
                             const isToday = isSameDay(day, today);
@@ -2170,8 +2170,8 @@ export const ResourcePlanningView: React.FC = () => {
                         {/* List of Tasks / Projects for this Employee */}
                         {empTasks.length === 0 ? (
                           <tr className="border-b border-border/30 bg-background">
-                            <td className="px-2 sm:px-3 py-2 sticky left-0 z-20 bg-background border-r border-border pl-6 sm:pl-10 text-muted-foreground italic text-xs">
-                              Nenhuma alocação ativa.
+                            <td className={`${sidebarWidthClass} ${isSidebarMinimized ? "px-1 text-center justify-center" : "px-2 sm:px-3 pl-6 sm:pl-10"} py-2 sticky left-0 z-20 bg-background border-r border-border text-muted-foreground italic text-xs transition-all duration-200 overflow-hidden`}>
+                              {isSidebarMinimized ? "" : "Nenhuma alocação ativa."}
                             </td>
                             {timelineDays.map((day) => {
                               const dStr = format(day, "yyyy-MM-dd");
@@ -2232,47 +2232,59 @@ export const ResourcePlanningView: React.FC = () => {
                                 className="border-b border-border/40 hover:bg-muted/20 transition-colors group/task"
                               >
                                 {/* Project / Task Name cell on the left */}
-                                <td className="px-2 sm:px-3 py-1.5 sticky left-0 z-20 bg-background border-r border-border pl-6 sm:pl-10 max-w-xs">
-                                  <div className="flex items-center justify-between gap-1">
+                                <td className={`${sidebarWidthClass} ${isSidebarMinimized ? "px-1 py-1.5 text-center" : "px-2 sm:px-3 py-1.5 pl-6 sm:pl-10 max-w-xs"} sticky left-0 z-20 bg-background border-r border-border transition-all duration-200 overflow-hidden`}>
+                                  {isSidebarMinimized ? (
                                     <div
-                                      className="cursor-pointer min-w-0 flex-1"
+                                      className="flex items-center justify-center cursor-pointer group/minitask"
                                       onClick={() => handleEditTask(task)}
+                                      title={`${task.name} (${project?.name || "Geral"})\n${hoursLabel}\nClique para editar.`}
                                     >
-                                      <p className="font-semibold text-foreground text-xs truncate group-hover/task:text-primary">
-                                        {task.name}
-                                      </p>
-                                      <p className="text-[9px] sm:text-[10px] text-muted-foreground truncate flex items-center gap-1">
-                                        <Briefcase className="h-2.5 w-2.5 opacity-60 flex-shrink-0" />
-                                        <span className="truncate">{project?.name || "Geral"}</span>
-                                        {task.repeats_weekly && (
-                                          <Repeat className="h-2.5 w-2.5 text-blue-500 ml-1 inline" />
-                                        )}
-                                      </p>
+                                      <div className="w-6 h-6 rounded bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-colors mx-auto">
+                                        <Briefcase className="h-3 w-3" />
+                                      </div>
                                     </div>
-                                    <div className="flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-opacity flex-shrink-0">
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
+                                  ) : (
+                                    <div className="flex items-center justify-between gap-1">
+                                      <div
+                                        className="cursor-pointer min-w-0 flex-1"
                                         onClick={() => handleEditTask(task)}
-                                        className="h-5 w-5 sm:h-6 sm:w-6 hover:bg-muted"
-                                        title="Editar Alocação"
                                       >
-                                        <Edit2 className="h-3 w-3 text-muted-foreground" />
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleDeleteTask(task.id);
-                                        }}
-                                        className="h-5 w-5 sm:h-6 sm:w-6 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                                        title="Excluir Alocação"
-                                      >
-                                        <Trash2 className="h-3 w-3" />
-                                      </Button>
+                                        <p className="font-semibold text-foreground text-xs truncate group-hover/task:text-primary">
+                                          {task.name}
+                                        </p>
+                                        <p className="text-[9px] sm:text-[10px] text-muted-foreground truncate flex items-center gap-1">
+                                          <Briefcase className="h-2.5 w-2.5 opacity-60 flex-shrink-0" />
+                                          <span className="truncate">{project?.name || "Geral"}</span>
+                                          {task.repeats_weekly && (
+                                            <Repeat className="h-2.5 w-2.5 text-blue-500 ml-1 inline" />
+                                          )}
+                                        </p>
+                                      </div>
+                                      <div className="flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-opacity flex-shrink-0">
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => handleEditTask(task)}
+                                          className="h-5 w-5 sm:h-6 sm:w-6 hover:bg-muted"
+                                          title="Editar Alocação"
+                                        >
+                                          <Edit2 className="h-3 w-3 text-muted-foreground" />
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeleteTask(task.id);
+                                          }}
+                                          className="h-5 w-5 sm:h-6 sm:w-6 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                                          title="Excluir Alocação"
+                                        >
+                                          <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                      </div>
                                     </div>
-                                  </div>
+                                  )}
                                 </td>
 
                                 {/* Allocation Bars across the Timeline Days */}
@@ -2409,16 +2421,28 @@ export const ResourcePlanningView: React.FC = () => {
 
                         {/* + Assign Project Button Row */}
                         <tr className="border-b-2 border-border/60 bg-muted/5">
-                          <td className="px-2 sm:px-3 py-1.5 sm:py-2 sticky left-0 z-20 bg-background border-r border-border pl-6 sm:pl-10">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleOpenNewTask(employee.id)}
-                              className="h-6 sm:h-7 text-xs font-semibold text-primary hover:text-primary/90 gap-1.5 p-0 hover:bg-transparent"
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                              <span>Atribuir Projeto / Tarefa</span>
-                            </Button>
+                          <td className={`${sidebarWidthClass} ${isSidebarMinimized ? "px-1 text-center justify-center" : "px-2 sm:px-3 pl-6 sm:pl-10"} py-1.5 sm:py-2 sticky left-0 z-20 bg-background border-r border-border transition-all duration-200 overflow-hidden`}>
+                            {isSidebarMinimized ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleOpenNewTask(employee.id)}
+                                className="h-6 w-6 mx-auto text-primary hover:bg-primary/10 rounded flex items-center justify-center p-0"
+                                title="Atribuir Projeto / Tarefa"
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleOpenNewTask(employee.id)}
+                                className="h-6 sm:h-7 text-xs font-semibold text-primary hover:text-primary/90 gap-1.5 p-0 hover:bg-transparent"
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                                <span>Atribuir Projeto / Tarefa</span>
+                              </Button>
+                            )}
                           </td>
                           {timelineDays.map((day) => {
                             const dStr = format(day, "yyyy-MM-dd");
@@ -2463,16 +2487,28 @@ export const ResourcePlanningView: React.FC = () => {
 
             {/* 4. BOTTOM ACTION ROW: + NEW PERSON */}
             <tr className="bg-card">
-              <td className="px-3 py-3 sticky left-0 z-20 bg-card border-r border-border">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsNewPersonOpen(true)}
-                  className="h-8 text-xs font-bold gap-1.5 w-full border-dashed"
-                >
-                  <UserPlus className="h-3.5 w-3.5 text-primary" />
-                  <span>+ Novo Colaborador</span>
-                </Button>
+              <td className={`${sidebarWidthClass} ${isSidebarMinimized ? "px-1 text-center" : "px-3"} py-3 sticky left-0 z-20 bg-card border-r border-border transition-all duration-200 overflow-hidden`}>
+                {isSidebarMinimized ? (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setIsNewPersonOpen(true)}
+                    className="h-8 w-8 mx-auto border-dashed text-primary flex items-center justify-center p-0"
+                    title="+ Novo Colaborador"
+                  >
+                    <UserPlus className="h-3.5 w-3.5" />
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsNewPersonOpen(true)}
+                    className="h-8 text-xs font-bold gap-1.5 w-full border-dashed"
+                  >
+                    <UserPlus className="h-3.5 w-3.5 text-primary" />
+                    <span>+ Novo Colaborador</span>
+                  </Button>
+                )}
               </td>
               <td colSpan={timelineDays.length} className="bg-muted/5" />
             </tr>

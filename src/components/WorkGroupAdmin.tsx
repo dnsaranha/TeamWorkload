@@ -25,6 +25,14 @@ import {
   Sparkles,
   HelpCircle,
   Share2,
+  GripVertical,
+  FileSpreadsheet,
+  CornerDownRight,
+  ArrowUp,
+  ArrowDown,
+  MoreHorizontal,
+  ChevronsUpDown,
+  FolderPlus,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -46,7 +54,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+} from "./ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { useToast } from "./ui/use-toast";
 import {
   workGroupService,
   WorkGroup,
@@ -79,12 +98,22 @@ export const WorkGroupAdmin: React.FC = () => {
     restoreMockData,
   } = useAuth();
 
+  const { toast } = useToast();
+
   const [groups, setGroups] = useState<WorkGroup[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [levelFilter, setLevelFilter] = useState<string>("all");
-  const [activeTab, setActiveTab] = useState<string>("tree");
+  const [activeTab, setActiveTab] = useState<string>("grid");
+
+  // Hierarchical Grid states (expand/collapse & drag and drop)
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverTarget, setDragOverTarget] = useState<{
+    id: string;
+    position: "before" | "inside" | "after";
+  } | null>(null);
 
   // Mock Data Modal State
   const [isClearMockDialogOpen, setIsClearMockDialogOpen] = useState<boolean>(false);
@@ -379,152 +408,265 @@ export const WorkGroupAdmin: React.FC = () => {
     );
   }, [simEmployee, groups]);
 
-  // Render tree node recursive component
-  const renderTreeNode = (group: WorkGroup, depth = 0) => {
-    const children = groups.filter((g) => g.parentId === group.id);
-    const levelConfig = HIERARCHY_LEVELS[group.level];
-
-    return (
-      <div key={group.id} className="relative flex flex-col items-start w-full">
-        <div
-          className={`w-full p-4 rounded-xl border transition-all shadow-sm ${
-            depth === 0
-              ? "bg-card border-border/80"
-              : depth === 1
-                ? "bg-muted/30 border-blue-200 dark:border-blue-900/40"
-                : "bg-muted/10 border-border/60"
-          } hover:shadow-md`}
-          style={{ borderLeftWidth: 5, borderLeftColor: group.color || "#2563eb" }}
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-bold text-base text-foreground">
-                  {group.name}
-                </span>
-                <Badge variant="outline" className="text-xs font-mono font-semibold">
-                  {group.code}
-                </Badge>
-                <span
-                  className={`text-xs px-2.5 py-0.5 rounded-full font-medium border ${levelConfig.bgClass} ${levelConfig.colorClass} ${levelConfig.borderClass}`}
-                >
-                  {levelConfig.badgeLabel}
-                </span>
-                {group.parentId && (
-                  <span className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Share2 className="w-3 h-3" />
-                    Vinculado a: <strong>{group.parentName || "Grupo Superior"}</strong>
-                  </span>
-                )}
-              </div>
-              {group.description && (
-                <p className="text-xs text-muted-foreground max-w-2xl">
-                  {group.description}
-                </p>
-              )}
-            </div>
-
-            {/* Actions */}
-            <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
-              {group.level < 4 && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleOpenCreate(group.id)}
-                  className="h-8 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10"
-                  title="Criar subgrupo subordinado a este grupo"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  + Subgrupo
-                </Button>
-              )}
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => handleOpenEdit(group)}
-                className="h-8 px-2 text-xs"
-                title="Editar configurações e membros"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => handleDeleteGroup(group)}
-                className="h-8 px-2 text-xs text-destructive hover:bg-destructive/10"
-                title="Excluir grupo"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Members Bar */}
-          <div className="mt-3 pt-3 border-t border-border/50 flex flex-wrap items-center justify-between gap-2 text-xs">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-muted-foreground font-medium flex items-center gap-1">
-                <Users2 className="w-3.5 h-3.5" />
-                {group.members.length} Colaborador(es):
-              </span>
-              {group.members.map((m) => (
-                <div
-                  key={m.employeeId}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-background border text-xs"
-                >
-                  <span className="font-medium">{m.employeeName}</span>
-                  {m.isAdmin ? (
-                    <Badge variant="default" className="text-[10px] h-4 px-1 bg-amber-600">
-                      Admin
-                    </Badge>
-                  ) : (
-                    <span className="text-[10px] text-muted-foreground">
-                      ({m.roleInGroup})
-                    </span>
-                  )}
-                  {/* Permission icons */}
-                  <div className="flex items-center gap-0.5 text-[10px] text-muted-foreground ml-1">
-                    {m.canCreate && <span title="Pode Criar">➕</span>}
-                    {m.canEdit && <span title="Pode Editar">✏️</span>}
-                    {m.canDelete && <span title="Pode Excluir">🗑️</span>}
-                  </div>
-                </div>
-              ))}
-              {group.members.length === 0 && (
-                <span className="text-muted-foreground italic text-xs">
-                  Nenhum colaborador vinculado ainda.
-                </span>
-              )}
-            </div>
-
-            <Button
-              variant="link"
-              size="sm"
-              onClick={() => handleOpenEdit(group)}
-              className="text-xs h-6 p-0 text-primary"
-            >
-              Gerenciar Colaboradores & Permissões →
-            </Button>
-          </div>
-        </div>
-
-        {/* Child Subgroups */}
-        {children.length > 0 && (
-          <div className="pl-6 sm:pl-10 mt-3 space-y-3 w-full border-l-2 border-dashed border-primary/20 relative">
-            <div className="absolute -left-1.5 top-0 w-3 h-3 rounded-full bg-primary/30" />
-            <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 flex items-center gap-1">
-              <span>Subgrupos Vinculados ({children.length})</span>
-              {children.length > 1 && (
-                <Badge variant="outline" className="text-[10px] text-blue-600 bg-blue-50 dark:bg-blue-950">
-                  Compartilham este grupo superior
-                </Badge>
-              )}
-            </div>
-            {children.map((child) => renderTreeNode(child, depth + 1))}
-          </div>
-        )}
-      </div>
-    );
+  // Expand & Collapse Tree
+  const toggleCollapse = (id: string) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
+
+  const handleExpandAll = () => setCollapsedIds(new Set());
+
+  const handleCollapseAll = () => {
+    const parentIds = groups
+      .filter((g) => groups.some((child) => child.parentId === g.id))
+      .map((g) => g.id);
+    setCollapsedIds(new Set(parentIds));
+  };
+
+  // Helper to prevent circular hierarchy
+  const isDescendantOf = (ancestorId: string, checkId: string): boolean => {
+    const directChildren = groups.filter((g) => g.parentId === ancestorId);
+    if (directChildren.some((c) => c.id === checkId)) return true;
+    return directChildren.some((c) => isDescendantOf(c.id, checkId));
+  };
+
+  // Drag and Drop Handlers
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    e.dataTransfer.setData("text/plain", id);
+    e.dataTransfer.effectAllowed = "move";
+    setDraggedId(id);
+  };
+
+  const handleDragOver = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggedId || draggedId === targetId) return;
+    if (isDescendantOf(draggedId, targetId)) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const ratio = y / rect.height;
+
+    let pos: "before" | "inside" | "after" = "inside";
+    if (ratio < 0.28) pos = "before";
+    else if (ratio > 0.72) pos = "after";
+
+    setDragOverTarget({ id: targetId, position: pos });
+  };
+
+  const handleDragLeave = () => {
+    setDragOverTarget(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggedId || draggedId === targetId || !dragOverTarget) {
+      setDraggedId(null);
+      setDragOverTarget(null);
+      return;
+    }
+
+    const draggedGroup = groups.find((g) => g.id === draggedId);
+    const targetGroup = groups.find((g) => g.id === targetId);
+
+    if (!draggedGroup || !targetGroup) {
+      setDraggedId(null);
+      setDragOverTarget(null);
+      return;
+    }
+
+    const now = new Date().toISOString();
+
+    try {
+      if (dragOverTarget.position === "inside") {
+        const newLevel = Math.min(4, targetGroup.level + 1) as HierarchyLevel;
+        const updated: WorkGroup = {
+          ...draggedGroup,
+          parentId: targetGroup.id,
+          parentName: targetGroup.name,
+          level: newLevel,
+          levelName: HIERARCHY_LEVELS[newLevel]?.shortTitle || "Grupo",
+          updated_at: now,
+        };
+
+        await workGroupService.save(updated);
+        toast({
+          title: "Subgrupo Vinculado!",
+          description: `"${draggedGroup.name}" agora é subgrupo de "${targetGroup.name}" (Nível ${newLevel}).`,
+        });
+      } else {
+        const newParentId = targetGroup.parentId;
+        const newLevel = targetGroup.level;
+        const parent = newParentId ? groups.find((g) => g.id === newParentId) : null;
+
+        const updated: WorkGroup = {
+          ...draggedGroup,
+          parentId: newParentId,
+          parentName: parent ? parent.name : undefined,
+          level: newLevel,
+          levelName: HIERARCHY_LEVELS[newLevel]?.shortTitle || "Grupo",
+          updated_at: now,
+        };
+
+        const reordered = groups.filter((g) => g.id !== draggedGroup.id);
+        const targetIdx = reordered.findIndex((g) => g.id === targetId);
+        const insertIdx = dragOverTarget.position === "before" ? targetIdx : targetIdx + 1;
+        reordered.splice(insertIdx, 0, updated);
+
+        await workGroupService.save(updated);
+        setGroups(reordered);
+
+        toast({
+          title: "Posição Atualizada!",
+          description: `"${draggedGroup.name}" reposicionado ${dragOverTarget.position === "before" ? "antes" : "depois"} de "${targetGroup.name}".`,
+        });
+      }
+      await loadData();
+      await refreshUserData();
+    } catch (err: any) {
+      console.error("Error moving group:", err);
+      toast({
+        title: "Erro ao mover grupo",
+        description: err.message || "Não foi possível mover o grupo.",
+        variant: "destructive",
+      });
+    } finally {
+      setDraggedId(null);
+      setDragOverTarget(null);
+    }
+  };
+
+  // Dropdown Reparenting action
+  const handleMoveToParent = async (group: WorkGroup, newParentId: string | null) => {
+    const now = new Date().toISOString();
+    try {
+      if (newParentId === null) {
+        const updated: WorkGroup = {
+          ...group,
+          parentId: null,
+          parentName: undefined,
+          level: 1,
+          levelName: HIERARCHY_LEVELS[1].shortTitle,
+          updated_at: now,
+        };
+        await workGroupService.save(updated);
+        toast({
+          title: "Grupo Promovido a Raiz",
+          description: `"${group.name}" agora é um Grupo Raiz (Nível 1).`,
+        });
+      } else {
+        const parent = groups.find((g) => g.id === newParentId);
+        if (!parent) return;
+        const newLevel = Math.min(4, parent.level + 1) as HierarchyLevel;
+        const updated: WorkGroup = {
+          ...group,
+          parentId: parent.id,
+          parentName: parent.name,
+          level: newLevel,
+          levelName: HIERARCHY_LEVELS[newLevel]?.shortTitle || "Grupo",
+          updated_at: now,
+        };
+        await workGroupService.save(updated);
+        toast({
+          title: "Hierarquia Atualizada",
+          description: `"${group.name}" agora é subgrupo de "${parent.name}" (Nível ${newLevel}).`,
+        });
+      }
+      await loadData();
+      await refreshUserData();
+    } catch (err: any) {
+      toast({
+        title: "Erro ao atualizar",
+        description: err.message || "Erro ao mover grupo.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Move up or down among siblings
+  const handleMoveOrder = async (group: WorkGroup, direction: "up" | "down") => {
+    const siblings = groups.filter((g) => g.parentId === group.parentId);
+    const idx = siblings.findIndex((g) => g.id === group.id);
+    if (idx === -1) return;
+    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= siblings.length) return;
+
+    const copy = [...groups];
+    const originalIdx = copy.findIndex((g) => g.id === group.id);
+    const otherId = siblings[targetIdx].id;
+    const originalOtherIdx = copy.findIndex((g) => g.id === otherId);
+
+    const temp = copy[originalIdx];
+    copy[originalIdx] = copy[originalOtherIdx];
+    copy[originalOtherIdx] = temp;
+    setGroups(copy);
+
+    toast({
+      title: "Posição Atualizada",
+      description: `"${group.name}" foi movido para ${direction === "up" ? "cima" : "baixo"}.`,
+    });
+  };
+
+  // Generate hierarchical rows for the Grid Table
+  interface HierarchicalGridRow {
+    group: WorkGroup;
+    depth: number;
+    hasChildren: boolean;
+    isExpanded: boolean;
+    childrenCount: number;
+  }
+
+  const hierarchicalGridRows = useMemo(() => {
+    const isFiltered = searchQuery.trim() !== "" || levelFilter !== "all";
+
+    if (isFiltered) {
+      return filteredGroups.map((g) => {
+        const directChildren = groups.filter((c) => c.parentId === g.id);
+        return {
+          group: g,
+          depth: 0,
+          hasChildren: directChildren.length > 0,
+          isExpanded: true,
+          childrenCount: directChildren.length,
+        };
+      });
+    }
+
+    const rows: HierarchicalGridRow[] = [];
+
+    const buildTree = (parentId: string | null, depth: number) => {
+      const items = groups.filter((g) => {
+        if (parentId === null) {
+          return g.parentId === null || !groups.some((p) => p.id === g.parentId);
+        }
+        return g.parentId === parentId;
+      });
+
+      for (const g of items) {
+        const directChildren = groups.filter((c) => c.parentId === g.id);
+        const hasChildren = directChildren.length > 0;
+        const isExpanded = !collapsedIds.has(g.id);
+
+        rows.push({
+          group: g,
+          depth,
+          hasChildren,
+          isExpanded,
+          childrenCount: directChildren.length,
+        });
+
+        if (hasChildren && isExpanded) {
+          buildTree(g.id, depth + 1);
+        }
+      }
+    };
+
+    buildTree(null, 0);
+    return rows;
+  }, [groups, filteredGroups, searchQuery, levelFilter, collapsedIds]);
 
   return (
     <div className="w-full space-y-6 p-4 sm:p-6 max-w-7xl mx-auto">
@@ -654,14 +796,10 @@ export const WorkGroupAdmin: React.FC = () => {
       {/* Main Tabs Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <TabsList className="grid grid-cols-3 w-full sm:w-auto">
-            <TabsTrigger value="tree" className="text-xs sm:text-sm gap-1.5">
-              <Network className="w-3.5 h-3.5" />
-              Árvore Hierárquica
-            </TabsTrigger>
-            <TabsTrigger value="list" className="text-xs sm:text-sm gap-1.5">
-              <FolderTree className="w-3.5 h-3.5" />
-              Lista de Grupos
+          <TabsList className="grid grid-cols-2 w-full sm:w-auto">
+            <TabsTrigger value="grid" className="text-xs sm:text-sm gap-1.5 font-semibold">
+              <FileSpreadsheet className="w-4 h-4 text-primary" />
+              Grade de Grupos (Grid Hierárquico)
             </TabsTrigger>
             <TabsTrigger value="simulator" className="text-xs sm:text-sm gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
@@ -669,9 +807,32 @@ export const WorkGroupAdmin: React.FC = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* Filters for Tree and List */}
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1 sm:w-60">
+          {/* Quick Actions & Filters */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1 bg-muted/40 p-0.5 rounded-lg border border-border">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleExpandAll}
+                className="h-8 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                title="Expandir todos os subgrupos"
+              >
+                <ChevronDown className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Expandir</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCollapseAll}
+                className="h-8 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                title="Recolher todos os subgrupos"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Recolher</span>
+              </Button>
+            </div>
+
+            <div className="relative flex-1 sm:w-56">
               <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
               <Input
                 placeholder="Buscar grupo ou sigla..."
@@ -681,146 +842,389 @@ export const WorkGroupAdmin: React.FC = () => {
               />
             </div>
             <Select value={levelFilter} onValueChange={setLevelFilter}>
-              <SelectTrigger className="h-9 w-36 text-xs">
+              <SelectTrigger className="h-9 w-32 sm:w-36 text-xs">
                 <SelectValue placeholder="Nível" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os Níveis</SelectItem>
-                <SelectItem value="1">Nível 1</SelectItem>
-                <SelectItem value="2">Nível 2</SelectItem>
-                <SelectItem value="3">Nível 3</SelectItem>
-                <SelectItem value="4">Nível 4</SelectItem>
+                <SelectItem value="1">Nível 1 (Diretoria)</SelectItem>
+                <SelectItem value="2">Nível 2 (Coordenação)</SelectItem>
+                <SelectItem value="3">Nível 3 (Operação)</SelectItem>
+                <SelectItem value="4">Nível 4 (Suporte)</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
 
-        {/* TAB 1: INTERACTIVE HIERARCHY TREE */}
-        <TabsContent value="tree" className="space-y-4 pt-1">
-          <div className="p-3 bg-muted/40 rounded-lg border text-xs flex items-center justify-between gap-2">
+        {/* TAB 1: HIERARCHICAL SPREADSHEET GRID TABLE (GRADE DE GRUPOS) */}
+        <TabsContent value="grid" className="space-y-3 pt-1">
+          {/* Helper Drag & Drop Info Banner */}
+          <div className="p-2.5 px-3 bg-muted/40 rounded-xl border border-border text-xs flex flex-wrap items-center justify-between gap-2 text-muted-foreground">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-foreground flex items-center gap-1">
-                <Info className="w-3.5 h-3.5 text-blue-500" />
-                Legenda de Níveis:
-              </span>
-              {Object.values(HIERARCHY_LEVELS).map((lvl) => (
-                <span
-                  key={lvl.level}
-                  className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${lvl.bgClass} ${lvl.colorClass} ${lvl.borderClass}`}
-                >
-                  {lvl.badgeLabel}
-                </span>
-              ))}
-            </div>
-            <span className="text-[11px] text-muted-foreground hidden md:inline">
-              Dois ou mais grupos podem apontar para o mesmo superior (grupos compartilhados)
-            </span>
-          </div>
-
-          <div className="space-y-4">
-            {/* Render root level groups (parentId === null) first */}
-            {groups.filter((g) => g.parentId === null).length === 0 ? (
-              <div className="text-center p-8 border border-dashed rounded-xl bg-card">
-                <p className="text-muted-foreground text-sm">
-                  Nenhum grupo raiz encontrado.
-                </p>
-                <Button
-                  onClick={() => handleOpenCreate(undefined, 1)}
-                  className="mt-3 text-xs"
-                >
-                  Criar Primeiro Grupo Raiz (Nível 1)
-                </Button>
+              <div className="inline-flex items-center gap-1 text-primary font-semibold">
+                <GripVertical className="w-3.5 h-3.5" />
+                <span>Drag & Drop:</span>
               </div>
-            ) : (
-              groups
-                .filter((g) => g.parentId === null)
-                .map((rootGroup) => renderTreeNode(rootGroup, 0))
-            )}
+              <span>Arraste a linha pela alça para reordenar ou solte <strong>sobre outro grupo</strong> para torná-lo subgrupo.</span>
+            </div>
+            <div className="flex items-center gap-2 text-[11px]">
+              <span className="inline-flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-purple-500"></span> Nível 1
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-blue-500"></span> Nível 2
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-emerald-500"></span> Nível 3
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-amber-500"></span> Nível 4
+              </span>
+            </div>
           </div>
-        </TabsContent>
 
-        {/* TAB 2: DETAILED LIST VIEW */}
-        <TabsContent value="list" className="space-y-4 pt-1">
-          <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
+          {/* Grid Table Container */}
+          <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-muted/50 border-b text-xs font-semibold text-muted-foreground uppercase">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm border-b border-border z-10 font-bold text-muted-foreground uppercase text-[11px]">
                   <tr>
-                    <th className="p-3 pl-4">Grupo de Trabalho</th>
-                    <th className="p-3">Sigla</th>
-                    <th className="p-3">Nível Hierárquico</th>
-                    <th className="p-3">Grupo Superior (Pai)</th>
-                    <th className="p-3">Membros</th>
-                    <th className="p-3 text-right pr-4">Ações</th>
+                    <th className="py-2.5 px-2 w-10 text-center">#</th>
+                    <th className="py-2.5 px-2 w-12 text-center" title="Arrastar e Soltar">
+                      <GripVertical className="h-3.5 w-3.5 mx-auto opacity-70" />
+                    </th>
+                    <th className="py-2.5 px-3 min-w-[280px]">Grupo de Trabalho & Hierarquia</th>
+                    <th className="py-2.5 px-3 w-32 text-center">Nível</th>
+                    <th className="py-2.5 px-3 w-44">Grupo Superior (Pai)</th>
+                    <th className="py-2.5 px-3 w-48">Colaboradores</th>
+                    <th className="py-2.5 px-3 min-w-[200px]">Descrição / Atribuições</th>
+                    <th className="py-2.5 px-3 w-36 text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {filteredGroups.length === 0 ? (
+                  {hierarchicalGridRows.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="p-6 text-center text-muted-foreground text-sm">
-                        Nenhum grupo encontrado com os filtros atuais.
+                      <td colSpan={8} className="py-12 text-center text-muted-foreground">
+                        <div className="flex flex-col items-center justify-center space-y-2">
+                          <FolderTree className="h-8 w-8 text-muted-foreground/40" />
+                          <p className="font-medium text-sm">Nenhum grupo encontrado</p>
+                          <p className="text-xs text-muted-foreground">
+                            {searchQuery || levelFilter !== "all"
+                              ? "Nenhum resultado para os filtros atuais."
+                              : "Crie o primeiro grupo de trabalho para estruturar a hierarquia da empresa."}
+                          </p>
+                          <Button
+                            size="sm"
+                            onClick={() => handleOpenCreate(undefined, 1)}
+                            className="mt-2 text-xs"
+                          >
+                            <Plus className="h-3.5 w-3.5 mr-1" /> Criar Primeiro Grupo Raiz (Nível 1)
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ) : (
-                    filteredGroups.map((g) => {
-                      const lvl = HIERARCHY_LEVELS[g.level];
+                    hierarchicalGridRows.map((row, index) => {
+                      const { group, depth, hasChildren, isExpanded, childrenCount } = row;
+                      const lvl = HIERARCHY_LEVELS[group.level];
+                      const isDragged = draggedId === group.id;
+                      const isOver = dragOverTarget?.id === group.id;
+                      const dropPos = isOver ? dragOverTarget?.position : null;
+
+                      // Drop preview styling
+                      let rowDropClass = "";
+                      if (isOver) {
+                        if (dropPos === "before") {
+                          rowDropClass = "border-t-2 border-t-primary bg-primary/5";
+                        } else if (dropPos === "after") {
+                          rowDropClass = "border-b-2 border-b-primary bg-primary/5";
+                        } else if (dropPos === "inside") {
+                          rowDropClass = "bg-primary/10 ring-2 ring-inset ring-primary";
+                        }
+                      }
+
                       return (
-                        <tr key={g.id} className="hover:bg-muted/40 transition-colors">
-                          <td className="p-3 pl-4 font-semibold text-foreground flex items-center gap-2">
+                        <tr
+                          key={group.id}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, group.id)}
+                          onDragOver={(e) => handleDragOver(e, group.id)}
+                          onDragLeave={handleDragLeave}
+                          onDrop={(e) => handleDrop(e, group.id)}
+                          className={`hover:bg-muted/30 transition-colors group ${
+                            isDragged ? "opacity-40 bg-muted/40" : ""
+                          } ${rowDropClass}`}
+                        >
+                          {/* Row Number */}
+                          <td className="py-2.5 px-2 text-center text-muted-foreground font-mono text-[11px]">
+                            {index + 1}
+                          </td>
+
+                          {/* Drag Handle */}
+                          <td className="py-2.5 px-2 text-center">
                             <div
-                              className="w-3 h-3 rounded-full shrink-0"
-                              style={{ backgroundColor: g.color || "#2563eb" }}
-                            />
-                            <div>
-                              <div>{g.name}</div>
-                              {g.description && (
-                                <div className="text-xs text-muted-foreground font-normal line-clamp-1">
-                                  {g.description}
-                                </div>
+                              className="inline-flex items-center justify-center p-1 rounded cursor-grab active:cursor-grabbing text-muted-foreground hover:text-primary hover:bg-muted/60 transition-colors"
+                              title="Arraste para mover ou solte sobre outro grupo para torná-lo subgrupo"
+                            >
+                              <GripVertical className="h-4 w-4" />
+                            </div>
+                          </td>
+
+                          {/* Group Name & Tree Hierarchy Indentation */}
+                          <td className="py-2.5 px-3">
+                            <div
+                              className="flex items-center gap-1.5"
+                              style={{ paddingLeft: `${depth * 22}px` }}
+                            >
+                              {/* Connector line indicator if subgroup */}
+                              {depth > 0 && (
+                                <CornerDownRight className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+                              )}
+
+                              {/* Expand/Collapse Chevron */}
+                              {hasChildren ? (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleCollapse(group.id)}
+                                  className="p-1 rounded hover:bg-muted text-foreground transition-colors shrink-0"
+                                  title={isExpanded ? "Recolher subgrupos" : "Expandir subgrupos"}
+                                >
+                                  {isExpanded ? (
+                                    <ChevronDown className="h-3.5 w-3.5" />
+                                  ) : (
+                                    <ChevronRight className="h-3.5 w-3.5 text-primary font-bold" />
+                                  )}
+                                </button>
+                              ) : (
+                                <div className="w-5.5 h-5.5 shrink-0" />
+                              )}
+
+                              {/* Color Badge Indicator */}
+                              <div
+                                className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs"
+                                style={{ backgroundColor: group.color || "#2563eb" }}
+                              />
+
+                              {/* Group Name */}
+                              <span className="font-bold text-foreground text-xs sm:text-sm">
+                                {group.name}
+                              </span>
+
+                              {/* Code Badge */}
+                              <Badge variant="outline" className="font-mono text-[10px] py-0 px-1.5 h-4 text-muted-foreground">
+                                {group.code}
+                              </Badge>
+
+                              {/* Subgroup Count Badge */}
+                              {hasChildren && (
+                                <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4 font-normal bg-muted text-muted-foreground">
+                                  {childrenCount} {childrenCount === 1 ? "subgrupo" : "subgrupos"}
+                                </Badge>
+                              )}
+
+                              {/* Drop Target Helper Badge */}
+                              {isOver && dropPos === "inside" && (
+                                <Badge className="text-[10px] bg-primary text-primary-foreground animate-pulse py-0 px-1.5 h-4">
+                                  Tornar Subgrupo de {group.name}
+                                </Badge>
                               )}
                             </div>
                           </td>
-                          <td className="p-3 font-mono text-xs">{g.code}</td>
-                          <td className="p-3">
+
+                          {/* Hierarchy Level */}
+                          <td className="py-2.5 px-3 text-center">
                             <span
-                              className={`text-xs px-2.5 py-0.5 rounded-full font-medium border ${lvl.bgClass} ${lvl.colorClass} ${lvl.borderClass}`}
+                              className={`inline-block text-[11px] px-2.5 py-0.5 rounded-full font-semibold border ${lvl.bgClass} ${lvl.colorClass} ${lvl.borderClass}`}
                             >
                               {lvl.badgeLabel}
                             </span>
                           </td>
-                          <td className="p-3 text-xs text-muted-foreground">
-                            {g.parentName || "— (Raiz)"}
+
+                          {/* Superior Parent Group */}
+                          <td className="py-2.5 px-3 text-xs text-muted-foreground">
+                            {group.parentId ? (
+                              <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+                                <Share2 className="h-3 w-3 text-primary shrink-0" />
+                                <span className="truncate max-w-[150px]" title={group.parentName || "Grupo Superior"}>
+                                  {group.parentName || groups.find((g) => g.id === group.parentId)?.name || "Grupo Superior"}
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground italic">
+                                — Raiz Organizacional
+                              </span>
+                            )}
                           </td>
-                          <td className="p-3 text-xs">
-                            <div className="flex items-center gap-1">
-                              <Badge variant="secondary" className="text-xs">
-                                {g.members.length} membro(s)
+
+                          {/* Members */}
+                          <td className="py-2.5 px-3">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Badge variant="secondary" className="text-xs h-5 px-1.5 gap-1 font-semibold">
+                                <Users2 className="h-3 w-3" />
+                                {group.members.length}
                               </Badge>
-                              {g.members.some((m) => m.isAdmin) && (
-                                <span className="text-[10px] text-amber-600 bg-amber-50 dark:bg-amber-950 px-1.5 py-0.5 rounded border border-amber-200">
+                              {group.members.length > 0 && (
+                                <span className="text-[11px] text-muted-foreground truncate max-w-[130px]" title={group.members.map((m) => m.employeeName).join(", ")}>
+                                  {group.members.slice(0, 2).map((m) => m.employeeName.split(" ")[0]).join(", ")}
+                                  {group.members.length > 2 ? ` +${group.members.length - 2}` : ""}
+                                </span>
+                              )}
+                              {group.members.some((m) => m.isAdmin) && (
+                                <span className="text-[9px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950 px-1 rounded border border-amber-200">
                                   Admin
                                 </span>
                               )}
                             </div>
                           </td>
-                          <td className="p-3 pr-4 text-right">
-                            <div className="flex items-center justify-end gap-1">
+
+                          {/* Description */}
+                          <td className="py-2.5 px-3 text-xs text-muted-foreground">
+                            <span className="line-clamp-1" title={group.description}>
+                              {group.description || "—"}
+                            </span>
+                          </td>
+
+                          {/* Actions */}
+                          <td className="py-2.5 px-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              {/* + Subgroup button */}
+                              {group.level < 4 && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleOpenCreate(group.id)}
+                                  className="h-7 px-2 text-[11px] gap-1 text-primary hover:bg-primary/10 border-primary/30"
+                                  title="Criar subgrupo vinculado a este grupo"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                  <span className="hidden xl:inline">Subgrupo</span>
+                                </Button>
+                              )}
+
+                              {/* Edit button */}
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => handleOpenEdit(g)}
-                                className="h-8 px-2 text-xs"
+                                onClick={() => handleOpenEdit(group)}
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                title="Editar grupo e membros"
                               >
-                                <Edit2 className="w-3.5 h-3.5 mr-1" />
-                                Editar
+                                <Edit2 className="h-3.5 w-3.5" />
                               </Button>
+
+                              {/* Move & Hierarchy Dropdown Menu ("drop n Down") */}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                    title="Mover e opções de hierarquia"
+                                  >
+                                    <MoreHorizontal className="h-3.5 w-3.5" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56 text-xs">
+                                  <div className="px-2 py-1.5 font-bold text-muted-foreground text-[10px] uppercase">
+                                    Mover / Hierarquia
+                                  </div>
+                                  <DropdownMenuItem
+                                    onClick={() => handleMoveOrder(group, "up")}
+                                    className="gap-2 cursor-pointer"
+                                  >
+                                    <ArrowUp className="h-3.5 w-3.5" />
+                                    <span>Mover para Cima</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => handleMoveOrder(group, "down")}
+                                    className="gap-2 cursor-pointer"
+                                  >
+                                    <ArrowDown className="h-3.5 w-3.5" />
+                                    <span>Mover para Baixo</span>
+                                  </DropdownMenuItem>
+
+                                  <DropdownMenuSeparator />
+
+                                  {group.parentId && (
+                                    <DropdownMenuItem
+                                      onClick={() => handleMoveToParent(group, null)}
+                                      className="gap-2 cursor-pointer text-purple-600 dark:text-purple-400 font-medium"
+                                    >
+                                      <Building2 className="h-3.5 w-3.5" />
+                                      <span>Promover a Grupo Raiz (Nível 1)</span>
+                                    </DropdownMenuItem>
+                                  )}
+
+                                  {/* Submenu to reparent to another group */}
+                                  <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger className="gap-2 text-xs cursor-pointer">
+                                      <Share2 className="h-3.5 w-3.5" />
+                                      <span>Vincular a outro Superior</span>
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent className="w-64 max-h-60 overflow-y-auto">
+                                      {groups
+                                        .filter(
+                                          (candidate) =>
+                                            candidate.id !== group.id &&
+                                            !isDescendantOf(group.id, candidate.id) &&
+                                            candidate.id !== group.parentId
+                                        )
+                                        .map((candidate) => (
+                                          <DropdownMenuItem
+                                            key={candidate.id}
+                                            onClick={() => handleMoveToParent(group, candidate.id)}
+                                            className="text-xs cursor-pointer gap-2"
+                                          >
+                                            <div
+                                              className="w-2 h-2 rounded-full shrink-0"
+                                              style={{ backgroundColor: candidate.color || "#2563eb" }}
+                                            />
+                                            <span className="truncate">{candidate.name}</span>
+                                            <Badge variant="outline" className="text-[9px] ml-auto">
+                                              Nível {candidate.level}
+                                            </Badge>
+                                          </DropdownMenuItem>
+                                        ))}
+                                    </DropdownMenuSubContent>
+                                  </DropdownMenuSub>
+
+                                  <DropdownMenuSeparator />
+
+                                  <DropdownMenuItem
+                                    onClick={() => handleOpenCreate(group.id)}
+                                    className="gap-2 cursor-pointer"
+                                  >
+                                    <Plus className="h-3.5 w-3.5" />
+                                    <span>Novo Subgrupo</span>
+                                  </DropdownMenuItem>
+
+                                  <DropdownMenuItem
+                                    onClick={() => handleOpenEdit(group)}
+                                    className="gap-2 cursor-pointer"
+                                  >
+                                    <Edit2 className="h-3.5 w-3.5" />
+                                    <span>Editar Membros & Permissões</span>
+                                  </DropdownMenuItem>
+
+                                  <DropdownMenuItem
+                                    onClick={() => handleDeleteGroup(group)}
+                                    className="gap-2 cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    <span>Excluir Grupo</span>
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+
+                              {/* Direct Delete button */}
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => handleDeleteGroup(g)}
-                                className="h-8 px-2 text-xs text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDeleteGroup(group)}
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                title="Excluir grupo"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           </td>
@@ -830,6 +1234,17 @@ export const WorkGroupAdmin: React.FC = () => {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Bottom Grid Summary */}
+            <div className="p-2.5 sm:px-4 border-t border-border bg-muted/40 flex items-center justify-between text-xs text-muted-foreground">
+              <div className="flex items-center space-x-2">
+                <span>Total: <strong>{groups.length}</strong> grupos cadastrados ({hierarchicalGridRows.length} exibidos na grade)</span>
+              </div>
+              <div className="flex items-center space-x-3">
+                <span>Grupos Raiz: <strong className="text-foreground">{groups.filter((g) => !g.parentId).length}</strong></span>
+                <span>Subgrupos: <strong className="text-foreground">{groups.filter((g) => !!g.parentId).length}</strong></span>
+              </div>
             </div>
           </div>
         </TabsContent>

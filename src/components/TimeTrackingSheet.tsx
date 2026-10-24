@@ -505,247 +505,454 @@ export const TimeTrackingSheet: React.FC<TimeTrackingSheetProps> = ({
         </div>
 
         {/* Live Timer Control Bar */}
-        <div className="p-3 rounded-xl bg-muted/40 border border-border flex flex-wrap items-center justify-between gap-3">
-          {/* Digital Clock */}
-          <div className="flex items-center space-x-3">
-            <div className="px-3 py-1.5 rounded-lg bg-background border border-border font-mono text-lg sm:text-xl font-black tracking-wider text-foreground shadow-2xs">
+        <div className="p-2.5 sm:p-3 rounded-xl bg-muted/40 border border-border flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
+          {/* Digital Clock & Start/Pause/Save buttons */}
+          <div className="flex items-center justify-between sm:justify-start space-x-2">
+            <div className="px-3 py-1.5 rounded-lg bg-background border border-border font-mono text-base sm:text-lg font-black tracking-wider text-foreground shadow-2xs">
               {formatTime(timerSeconds)}
             </div>
 
-            {isTimerRunning ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handlePauseTimer}
-                className="h-9 px-3 gap-1.5 border-amber-500/50 text-amber-600 hover:bg-amber-500/10 font-bold text-xs"
-              >
-                <Pause className="h-3.5 w-3.5" />
-                <span>Pausar</span>
-              </Button>
-            ) : (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={handleStartTimer}
-                className="h-9 px-3 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-xs shadow-xs"
-              >
-                <Play className="h-3.5 w-3.5 fill-current" />
-                <span>{timerSeconds > 0 ? "Retomar" : "Iniciar Timer"}</span>
-              </Button>
-            )}
+            <div className="flex items-center gap-1.5">
+              {isTimerRunning ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePauseTimer}
+                  className="h-8 sm:h-9 px-2.5 sm:px-3 gap-1.5 border-amber-500/50 text-amber-600 hover:bg-amber-500/10 font-bold text-xs"
+                >
+                  <Pause className="h-3.5 w-3.5" />
+                  <span>Pausar</span>
+                </Button>
+              ) : (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleStartTimer}
+                  className="h-8 sm:h-9 px-2.5 sm:px-3 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-xs shadow-xs"
+                >
+                  <Play className="h-3.5 w-3.5 fill-current" />
+                  <span>{timerSeconds > 0 ? "Retomar" : "Iniciar"}</span>
+                </Button>
+              )}
 
-            {(isTimerRunning || timerSeconds > 0) && (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={handleStopAndSaveTimer}
-                className="h-9 px-3 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs"
-              >
-                <Square className="h-3.5 w-3.5 fill-current" />
-                <span>Salvar Apontamento</span>
-              </Button>
-            )}
+              {(isTimerRunning || timerSeconds > 0) && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleStopAndSaveTimer}
+                  className="h-8 sm:h-9 px-2.5 sm:px-3 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs"
+                >
+                  <Square className="h-3.5 w-3.5 fill-current" />
+                  <span>Salvar</span>
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Activity Description & Selectors */}
-          <div className="flex items-center gap-2 flex-1 min-w-[280px]">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1">
             <Input
-              placeholder="No que você está trabalhando agora? (Ex: Refatorando tela de grade...)"
+              placeholder="No que você está trabalhando agora?"
               value={timerDescription}
               onChange={(e) => setTimerDescription(e.target.value)}
-              className="h-9 text-xs bg-background flex-1"
+              className="h-8 sm:h-9 text-xs bg-background flex-1"
             />
 
-            <Select
-              value={timerProjectId || "none"}
-              onValueChange={(val) => setTimerProjectId(val === "none" ? null : val)}
-            >
-              <SelectTrigger className="w-36 h-9 text-xs bg-background shrink-0">
-                <SelectValue placeholder="Projeto" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Sem Projeto</SelectItem>
-                {projects.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="grid grid-cols-2 sm:flex items-center gap-2">
+              <Select
+                value={timerProjectId || "none"}
+                onValueChange={(val) => setTimerProjectId(val === "none" ? null : val)}
+              >
+                <SelectTrigger className="w-full sm:w-36 h-8 sm:h-9 text-xs bg-background shrink-0 truncate">
+                  <SelectValue placeholder="Projeto" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem Projeto</SelectItem>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-            <Select
-              value={timerTaskId || "none"}
-              onValueChange={(val) => {
-                const taskId = val === "none" ? null : val;
-                setTimerTaskId(taskId);
-                const task = tasks.find((t) => t.id === taskId);
-                if (task) {
-                  if (!timerDescription) setTimerDescription(task.name);
-                  if (task.project_id) setTimerProjectId(task.project_id);
-                  if (task.assigned_employee_id) setTimerEmployeeId(task.assigned_employee_id);
-                }
-              }}
-            >
-              <SelectTrigger className="w-40 h-9 text-xs bg-background shrink-0">
-                <SelectValue placeholder="Vincular Tarefa" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Sem Tarefa</SelectItem>
-                {tasks.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <Select
+                value={timerTaskId || "none"}
+                onValueChange={(val) => {
+                  const taskId = val === "none" ? null : val;
+                  setTimerTaskId(taskId);
+                  const task = tasks.find((t) => t.id === taskId);
+                  if (task) {
+                    if (!timerDescription) setTimerDescription(task.name);
+                    if (task.project_id) setTimerProjectId(task.project_id);
+                    if (task.assigned_employee_id) setTimerEmployeeId(task.assigned_employee_id);
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full sm:w-36 h-8 sm:h-9 text-xs bg-background shrink-0 truncate">
+                  <SelectValue placeholder="Tarefa" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem Tarefa</SelectItem>
+                  {tasks.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* KPI Cards & Filter Bar */}
-      <div className="p-3 sm:px-4 border-b border-border bg-card/60 flex flex-col gap-3">
-        {/* Metric Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          <Card className="shadow-2xs bg-card/90">
-            <CardContent className="p-3 flex items-center justify-between">
-              <div>
-                <p className="text-[11px] font-medium text-muted-foreground">Hoje Apontado</p>
-                <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{hoursToday}h</p>
-              </div>
-              <Clock className="h-4 w-4 text-emerald-500/70" />
-            </CardContent>
-          </Card>
+      {/* Filter and Summary Strip Container */}
+      <div className="p-2.5 sm:px-4 border-b border-border bg-card/60 flex flex-col gap-2.5">
 
-          <Card className="shadow-2xs bg-card/90">
-            <CardContent className="p-3 flex items-center justify-between">
-              <div>
-                <p className="text-[11px] font-medium text-muted-foreground">Esta Semana</p>
-                <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{hoursThisWeek}h</p>
-              </div>
-              <CalendarIcon className="h-4 w-4 text-blue-500/70" />
-            </CardContent>
-          </Card>
+        {/* Filters and Compact Summary Strip (Cards removed as requested) */}
+        <div className="flex flex-col gap-2.5">
+          {/* Responsive Filters */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Search */}
+            <div className="relative flex-1 min-w-[160px] sm:min-w-[200px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por descrição, tarefa, projeto..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-8 pl-8 text-xs bg-background w-full"
+              />
+            </div>
 
-          <Card className="shadow-2xs bg-card/90">
-            <CardContent className="p-3 flex items-center justify-between">
-              <div>
-                <p className="text-[11px] font-medium text-muted-foreground">Total Filtrado</p>
-                <p className="text-lg font-bold text-primary">{totalHoursFiltered}h</p>
-              </div>
-              <Sparkles className="h-4 w-4 text-primary/70" />
-            </CardContent>
-          </Card>
+            {/* Date Filter */}
+            <div className="flex items-center overflow-x-auto max-w-full rounded-lg border border-border p-0.5 bg-muted/40 shrink-0">
+              <button
+                onClick={() => setDateRangeFilter("all")}
+                className={`px-2 py-1 text-xs rounded font-medium transition-all shrink-0 ${
+                  dateRangeFilter === "all" ? "bg-background text-foreground shadow-2xs font-bold" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Todos
+              </button>
+              <button
+                onClick={() => setDateRangeFilter("today")}
+                className={`px-2 py-1 text-xs rounded font-medium transition-all shrink-0 ${
+                  dateRangeFilter === "today" ? "bg-background text-foreground shadow-2xs font-bold" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Hoje
+              </button>
+              <button
+                onClick={() => setDateRangeFilter("week")}
+                className={`px-2 py-1 text-xs rounded font-medium transition-all shrink-0 ${
+                  dateRangeFilter === "week" ? "bg-background text-foreground shadow-2xs font-bold" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Semana
+              </button>
+              <button
+                onClick={() => setDateRangeFilter("month")}
+                className={`px-2 py-1 text-xs rounded font-medium transition-all shrink-0 ${
+                  dateRangeFilter === "month" ? "bg-background text-foreground shadow-2xs font-bold" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Mês
+              </button>
+            </div>
 
-          <Card className="shadow-2xs bg-card/90">
-            <CardContent className="p-3 flex items-center justify-between">
-              <div>
-                <p className="text-[11px] font-medium text-muted-foreground">Lançamentos</p>
-                <p className="text-lg font-bold">{filteredEntries.length}</p>
-              </div>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardContent>
-          </Card>
+            {/* Project & Employee Selectors */}
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Select value={selectedProjectFilter} onValueChange={setSelectedProjectFilter}>
+                <SelectTrigger className="flex-1 sm:w-36 h-8 text-xs bg-background">
+                  <SelectValue placeholder="Projeto" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os Projetos</SelectItem>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={selectedEmployeeFilter} onValueChange={setSelectedEmployeeFilter}>
+                <SelectTrigger className="flex-1 sm:w-36 h-8 text-xs bg-background">
+                  <SelectValue placeholder="Colaborador" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toda a Equipe</SelectItem>
+                  {employees.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {(searchQuery || selectedProjectFilter !== "all" || selectedEmployeeFilter !== "all" || dateRangeFilter !== "all") && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSelectedProjectFilter("all");
+                    setSelectedEmployeeFilter("all");
+                    setDateRangeFilter("all");
+                  }}
+                  className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground shrink-0"
+                  title="Limpar todos os filtros"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  <span className="hidden sm:inline ml-1">Limpar</span>
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Compact metrics strip (replacing bulky cards) */}
+          <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-border/40 text-xs">
+            <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+                Hoje: <strong className="text-foreground font-semibold">{hoursToday}h</strong>
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-blue-500"></span>
+                Esta Semana: <strong className="text-foreground font-semibold">{hoursThisWeek}h</strong>
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-primary"></span>
+                Filtrado: <strong className="text-primary font-bold">{totalHoursFiltered}h</strong>
+              </span>
+              <span className="text-[11px]">({filteredEntries.length} {filteredEntries.length === 1 ? "apontamento" : "apontamentos"})</span>
+            </div>
+          </div>
         </div>
+      </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Search */}
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por descrição, tarefa, projeto ou colaborador..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-8 pl-8 text-xs bg-background"
-            />
-          </div>
+      {/* Main Interactive Content: Mobile Card List (< md) and Desktop Spreadsheet (>= md) */}
+      <div className="flex-1 overflow-auto bg-card">
+        {/* Mobile Card List (< md) */}
+        <div className="md:hidden divide-y divide-border/60">
+          {filteredEntries.length === 0 ? (
+            <div className="py-12 px-4 text-center text-muted-foreground flex flex-col items-center justify-center space-y-2">
+              <Clock className="h-8 w-8 text-muted-foreground/40" />
+              <p className="font-medium text-sm">Nenhum apontamento encontrado</p>
+              <p className="text-xs text-muted-foreground">
+                Clique em "+ Nova Linha" ou use o cronômetro acima
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleAddNewRow}
+                className="text-xs mt-2"
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar Apontamento
+              </Button>
+            </div>
+          ) : (
+            filteredEntries.map((entry, index) => {
+              const dateStr = entry.start_time
+                ? format(new Date(entry.start_time), "yyyy-MM-dd")
+                : format(new Date(), "yyyy-MM-dd");
+              const startTimeStr = entry.start_time
+                ? format(new Date(entry.start_time), "HH:mm")
+                : "09:00";
+              const endTimeStr = entry.end_time
+                ? format(new Date(entry.end_time), "HH:mm")
+                : "18:00";
+              const hoursVal = ((entry.duration_seconds || 0) / 3600).toFixed(2);
 
-          {/* Date Filter */}
-          <div className="flex items-center rounded-lg border border-border p-0.5 bg-muted/40">
-            <button
-              onClick={() => setDateRangeFilter("all")}
-              className={`px-2 py-1 text-xs rounded font-medium transition-all ${
-                dateRangeFilter === "all" ? "bg-background text-foreground shadow-2xs font-bold" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Todos
-            </button>
-            <button
-              onClick={() => setDateRangeFilter("today")}
-              className={`px-2 py-1 text-xs rounded font-medium transition-all ${
-                dateRangeFilter === "today" ? "bg-background text-foreground shadow-2xs font-bold" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Hoje
-            </button>
-            <button
-              onClick={() => setDateRangeFilter("week")}
-              className={`px-2 py-1 text-xs rounded font-medium transition-all ${
-                dateRangeFilter === "week" ? "bg-background text-foreground shadow-2xs font-bold" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Esta Semana
-            </button>
-            <button
-              onClick={() => setDateRangeFilter("month")}
-              className={`px-2 py-1 text-xs rounded font-medium transition-all ${
-                dateRangeFilter === "month" ? "bg-background text-foreground shadow-2xs font-bold" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Este Mês
-            </button>
-          </div>
+              return (
+                <div key={entry.id} className="p-3 bg-card hover:bg-muted/20 flex flex-col gap-2.5 transition-colors">
+                  {/* Top: Row Number + Date + Hours + Actions */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-muted-foreground font-semibold">#{index + 1}</span>
+                      <Input
+                        type="date"
+                        value={dateStr}
+                        onChange={(e) => {
+                          const newDateVal = e.target.value;
+                          if (newDateVal) {
+                            try {
+                              const [y, m, d] = newDateVal.split("-").map(Number);
+                              const cur = entry.start_time ? new Date(entry.start_time) : new Date();
+                              cur.setFullYear(y, m - 1, d);
+                              const updatedStart = cur.toISOString();
+                              const updatedEnd = new Date(cur.getTime() + (entry.duration_seconds || 0) * 1000).toISOString();
+                              handleUpdateCell(entry.id, {
+                                start_time: updatedStart,
+                                end_time: updatedEnd,
+                              });
+                            } catch {}
+                          }
+                        }}
+                        className="h-7 text-xs px-2 bg-muted/40 border-border w-28"
+                      />
+                    </div>
 
-          {/* Project Filter */}
-          <Select value={selectedProjectFilter} onValueChange={setSelectedProjectFilter}>
-            <SelectTrigger className="w-36 h-8 text-xs bg-background">
-              <SelectValue placeholder="Filtrar Projeto" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os Projetos</SelectItem>
-              {projects.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-0.5 bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded font-mono font-bold text-xs">
+                        <Input
+                          type="number"
+                          step="0.25"
+                          min="0"
+                          max="24"
+                          value={hoursVal}
+                          onChange={(e) => handleHoursChange(entry.id, e.target.value, entry.start_time)}
+                          className="h-6 w-12 text-center font-bold text-xs p-0 bg-transparent border-none shadow-none focus-visible:ring-0"
+                        />
+                        <span>h</span>
+                      </div>
 
-          {/* Employee Filter */}
-          <Select value={selectedEmployeeFilter} onValueChange={setSelectedEmployeeFilter}>
-            <SelectTrigger className="w-36 h-8 text-xs bg-background">
-              <SelectValue placeholder="Filtrar Colaborador" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Toda a Equipe</SelectItem>
-              {employees.map((e) => (
-                <SelectItem key={e.id} value={e.id}>
-                  {e.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleStartTimerFromRow(entry)}
+                        className="h-7 w-7 text-primary hover:bg-primary/10 rounded"
+                        title="Continuar timer"
+                      >
+                        <Play className="h-3 w-3 fill-current" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteRow(entry.id)}
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded"
+                        title="Excluir"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
 
-          {(searchQuery || selectedProjectFilter !== "all" || selectedEmployeeFilter !== "all" || dateRangeFilter !== "all") && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setSearchQuery("");
-                setSelectedProjectFilter("all");
-                setSelectedEmployeeFilter("all");
-                setDateRangeFilter("all");
-              }}
-              className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <RotateCcw className="h-3 w-3 mr-1" /> Limpar Filtros
-            </Button>
+                  {/* Description Input */}
+                  <Input
+                    value={entry.description || ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEntries((prev) =>
+                        prev.map((item) =>
+                          item.id === entry.id ? { ...item, description: val } : item
+                        )
+                      );
+                    }}
+                    onBlur={(e) => handleUpdateCell(entry.id, { description: e.target.value })}
+                    placeholder="Descrição da atividade..."
+                    className="h-7 text-xs bg-background"
+                  />
+
+                  {/* Colaborador & Projeto */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <Select
+                      value={entry.employee_id || "none"}
+                      onValueChange={(val) => {
+                        const empId = val === "none" ? null : val;
+                        const emp = employees.find((e) => e.id === empId);
+                        handleUpdateCell(entry.id, {
+                          employee_id: empId,
+                          employee_name: emp?.name || null,
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="h-7 text-xs bg-background truncate">
+                        <SelectValue placeholder="Colaborador" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sem Colaborador</SelectItem>
+                        {employees.map((e) => (
+                          <SelectItem key={e.id} value={e.id}>
+                            {e.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select
+                      value={entry.project_id || "none"}
+                      onValueChange={(val) => {
+                        const projId = val === "none" ? null : val;
+                        const proj = projects.find((p) => p.id === projId);
+                        handleUpdateCell(entry.id, {
+                          project_id: projId,
+                          project_name: proj?.name || null,
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="h-7 text-xs bg-background truncate">
+                        <SelectValue placeholder="Projeto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sem Projeto</SelectItem>
+                        {projects.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Tarefa & Início / Fim */}
+                  <div className="grid grid-cols-3 gap-2 items-center">
+                    <div className="col-span-1">
+                      <Select
+                        value={entry.task_id || "none"}
+                        onValueChange={(val) => {
+                          const taskId = val === "none" ? null : val;
+                          const task = tasks.find((t) => t.id === taskId);
+                          handleUpdateCell(entry.id, {
+                            task_id: taskId,
+                            task_name: task?.name || null,
+                            project_id: task?.project_id || entry.project_id,
+                            project_name: projects.find((p) => p.id === task?.project_id)?.name || entry.project_name,
+                          });
+                        }}
+                      >
+                        <SelectTrigger className="h-7 text-xs bg-background truncate">
+                          <SelectValue placeholder="Tarefa" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sem Tarefa</SelectItem>
+                          {tasks.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-muted-foreground font-mono">Início:</span>
+                      <Input
+                        type="time"
+                        value={startTimeStr}
+                        onChange={(e) => handleTimeChange(entry.id, "start_time", e.target.value, entry)}
+                        className="h-7 text-xs px-1 text-center font-mono bg-background"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-muted-foreground font-mono">Fim:</span>
+                      <Input
+                        type="time"
+                        value={endTimeStr}
+                        onChange={(e) => handleTimeChange(entry.id, "end_time", e.target.value, entry)}
+                        className="h-7 text-xs px-1 text-center font-mono bg-background"
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
-      </div>
 
-      {/* Main Interactive Editable Table (Grade Dynamics) */}
-      <div className="flex-1 overflow-auto bg-card">
+        {/* Desktop / Tablet Spreadsheet View (>= md) */}
+        <div className="hidden md:block">
         <table className="w-full border-collapse text-left text-xs">
           {/* Table Header */}
           <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm border-b border-border z-10 font-bold text-muted-foreground">
@@ -1007,6 +1214,7 @@ export const TimeTrackingSheet: React.FC<TimeTrackingSheetProps> = ({
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Bottom Summary Bar */}
