@@ -7,6 +7,7 @@ import routes from "tempo-routes";
 import { ThemeProvider } from "./lib/theme";
 import { AuthProvider, useAuth } from "./lib/authContext";
 import { Toaster } from "./components/ui/toaster";
+import { OfflineIndicator } from "./components/OfflineIndicator";
 
 function AppContent() {
   const { isAuthenticated, loading } = useAuth();
@@ -36,6 +37,8 @@ function AppContent() {
   // Authenticated Area
   return (
     <div className="min-h-screen bg-background">
+      {/* PWA Offline Connectivity Status Banner */}
+      <OfflineIndicator />
       {/* Modal/Banner for invited collaborators upon logging in / accessing app */}
       <PendingInvitationBanner />
       <Routes>

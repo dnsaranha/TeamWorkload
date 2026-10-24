@@ -35,6 +35,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ThemeToggleButton } from "@/lib/theme";
+import { PWAInstallButton } from "./PWAInstallButton";
 import WorkloadCalendar from "./WorkloadCalendar";
 import XiaomiCalendar from "./XiaomiCalendar";
 import GanttChart from "./GanttChart";
@@ -169,6 +170,7 @@ const HomePage = () => {
             </div>
           </div>
           <div className="flex items-center space-x-1">
+            <PWAInstallButton variant="ghost" size="icon" showText={false} className="h-8 w-8 text-primary" />
             <ThemeToggleButton />
             <Button
               variant="ghost"
@@ -524,6 +526,12 @@ const HomePage = () => {
                   ))}
                 </select>
               </div>
+
+              <PWAInstallButton
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs border-primary/30 text-primary hover:bg-primary/10 shadow-2xs"
+              />
 
               <Button
                 variant={activeTab === "groups" ? "default" : "outline"}

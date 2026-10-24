@@ -3,6 +3,8 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
@@ -106,14 +108,42 @@ export async function testFirestoreConnection(): Promise<boolean> {
 // Trigger initial test
 testFirestoreConnection().catch(() => {});
 
-// Google Sign-In helper
+// Google Sign-In helper with popup & redirect fallback
 export async function signInWithGoogle(): Promise<User | null> {
+  const isStandalone =
+    typeof window !== "undefined" &&
+    (window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true);
+
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
   } catch (error: any) {
-    console.error("Google sign in error:", error);
+    console.warn("Google signInWithPopup notice:", error?.code, error?.message);
+
+    // If popup was blocked or closed on mobile/PWA standalone, fallback to redirect
+    if (
+      error.code === "auth/popup-blocked" ||
+      error.code === "auth/cancelled-popup-request" ||
+      (isStandalone && error.code === "auth/popup-closed-by-user")
+    ) {
+      console.log("Triggering signInWithRedirect fallback for Google login...");
+      await signInWithRedirect(auth, googleProvider);
+      return null;
+    }
+
     throw error;
+  }
+}
+
+// Check redirect login result if user redirected back
+export async function checkRedirectAuth(): Promise<User | null> {
+  try {
+    const result = await getRedirectResult(auth);
+    return result ? result.user : null;
+  } catch (error) {
+    console.warn("Error checking redirect auth result:", error);
+    return null;
   }
 }
 

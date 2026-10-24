@@ -23,6 +23,8 @@ import {
 } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { useAuth } from "../lib/authContext";
+import { PWAInstallButton } from "./PWAInstallButton";
+import { ThemeToggleButton } from "../lib/theme";
 
 interface LoginPageProps {
   onSuccess?: () => void;
@@ -45,8 +47,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
       await loginGoogle();
       if (onSuccess) onSuccess();
     } catch (err: any) {
-      console.error(err);
-      setErrorMsg(err.message || "Erro ao autenticar com o Google.");
+      console.error("Google login error:", err);
+      if (err.code === "auth/unauthorized-domain") {
+        setErrorMsg(
+          "O domínio atual (teamworkload.vercel.app) ainda não está na lista de Domínios Autorizados do Firebase Console. Para habilitar o login Google no Vercel, acesse o Firebase Console > Authentication > Settings > Authorized Domains e adicione 'teamworkload.vercel.app'. Você também pode entrar ou se cadastrar com e-mail corporativo abaixo."
+        );
+      } else if (err.code === "auth/popup-blocked") {
+        setErrorMsg("O popup de login do Google foi bloqueado pelo navegador. Toque novamente para tentar o redirecionamento direto.");
+      } else if (err.code === "auth/popup-closed-by-user") {
+        setErrorMsg("A janela de login com o Google foi fechada antes de concluir a autenticação.");
+      } else {
+        setErrorMsg(err.message || "Erro ao autenticar com a conta Google.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -88,7 +100,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 sm:p-6 bg-muted/20">
+    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 sm:p-6 bg-muted/20 relative">
+      {/* Top Utility Bar */}
+      <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+        <PWAInstallButton variant="outline" size="sm" className="bg-background/80 shadow-xs text-xs" />
+        <ThemeToggleButton />
+      </div>
+
       <div className="w-full max-w-md mx-auto space-y-6">
         {/* Header Branding */}
         <div className="text-center space-y-2">

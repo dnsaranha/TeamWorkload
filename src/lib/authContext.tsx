@@ -3,6 +3,7 @@ import { User } from "firebase/auth";
 import {
   auth,
   signInWithGoogle,
+  checkRedirectAuth,
   signInWithEmail,
   registerWithEmail,
   logoutUser,
@@ -201,6 +202,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   useEffect(() => {
+    checkRedirectAuth().catch((err) => console.warn("checkRedirectAuth:", err));
     refreshUserData();
 
     const unsubscribe = subscribeToAuth(async (currentUser) => {
