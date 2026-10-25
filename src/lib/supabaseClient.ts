@@ -489,52 +489,54 @@ class LocalMockDB {
 
 export const mockDB = new LocalMockDB();
 
+const DELETED_IDS_KEY = "crono_pulse_deleted_ids";
+
+export function markAsDeleted(id: string): void {
+  try {
+    const raw = localStorage.getItem(DELETED_IDS_KEY);
+    const list: string[] = raw ? JSON.parse(raw) : [];
+    if (!list.includes(id)) {
+      list.push(id);
+      localStorage.setItem(DELETED_IDS_KEY, JSON.stringify(list.slice(-1000)));
+    }
+  } catch (e) {
+    console.warn("Could not mark as deleted:", e);
+  }
+}
+
+export function isItemDeleted(id: string): boolean {
+  try {
+    const raw = localStorage.getItem(DELETED_IDS_KEY);
+    if (!raw) return false;
+    const list: string[] = JSON.parse(raw);
+    return list.includes(id);
+  } catch {
+    return false;
+  }
+}
+
 // Helper functions for CRUD operations with Firebase Firestore as primary storage
 export const employeeService = {
   async getAll(): Promise<Employee[]> {
     try {
       const remote = await firestoreService.getEmployees();
-      const isMockCleared = localStorage.getItem("crono_pulse_mock_cleared") === "true";
-      const local = mockDB.getEmployees();
-
-      if (remote && remote.length > 0) {
-        const remoteIds = new Set(remote.map((r) => r.id));
-        const extraLocal = local.filter(
-          (l) => !remoteIds.has(l.id) && (!isMockCleared || !["emp-1", "emp-2", "emp-3", "emp-4"].includes(l.id))
-        );
-        if (extraLocal.length > 0) {
-          for (const el of extraLocal) {
-            firestoreService.saveEmployee(el).catch(console.warn);
-          }
-        }
-        const merged = [...remote, ...extraLocal].map((e) => ({
-          ...e,
-          status: e.status || "ativo",
-        }));
-        mockDB.setEmployees(merged);
-        return merged;
-      } else {
-        if (isMockCleared) {
-          const nonMock = local
-            .filter((l) => !["emp-1", "emp-2", "emp-3", "emp-4"].includes(l.id))
-            .map((e) => ({ ...e, status: e.status || "ativo" }));
-          for (const emp of nonMock) {
-            firestoreService.saveEmployee(emp).catch(console.warn);
-          }
-          mockDB.setEmployees(nonMock);
-          return nonMock;
-        }
-        // Seed initial employees to Firestore
-        const initial = mockDB.getEmployees().map((e) => ({ ...e, status: e.status || "ativo" }));
-        for (const emp of initial) {
-          firestoreService.saveEmployee(emp).catch(() => {});
-        }
-        return initial;
+      if (remote) {
+        const filteredRemote = remote
+          .filter((e) => !isItemDeleted(e.id))
+          .map((e) => ({
+            ...e,
+            status: e.status || "ativo",
+          }));
+        mockDB.setEmployees(filteredRemote);
+        return filteredRemote;
       }
     } catch (err) {
       console.warn("[Employee Service] Falling back to local data:", err);
     }
-    return mockDB.getEmployees().map((e) => ({ ...e, status: e.status || "ativo" }));
+    return mockDB
+      .getEmployees()
+      .filter((e) => !isItemDeleted(e.id))
+      .map((e) => ({ ...e, status: e.status || "ativo" }));
   },
 
   async create(employee: EmployeeInsert & { id?: string }): Promise<Employee> {
@@ -593,6 +595,7 @@ export const employeeService = {
   },
 
   async delete(id: string): Promise<void> {
+    markAsDeleted(id);
     const employees = mockDB.getEmployees().filter((e) => e.id !== id);
     mockDB.setEmployees(employees);
     await firestoreService.deleteEmployee(id).catch(console.warn);
@@ -624,42 +627,15 @@ export const projectService = {
   async getAll(): Promise<Project[]> {
     try {
       const remote = await firestoreService.getProjects();
-      const isMockCleared = localStorage.getItem("crono_pulse_mock_cleared") === "true";
-      const local = mockDB.getProjects();
-
-      if (remote && remote.length > 0) {
-        const remoteIds = new Set(remote.map((r) => r.id));
-        const extraLocal = local.filter(
-          (l) => !remoteIds.has(l.id) && (!isMockCleared || !["proj-1", "proj-2", "proj-3"].includes(l.id))
-        );
-        if (extraLocal.length > 0) {
-          for (const el of extraLocal) {
-            firestoreService.saveProject(el).catch(console.warn);
-          }
-        }
-        const merged = [...remote, ...extraLocal];
-        mockDB.setProjects(merged);
-        return merged;
-      } else {
-        if (isMockCleared) {
-          const nonMock = local.filter((l) => !["proj-1", "proj-2", "proj-3"].includes(l.id));
-          for (const proj of nonMock) {
-            firestoreService.saveProject(proj).catch(console.warn);
-          }
-          mockDB.setProjects(nonMock);
-          return nonMock;
-        }
-        // Seed initial projects to Firestore
-        const initial = mockDB.getProjects();
-        for (const proj of initial) {
-          firestoreService.saveProject(proj).catch(() => {});
-        }
-        return initial;
+      if (remote) {
+        const filteredRemote = remote.filter((p) => !isItemDeleted(p.id));
+        mockDB.setProjects(filteredRemote);
+        return filteredRemote;
       }
     } catch (err) {
       console.warn("[Project Service] Falling back to local data:", err);
     }
-    return mockDB.getProjects();
+    return mockDB.getProjects().filter((p) => !isItemDeleted(p.id));
   },
 
   async create(project: ProjectInsert & { id?: string }): Promise<Project> {
@@ -721,6 +697,7 @@ export const projectService = {
   },
 
   async delete(id: string): Promise<void> {
+    markAsDeleted(id);
     const projects = mockDB.getProjects().filter((p) => p.id !== id);
     mockDB.setProjects(projects);
     try {
@@ -756,43 +733,15 @@ export const taskService = {
   async getAll(): Promise<Task[]> {
     try {
       const remote = await firestoreService.getTasks();
-      const isMockCleared = localStorage.getItem("crono_pulse_mock_cleared") === "true";
-      const local = mockDB.getTasks();
-      const mockIds = ["task-1", "task-2", "task-2-1", "task-2-2", "task-3", "task-4", "task-5", "task-6"];
-
-      if (remote && remote.length > 0) {
-        const remoteIds = new Set(remote.map((r) => r.id));
-        const extraLocal = local.filter(
-          (l) => !remoteIds.has(l.id) && (!isMockCleared || !mockIds.includes(l.id))
-        );
-        if (extraLocal.length > 0) {
-          for (const el of extraLocal) {
-            firestoreService.saveTask(el).catch(console.warn);
-          }
-        }
-        const merged = [...remote, ...extraLocal];
-        mockDB.setTasks(merged);
-        return mockDB.getTasks();
-      } else {
-        if (isMockCleared) {
-          const nonMock = local.filter((l) => !mockIds.includes(l.id));
-          for (const task of nonMock) {
-            firestoreService.saveTask(task).catch(console.warn);
-          }
-          mockDB.setTasks(nonMock);
-          return mockDB.getTasks();
-        }
-        // Seed initial tasks to Firestore
-        const initial = mockDB.getTasks();
-        for (const task of initial) {
-          firestoreService.saveTask(task).catch(() => {});
-        }
-        return initial;
+      if (remote) {
+        const filteredRemote = remote.filter((t) => !isItemDeleted(t.id));
+        mockDB.setTasks(filteredRemote);
+        return mockDB.getTasks().filter((t) => !isItemDeleted(t.id));
       }
     } catch (err) {
       console.warn("[Task Service] Falling back to local data:", err);
     }
-    return mockDB.getTasks();
+    return mockDB.getTasks().filter((t) => !isItemDeleted(t.id));
   },
 
   async create(task: TaskInsert & { id?: string }): Promise<Task> {
@@ -877,6 +826,7 @@ export const taskService = {
   },
 
   async delete(id: string): Promise<void> {
+    markAsDeleted(id);
     const tasks = mockDB.getTasks().filter((t) => t.id !== id);
     mockDB.setTasks(tasks);
     try {
@@ -925,39 +875,31 @@ export const taskService = {
 
 export const timeEntryService = {
   async getAll(): Promise<TimeEntry[]> {
-    let local: TimeEntry[] = [];
-    try {
-      const data = localStorage.getItem("crono_pulse_time_entries");
-      local = data ? JSON.parse(data) : [];
-    } catch {
-      local = [];
-    }
-
     try {
       const remote = await firestoreService.getTimeEntries();
       if (remote) {
-        const remoteIds = new Set(remote.map((r) => r.id));
-        const extraLocal = local.filter((l) => !remoteIds.has(l.id));
-        if (extraLocal.length > 0) {
-          for (const el of extraLocal) {
-            firestoreService.saveTimeEntry(el).catch(console.warn);
-          }
-        }
-        const merged = [...remote, ...extraLocal];
-        merged.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-        localStorage.setItem("crono_pulse_time_entries", JSON.stringify(merged));
-        return merged;
+        const filtered = remote.filter((t) => !isItemDeleted(t.id));
+        filtered.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+        localStorage.setItem("crono_pulse_time_entries", JSON.stringify(filtered));
+        return filtered;
       }
     } catch (err) {
       console.warn("Firestore time entries fallback to local:", err);
     }
-    return local;
+    try {
+      const data = localStorage.getItem("crono_pulse_time_entries");
+      const list: TimeEntry[] = data ? JSON.parse(data) : [];
+      return list.filter((t) => !isItemDeleted(t.id));
+    } catch {
+      return [];
+    }
   },
 
   getAllSync(): TimeEntry[] {
     try {
       const data = localStorage.getItem("crono_pulse_time_entries");
-      return data ? JSON.parse(data) : [];
+      const list: TimeEntry[] = data ? JSON.parse(data) : [];
+      return list.filter((t) => !isItemDeleted(t.id));
     } catch {
       return [];
     }
@@ -1010,6 +952,7 @@ export const timeEntryService = {
   },
 
   async delete(id: string): Promise<void> {
+    markAsDeleted(id);
     const all = this.getAllSync().filter((t) => t.id !== id);
     try {
       localStorage.setItem("crono_pulse_time_entries", JSON.stringify(all));

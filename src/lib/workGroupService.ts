@@ -6,7 +6,7 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 import { db, OperationType, handleFirestoreError } from "./firebase";
-import { Employee, employeeService } from "./supabaseClient";
+import { Employee, employeeService, markAsDeleted, isItemDeleted } from "./supabaseClient";
 
 export type HierarchyLevel = 1 | 2 | 3 | 4;
 
@@ -330,6 +330,7 @@ export const workGroupService = {
   // Get all groups (with Firestore priority and local cache fallback)
   async getAll(): Promise<WorkGroup[]> {
     const isMockCleared = localStorage.getItem("crono_pulse_mock_cleared") === "true";
+    const isGroupsInit = localStorage.getItem("crono_pulse_groups_init") === "true";
 
     try {
       const colRef = collection(db, WORK_GROUPS_COL);
@@ -345,45 +346,24 @@ export const workGroupService = {
           groups = groups.filter((g) => !SEED_GROUP_IDS.includes(g.id));
         }
 
-        // Merge with local storage if local has freshly created groups not yet indexed
-        const local = localStorage.getItem(STORAGE_KEY);
-        if (local) {
-          try {
-            const localParsed: WorkGroup[] = JSON.parse(local);
-            for (const lg of localParsed) {
-              if (!groups.some((g) => g.id === lg.id)) {
-                if (!isMockCleared || !SEED_GROUP_IDS.includes(lg.id)) {
-                  groups.push(lg);
-                  // Push to Firestore in background to heal sync
-                  const docRef = doc(db, WORK_GROUPS_COL, lg.id);
-                  setDoc(docRef, sanitizeForFirestore(lg), { merge: true }).catch(() => {});
-                }
-              }
-            }
-          } catch (e) {
-            console.error("Error parsing local work groups:", e);
-          }
-        }
+        // Filter out tombstoned groups
+        groups = groups.filter((g) => !isItemDeleted(g.id));
 
         localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
+        localStorage.setItem("crono_pulse_groups_init", "true");
         return groups;
       }
     } catch (err) {
       handleFirestoreError(err, OperationType.GET, WORK_GROUPS_COL);
     }
 
-    // If user cleared mock data, return only local non-mock groups
-    if (isMockCleared) {
+    // If user cleared mock data or groups were initialized, return only local non-mock groups
+    if (isMockCleared || isGroupsInit) {
       const local = localStorage.getItem(STORAGE_KEY);
       if (local) {
         try {
           const parsed: WorkGroup[] = JSON.parse(local);
-          const nonMock = parsed.filter((g) => !SEED_GROUP_IDS.includes(g.id));
-          for (const g of nonMock) {
-            const docRef = doc(db, WORK_GROUPS_COL, g.id);
-            setDoc(docRef, sanitizeForFirestore(g), { merge: true }).catch(() => {});
-          }
-          return nonMock;
+          return parsed.filter((g) => !isItemDeleted(g.id) && (!isMockCleared || !SEED_GROUP_IDS.includes(g.id)));
         } catch (e) {
           console.error("Error parsing local work groups:", e);
         }
@@ -391,19 +371,10 @@ export const workGroupService = {
       return [];
     }
 
-    // Fallback to local storage or seed data
-    const local = localStorage.getItem(STORAGE_KEY);
-    if (local) {
-      try {
-        return JSON.parse(local);
-      } catch (e) {
-        console.error("Error parsing local work groups:", e);
-      }
-    }
-
     // Seed defaults
-    const seed = getSeedGroups();
+    const seed = getSeedGroups().filter((g) => !isItemDeleted(g.id));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
+    localStorage.setItem("crono_pulse_groups_init", "true");
     // Asynchronously seed to Firestore
     this.seedFirestore(seed).catch((e) => console.warn("Seed firestore notice:", e));
     return seed;
@@ -478,6 +449,7 @@ export const workGroupService = {
   },
 
   async delete(id: string): Promise<void> {
+    markAsDeleted(id);
     const groups = await this.getAll();
     const updated = groups.filter((g) => g.id !== id);
 

@@ -2536,6 +2536,22 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
                           <Edit2 className="h-2.5 w-2.5" />
                         </Button>
                       )}
+
+                      {/* Quick Delete button */}
+                      {displaySettings.listColumns.actions && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 rounded"
+                          title="Excluir Tarefa"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteTask(task.id);
+                          }}
+                        >
+                          <Trash2 className="h-2.5 w-2.5" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );

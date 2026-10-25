@@ -230,6 +230,7 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
   const [isManageProjectsOpen, setIsManageProjectsOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const [projectForm, setProjectForm] = useState({
     name: "",
     description: "",
@@ -543,6 +544,12 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
 
   const handleDeleteProject = async (projId: string) => {
     try {
+      const childTasks = tasks.filter((t) => t.project_id === projId);
+      for (const t of childTasks) {
+        await taskService.delete(t.id).catch(() => {});
+      }
+      setTasks((prev) => prev.filter((t) => t.project_id !== projId));
+      setProjects((prev) => prev.filter((p) => p.id !== projId));
       await projectService.delete(projId);
       await loadData();
       if (onDataChange) onDataChange();
@@ -1603,15 +1610,28 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
                           if (col.key === "actions") {
                             return (
                               <td key={col.key} className="px-2 py-2 text-center">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleCreateInlineTask(group.project?.id || null)}
-                                  className="h-6 w-6 text-primary hover:bg-primary/10 rounded"
-                                  title="Adicionar tarefa neste projeto"
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                </Button>
+                                <div className="flex items-center justify-center space-x-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleCreateInlineTask(group.project?.id || null)}
+                                    className="h-6 w-6 text-primary hover:bg-primary/10 rounded"
+                                    title="Adicionar tarefa neste projeto"
+                                  >
+                                    <Plus className="h-3.5 w-3.5" />
+                                  </Button>
+                                  {group.project && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => setProjectToDelete(group.project || null)}
+                                      className="h-6 w-6 text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 rounded"
+                                      title="Excluir projeto"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                                </div>
                               </td>
                             );
                           }
@@ -2242,11 +2262,11 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
                               if (col.key === "actions") {
                                 return (
                                   <td key={col.key} className="px-1 py-1 text-center">
-                                    <div className="flex items-center justify-center space-x-1 opacity-40 group-hover:opacity-100 transition-opacity">
+                                    <div className="flex items-center justify-center space-x-1 opacity-80 hover:opacity-100 transition-opacity">
                                       <button
                                         type="button"
                                         onClick={() => handleMoveTaskOrder(task.id, "up")}
-                                        className="p-0.5 hover:text-primary rounded hover:bg-muted"
+                                        className="p-1 hover:text-primary rounded hover:bg-muted"
                                         title="Mover para cima"
                                       >
                                         <ChevronUp className="h-3.5 w-3.5" />
@@ -2254,7 +2274,7 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
                                       <button
                                         type="button"
                                         onClick={() => handleMoveTaskOrder(task.id, "down")}
-                                        className="p-0.5 hover:text-primary rounded hover:bg-muted"
+                                        className="p-1 hover:text-primary rounded hover:bg-muted"
                                         title="Mover para baixo"
                                       >
                                         <ChevronDown className="h-3.5 w-3.5" />
@@ -2262,7 +2282,7 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
                                       <button
                                         type="button"
                                         onClick={() => handleDeleteTask(task.id)}
-                                        className="p-0.5 hover:text-rose-500 rounded hover:bg-rose-500/10 text-muted-foreground"
+                                        className="p-1 hover:text-rose-500 rounded hover:bg-rose-500/10 text-muted-foreground/80 active:scale-95 transition-all"
                                         title="Excluir tarefa"
                                       >
                                         <Trash2 className="h-3.5 w-3.5" />
@@ -2531,6 +2551,46 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
               className="text-xs h-8"
             >
               Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation Dialog for Project Deletion */}
+      <Dialog open={Boolean(projectToDelete)} onOpenChange={(open) => !open && setProjectToDelete(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-destructive">
+              <Trash2 className="w-5 h-5 text-destructive" />
+              Excluir Projeto e Tarefas?
+            </DialogTitle>
+            <DialogDescription className="text-xs pt-1">
+              Tem certeza que deseja excluir o projeto <strong>"{projectToDelete?.name}"</strong>?
+              Todas as tarefas deste projeto serão permanentemente removidas.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setProjectToDelete(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={async () => {
+                if (projectToDelete) {
+                  await handleDeleteProject(projectToDelete.id);
+                  setProjectToDelete(null);
+                }
+              }}
+              className="gap-1.5 font-semibold"
+            >
+              Confirmar Exclusão
             </Button>
           </DialogFooter>
         </DialogContent>
