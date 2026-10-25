@@ -212,8 +212,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         localStorage.setItem(AUTH_SESSION_KEY, "true");
         setIsSuperAdminState(true);
         localStorage.setItem(SUPER_ADMIN_KEY, "true");
-        const emps = await employeeService.getAll();
-        await ensureEmployeeForAuthUser(currentUser, emps);
+        await refreshUserData();
       }
       setLoading(false);
     });

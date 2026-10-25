@@ -378,7 +378,12 @@ export const workGroupService = {
       if (local) {
         try {
           const parsed: WorkGroup[] = JSON.parse(local);
-          return parsed.filter((g) => !SEED_GROUP_IDS.includes(g.id));
+          const nonMock = parsed.filter((g) => !SEED_GROUP_IDS.includes(g.id));
+          for (const g of nonMock) {
+            const docRef = doc(db, WORK_GROUPS_COL, g.id);
+            setDoc(docRef, sanitizeForFirestore(g), { merge: true }).catch(() => {});
+          }
+          return nonMock;
         } catch (e) {
           console.error("Error parsing local work groups:", e);
         }

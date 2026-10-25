@@ -502,6 +502,11 @@ export const employeeService = {
         const extraLocal = local.filter(
           (l) => !remoteIds.has(l.id) && (!isMockCleared || !["emp-1", "emp-2", "emp-3", "emp-4"].includes(l.id))
         );
+        if (extraLocal.length > 0) {
+          for (const el of extraLocal) {
+            firestoreService.saveEmployee(el).catch(console.warn);
+          }
+        }
         const merged = [...remote, ...extraLocal].map((e) => ({
           ...e,
           status: e.status || "ativo",
@@ -513,6 +518,9 @@ export const employeeService = {
           const nonMock = local
             .filter((l) => !["emp-1", "emp-2", "emp-3", "emp-4"].includes(l.id))
             .map((e) => ({ ...e, status: e.status || "ativo" }));
+          for (const emp of nonMock) {
+            firestoreService.saveEmployee(emp).catch(console.warn);
+          }
           mockDB.setEmployees(nonMock);
           return nonMock;
         }
@@ -624,12 +632,20 @@ export const projectService = {
         const extraLocal = local.filter(
           (l) => !remoteIds.has(l.id) && (!isMockCleared || !["proj-1", "proj-2", "proj-3"].includes(l.id))
         );
+        if (extraLocal.length > 0) {
+          for (const el of extraLocal) {
+            firestoreService.saveProject(el).catch(console.warn);
+          }
+        }
         const merged = [...remote, ...extraLocal];
         mockDB.setProjects(merged);
         return merged;
       } else {
         if (isMockCleared) {
           const nonMock = local.filter((l) => !["proj-1", "proj-2", "proj-3"].includes(l.id));
+          for (const proj of nonMock) {
+            firestoreService.saveProject(proj).catch(console.warn);
+          }
           mockDB.setProjects(nonMock);
           return nonMock;
         }
@@ -749,12 +765,20 @@ export const taskService = {
         const extraLocal = local.filter(
           (l) => !remoteIds.has(l.id) && (!isMockCleared || !mockIds.includes(l.id))
         );
+        if (extraLocal.length > 0) {
+          for (const el of extraLocal) {
+            firestoreService.saveTask(el).catch(console.warn);
+          }
+        }
         const merged = [...remote, ...extraLocal];
         mockDB.setTasks(merged);
         return mockDB.getTasks();
       } else {
         if (isMockCleared) {
           const nonMock = local.filter((l) => !mockIds.includes(l.id));
+          for (const task of nonMock) {
+            firestoreService.saveTask(task).catch(console.warn);
+          }
           mockDB.setTasks(nonMock);
           return mockDB.getTasks();
         }
@@ -901,21 +925,33 @@ export const taskService = {
 
 export const timeEntryService = {
   async getAll(): Promise<TimeEntry[]> {
+    let local: TimeEntry[] = [];
+    try {
+      const data = localStorage.getItem("crono_pulse_time_entries");
+      local = data ? JSON.parse(data) : [];
+    } catch {
+      local = [];
+    }
+
     try {
       const remote = await firestoreService.getTimeEntries();
-      if (remote && remote.length > 0) {
-        localStorage.setItem("crono_pulse_time_entries", JSON.stringify(remote));
-        return remote;
+      if (remote) {
+        const remoteIds = new Set(remote.map((r) => r.id));
+        const extraLocal = local.filter((l) => !remoteIds.has(l.id));
+        if (extraLocal.length > 0) {
+          for (const el of extraLocal) {
+            firestoreService.saveTimeEntry(el).catch(console.warn);
+          }
+        }
+        const merged = [...remote, ...extraLocal];
+        merged.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+        localStorage.setItem("crono_pulse_time_entries", JSON.stringify(merged));
+        return merged;
       }
     } catch (err) {
       console.warn("Firestore time entries fallback to local:", err);
     }
-    try {
-      const data = localStorage.getItem("crono_pulse_time_entries");
-      return data ? JSON.parse(data) : [];
-    } catch {
-      return [];
-    }
+    return local;
   },
 
   getAllSync(): TimeEntry[] {
@@ -940,7 +976,11 @@ export const timeEntryService = {
     } catch (e) {
       console.error("Error saving time entry:", e);
     }
-    firestoreService.saveTimeEntry(newEntry).catch(console.warn);
+    try {
+      await firestoreService.saveTimeEntry(newEntry);
+    } catch (err) {
+      console.warn("Could not save time entry to remote:", err);
+    }
     return newEntry;
   },
 
@@ -960,7 +1000,11 @@ export const timeEntryService = {
       console.error("Error updating time entry:", e);
     }
     if (updatedItem) {
-      firestoreService.saveTimeEntry(updatedItem).catch(console.warn);
+      try {
+        await firestoreService.saveTimeEntry(updatedItem);
+      } catch (err) {
+        console.warn("Could not update time entry remotely:", err);
+      }
     }
     return updatedItem;
   },
@@ -972,7 +1016,11 @@ export const timeEntryService = {
     } catch (e) {
       console.error("Error deleting time entry:", e);
     }
-    firestoreService.deleteTimeEntry(id).catch(console.warn);
+    try {
+      await firestoreService.deleteTimeEntry(id);
+    } catch (err) {
+      console.warn("Could not delete time entry remotely:", err);
+    }
   },
 
   getActive(): {

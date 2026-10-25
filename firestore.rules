@@ -1,48 +1,44 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Global Default-Deny
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
-    function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128;
+    // Health / connectivity test
+    match /test/{testId} {
+      allow read, write: if true;
     }
 
     // Employees Collection
     match /employees/{employeeId} {
-      allow read, write: if isValidId(employeeId);
+      allow read, write: if true;
     }
 
     // Projects Collection
     match /projects/{projectId} {
-      allow read, write: if isValidId(projectId);
+      allow read, write: if true;
     }
 
     // Tasks Collection
     match /tasks/{taskId} {
-      allow read, write: if isValidId(taskId);
+      allow read, write: if true;
     }
 
     // Time Entries Collection
     match /time_entries/{timeEntryId} {
-      allow read, write: if isValidId(timeEntryId);
+      allow read, write: if true;
     }
 
     // Profiles Collection
     match /profiles/{profileId} {
-      allow read, write: if isValidId(profileId);
+      allow read, write: if true;
     }
 
     // Work Groups Collection
     match /work_groups/{groupId} {
-      allow read, write: if isValidId(groupId);
+      allow read, write: if true;
     }
 
     // Invitations Collection
     match /invitations/{invitationId} {
-      allow read, write: if isValidId(invitationId);
+      allow read, write: if true;
     }
   }
 }
