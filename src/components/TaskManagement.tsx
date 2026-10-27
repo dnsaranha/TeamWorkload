@@ -48,6 +48,7 @@ import {
   LayoutGrid,
   Building2,
   Users,
+  Clock,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
@@ -57,9 +58,11 @@ import {
   taskService,
   projectService,
   employeeService,
+  timeEntryService,
   type Task,
   type Project,
   type Employee,
+  type TimeEntry,
 } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/authContext";
 
@@ -73,6 +76,7 @@ const TaskManagement = () => {
   const [tasks, setTasks] = useState<TaskWithRelations[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [taskTrackedHours, setTaskTrackedHours] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [viewFormat, setViewFormat] = useState<"grid" | "classic">("grid");
 
@@ -148,6 +152,14 @@ const TaskManagement = () => {
   // Load data from database
   useEffect(() => {
     loadData();
+
+    const handleTimeEntriesUpdated = () => {
+      loadData();
+    };
+    window.addEventListener("time_entries_updated", handleTimeEntriesUpdated);
+    return () => {
+      window.removeEventListener("time_entries_updated", handleTimeEntriesUpdated);
+    };
   }, []);
 
   // Effect to automatically calculate estimated_time for new task
@@ -178,12 +190,15 @@ const TaskManagement = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [tasksData, projectsData, employeesData] = await Promise.all([
+      const [tasksData, projectsData, employeesData, timeEntriesData] = await Promise.all([
         taskService.getAll(),
         projectService.getAll(),
         employeeService.getAll(),
+        timeEntryService.getAll(),
       ]);
 
+      const trackedMap = timeEntryService.getTrackedHoursMap(timeEntriesData);
+      setTaskTrackedHours(trackedMap);
       setTasks(tasksData as TaskWithRelations[]);
       setProjects(projectsData);
       setEmployees(employeesData);
@@ -585,6 +600,7 @@ const TaskManagement = () => {
       "Assigned To ID": task.assigned_employee_id,
       "Assigned To": task.assigned_employee?.name || "Unassigned",
       "Estimated Hours": task.estimated_time,
+      "Tracked Hours (Apontamento)": Number((taskTrackedHours[task.id] ?? task.actual_time ?? 0).toFixed(1)),
       "Start Date": task.start_date,
       "End Date": task.end_date,
       "Repeats Weekly": task.repeats_weekly ? "Yes" : "No",
@@ -1799,6 +1815,7 @@ const TaskManagement = () => {
                   <TableHead>Projeto</TableHead>
                   <TableHead>Grupo</TableHead>
                   <TableHead>Horas Estimadas</TableHead>
+                  <TableHead>Horas Registradas</TableHead>
                   <TableHead>Período</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Responsável</TableHead>
@@ -1808,13 +1825,13 @@ const TaskManagement = () => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-6">
+                    <TableCell colSpan={9} className="text-center py-6">
                       Carregando tarefas...
                     </TableCell>
                   </TableRow>
                 ) : filteredTasks.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-6 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-6 text-muted-foreground">
                       {tasks.length === 0
                         ? "Nenhuma tarefa encontrada"
                         : "Nenhuma tarefa corresponde aos filtros"}
@@ -1838,7 +1855,13 @@ const TaskManagement = () => {
                           <span className="text-xs text-muted-foreground">Geral</span>
                         )}
                       </TableCell>
-                      <TableCell>{task.estimated_time}h</TableCell>
+                      <TableCell className="font-mono">{task.estimated_time}h</TableCell>
+                      <TableCell className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                        <span className="inline-flex items-center gap-1">
+                          <Clock className="w-3 h-3 opacity-70" />
+                          {(taskTrackedHours[task.id] ?? task.actual_time ?? 0).toFixed(1)}h
+                        </span>
+                      </TableCell>
                       <TableCell className="whitespace-nowrap">
                         {format(new Date(task.start_date + "T00:00:00"), "dd/MM")}{" "}
                         -{" "}

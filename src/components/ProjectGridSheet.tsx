@@ -56,10 +56,12 @@ import {
   taskService,
   employeeService,
   projectService,
+  timeEntryService,
   type Task,
   type Employee,
   type Project,
   type TaskInsert,
+  type TimeEntry,
 } from "@/lib/supabaseClient";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -136,7 +138,7 @@ const DEFAULT_COLUMNS: ColumnDef[] = [
   { key: "dependsOn", label: "Predecessora", defaultWidth: 120, minWidth: 90 },
   { key: "duration", label: "Duração", defaultWidth: 95, minWidth: 75 },
   { key: "effort", label: "Esf. Estimado", defaultWidth: 100, minWidth: 75 },
-  { key: "actualEffort", label: "Esf. Realizado", defaultWidth: 110, minWidth: 80 },
+  { key: "actualEffort", label: "Horas Registradas", defaultWidth: 125, minWidth: 85 },
   { key: "variance", label: "Desvio / Saldo", defaultWidth: 110, minWidth: 85 },
   { key: "effortRemaining", label: "Esf. Restante", defaultWidth: 105, minWidth: 80 },
   { key: "startDate", label: "Início", defaultWidth: 115, minWidth: 95 },
@@ -160,6 +162,7 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
   const [tasks, setTasks] = useState<Task[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [taskTrackedHours, setTaskTrackedHours] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   // Filters & Selection
@@ -243,19 +246,31 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
   const taskFileInputRef = useRef<HTMLInputElement>(null);
   const projectFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load all initial data
+  // Load all initial data and listen for live updates from time tracking
   useEffect(() => {
     loadData();
+
+    const handleTimeEntriesUpdated = () => {
+      loadData();
+    };
+    window.addEventListener("time_entries_updated", handleTimeEntriesUpdated);
+    return () => {
+      window.removeEventListener("time_entries_updated", handleTimeEntriesUpdated);
+    };
   }, []);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [loadedTasks, loadedEmployees, loadedProjects] = await Promise.all([
+      const [loadedTasks, loadedEmployees, loadedProjects, loadedTimeEntries] = await Promise.all([
         taskService.getAll(),
         employeeService.getAll(),
         projectService.getAll(),
+        timeEntryService.getAll(),
       ]);
+
+      const trackedMap = timeEntryService.getTrackedHoursMap(loadedTimeEntries);
+      setTaskTrackedHours(trackedMap);
 
       // Apply saved custom order if exists
       try {
@@ -301,6 +316,9 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
         "Data de Início": task.start_date,
         "Data de Término": task.end_date,
         "Esforço Estimado (h)": task.estimated_time || 0,
+        "Horas Registradas / Realizado (h)": (taskTrackedHours[task.id] !== undefined && taskTrackedHours[task.id] > 0)
+          ? Number(taskTrackedHours[task.id].toFixed(1))
+          : Number((task.actual_time || 0).toFixed(1)),
         "Progresso (%)": task.progress || (task.status === "completed" ? 100 : 0),
         "Predecessora ID": task.parent_task_id || "",
         "Marcador Especial": task.special_marker || "",
@@ -890,7 +908,8 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
 
           projTasks.forEach((t) => {
             const eff = Number(t.estimated_time) || 0;
-            const act = Number(t.actual_time) || 0;
+            const tracked = taskTrackedHours[t.id];
+            const act = tracked !== undefined && tracked > 0 ? tracked : Number(t.actual_time) || 0;
             totalEff += eff;
             totalAct += act;
             if (t.status === "completed") {
@@ -940,7 +959,8 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
 
       unassignedTasks.forEach((t) => {
         const eff = Number(t.estimated_time) || 0;
-        const act = Number(t.actual_time) || 0;
+        const tracked = taskTrackedHours[t.id];
+        const act = tracked !== undefined && tracked > 0 ? tracked : Number(t.actual_time) || 0;
         totalEff += eff;
         totalAct += act;
         if (t.status === "completed") compCount++;
@@ -975,14 +995,22 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
     }
 
     return groups;
-  }, [filteredTasks, projects, selectedProjectId, groupBy]);
+  }, [filteredTasks, projects, selectedProjectId, groupBy, taskTrackedHours]);
 
   // Overall Project Stats for Header
   const overallStats = useMemo(() => {
     let totalTasks = tasks.length;
     let completed = tasks.filter((t) => t.status === "completed").length;
     let totalEffort = Number(tasks.reduce((sum, t) => sum + (Number(t.estimated_time) || 0), 0).toFixed(1));
-    let totalActualEffort = Number(tasks.reduce((sum, t) => sum + (Number(t.actual_time) || 0), 0).toFixed(1));
+    let totalActualEffort = Number(
+      tasks
+        .reduce((sum, t) => {
+          const tracked = taskTrackedHours[t.id];
+          const act = tracked !== undefined && tracked > 0 ? tracked : Number(t.actual_time) || 0;
+          return sum + act;
+        }, 0)
+        .toFixed(1)
+    );
     let remainingEffort = Number(
       tasks.reduce(
         (sum, t) => (t.status === "completed" ? sum : sum + (Number(t.estimated_time) || 0)),
@@ -991,7 +1019,7 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
     );
 
     return { totalTasks, completed, totalEffort, totalActualEffort, remainingEffort };
-  }, [tasks]);
+  }, [tasks, taskTrackedHours]);
 
   // Global sequential row index lookup
   const taskRowIndexMap = useMemo(() => {
@@ -2060,11 +2088,15 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
                                 );
                               }
 
-                              // Actual Effort (Hours tracked / executed)
+                              // Actual Effort (Hours tracked in Acompanhamento de Horas / executed)
                               if (col.key === "actualEffort") {
                                 const isEditing =
                                   activeCell?.taskId === task.id && activeCell?.field === "actualEffort";
-                                const actualVal = task.actual_time || 0;
+                                const trackedHours = taskTrackedHours[task.id];
+                                const hasTracked = trackedHours !== undefined && trackedHours > 0;
+                                const actualVal = hasTracked
+                                  ? Number(trackedHours.toFixed(1))
+                                  : Number((task.actual_time || 0).toFixed(1));
 
                                 return (
                                   <td
@@ -2090,12 +2122,14 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
                                         onBlur={() => {
                                           const val = Math.max(0, Number(editingValue) || 0);
                                           handleUpdateTaskField(task.id, "actual_time", val);
+                                          setTaskTrackedHours((prev) => ({ ...prev, [task.id]: val }));
                                           setActiveCell(null);
                                         }}
                                         onKeyDown={(e) => {
                                           if (e.key === "Enter") {
                                             const val = Math.max(0, Number(editingValue) || 0);
                                             handleUpdateTaskField(task.id, "actual_time", val);
+                                            setTaskTrackedHours((prev) => ({ ...prev, [task.id]: val }));
                                             setActiveCell(null);
                                           } else if (e.key === "Escape") {
                                             setActiveCell(null);
@@ -2104,10 +2138,24 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
                                         className="w-full bg-transparent outline-none font-bold text-emerald-600 dark:text-emerald-400"
                                       />
                                     ) : (
-                                      <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                                        <Clock className="h-3 w-3 opacity-70" />
-                                        <span>{actualVal} h</span>
-                                      </span>
+                                      <div
+                                        className="flex items-center gap-1.5"
+                                        title={
+                                          hasTracked
+                                            ? "Horas registradas no Acompanhamento de Horas"
+                                            : "Esforço Realizado apontado"
+                                        }
+                                      >
+                                        <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                          <Clock className="h-3 w-3 opacity-70" />
+                                          <span>{actualVal} h</span>
+                                        </span>
+                                        {hasTracked && (
+                                          <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-sans font-medium border border-emerald-500/20">
+                                            Apontado
+                                          </span>
+                                        )}
+                                      </div>
                                     )}
                                   </td>
                                 );
@@ -2116,7 +2164,8 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
                               // Variance / Saldo de Horas
                               if (col.key === "variance") {
                                 const est = task.estimated_time || 0;
-                                const act = task.actual_time || 0;
+                                const trackedHours = taskTrackedHours[task.id];
+                                const act = trackedHours !== undefined && trackedHours > 0 ? trackedHours : (task.actual_time || 0);
                                 const diff = Number((act - est).toFixed(1));
 
                                 return (
@@ -2138,7 +2187,10 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
 
                               // 8. Effort Remaining
                               if (col.key === "effortRemaining") {
-                                const remHours = isCompleted ? 0 : task.estimated_time || 8;
+                                const trackedHours = taskTrackedHours[task.id];
+                                const act = trackedHours !== undefined && trackedHours > 0 ? trackedHours : (task.actual_time || 0);
+                                const est = task.estimated_time || 8;
+                                const remHours = isCompleted ? 0 : Math.max(0, Number((est - act).toFixed(1)));
                                 return (
                                   <td
                                     key={col.key}

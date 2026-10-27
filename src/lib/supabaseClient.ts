@@ -905,6 +905,40 @@ export const timeEntryService = {
     }
   },
 
+  getTrackedHoursMap(entries?: TimeEntry[]): Record<string, number> {
+    const list = entries || this.getAllSync();
+    const map: Record<string, number> = {};
+    for (const entry of list) {
+      if (entry.task_id && !isItemDeleted(entry.id)) {
+        const hours = (Number(entry.duration_seconds) || 0) / 3600;
+        map[entry.task_id] = Number(((map[entry.task_id] || 0) + hours).toFixed(2));
+      }
+    }
+    return map;
+  },
+
+  async syncTaskActualTime(taskId: string, allEntries?: TimeEntry[]): Promise<number> {
+    if (!taskId) return 0;
+    try {
+      const entries = allEntries || (await this.getAll());
+      const taskEntries = entries.filter((e) => e.task_id === taskId && !isItemDeleted(e.id));
+      const totalSecs = taskEntries.reduce((sum, e) => sum + (Number(e.duration_seconds) || 0), 0);
+      const totalHours = Number((totalSecs / 3600).toFixed(2));
+
+      const tasks = mockDB.getTasks();
+      const task = tasks.find((t) => t.id === taskId);
+      if (task) {
+        const updatedTask = { ...task, actual_time: totalHours, updated_at: new Date().toISOString() };
+        mockDB.setTasks(tasks.map((t) => (t.id === taskId ? updatedTask : t)));
+        await firestoreService.saveTask(updatedTask).catch(console.warn);
+      }
+      return totalHours;
+    } catch (e) {
+      console.warn("Could not sync task actual_time:", e);
+      return 0;
+    }
+  },
+
   async create(entry: TimeEntryInsert): Promise<TimeEntry> {
     const all = this.getAllSync();
     const newEntry: TimeEntry = {
@@ -923,11 +957,20 @@ export const timeEntryService = {
     } catch (err) {
       console.warn("Could not save time entry to remote:", err);
     }
+
+    if (newEntry.task_id) {
+      this.syncTaskActualTime(newEntry.task_id, updated).catch(console.warn);
+    }
+    try {
+      window.dispatchEvent(new CustomEvent("time_entries_updated", { detail: newEntry }));
+    } catch {}
+
     return newEntry;
   },
 
   async update(id: string, updates: Partial<TimeEntry>): Promise<TimeEntry | null> {
     const all = this.getAllSync();
+    const prevItem = all.find((item) => item.id === id);
     let updatedItem: TimeEntry | null = null;
     const updated = all.map((item) => {
       if (item.id === id) {
@@ -948,14 +991,27 @@ export const timeEntryService = {
         console.warn("Could not update time entry remotely:", err);
       }
     }
+
+    if (updatedItem && (updatedItem as TimeEntry).task_id) {
+      this.syncTaskActualTime((updatedItem as TimeEntry).task_id!, updated).catch(console.warn);
+    }
+    if (prevItem?.task_id && updatedItem && prevItem.task_id !== (updatedItem as TimeEntry).task_id) {
+      this.syncTaskActualTime(prevItem.task_id, updated).catch(console.warn);
+    }
+    try {
+      window.dispatchEvent(new CustomEvent("time_entries_updated", { detail: updatedItem }));
+    } catch {}
+
     return updatedItem;
   },
 
   async delete(id: string): Promise<void> {
     markAsDeleted(id);
-    const all = this.getAllSync().filter((t) => t.id !== id);
+    const all = this.getAllSync();
+    const target = all.find((t) => t.id === id);
+    const remaining = all.filter((t) => t.id !== id);
     try {
-      localStorage.setItem("crono_pulse_time_entries", JSON.stringify(all));
+      localStorage.setItem("crono_pulse_time_entries", JSON.stringify(remaining));
     } catch (e) {
       console.error("Error deleting time entry:", e);
     }
@@ -964,6 +1020,13 @@ export const timeEntryService = {
     } catch (err) {
       console.warn("Could not delete time entry remotely:", err);
     }
+
+    if (target?.task_id) {
+      this.syncTaskActualTime(target.task_id, remaining).catch(console.warn);
+    }
+    try {
+      window.dispatchEvent(new CustomEvent("time_entries_updated", { detail: { id } }));
+    } catch {}
   },
 
   getActive(): {

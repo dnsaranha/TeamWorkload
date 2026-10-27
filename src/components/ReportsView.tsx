@@ -40,9 +40,11 @@ import {
   projectService,
   taskService,
   employeeService,
+  timeEntryService,
   type Project,
   type Task,
   type Employee,
+  type TimeEntry,
 } from "@/lib/supabaseClient";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
@@ -61,6 +63,7 @@ export const ReportsView: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [taskTrackedHours, setTaskTrackedHours] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
@@ -69,17 +72,28 @@ export const ReportsView: React.FC = () => {
 
   useEffect(() => {
     loadData();
+
+    const handleTimeEntriesUpdated = () => {
+      loadData();
+    };
+    window.addEventListener("time_entries_updated", handleTimeEntriesUpdated);
+    return () => {
+      window.removeEventListener("time_entries_updated", handleTimeEntriesUpdated);
+    };
   }, []);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [projectsData, tasksData, employeesData] = await Promise.all([
+      const [projectsData, tasksData, employeesData, timeEntriesData] = await Promise.all([
         projectService.getAll(),
         taskService.getAll(),
         employeeService.getAll(),
+        timeEntryService.getAll(),
       ]);
 
+      const trackedMap = timeEntryService.getTrackedHoursMap(timeEntriesData);
+      setTaskTrackedHours(trackedMap);
       setProjects(projectsData);
       setTasks(tasksData as Task[]);
       setEmployees(employeesData);
@@ -91,42 +105,51 @@ export const ReportsView: React.FC = () => {
   };
 
   const filteredTasks = useMemo(() => {
-    return tasks.filter((task) => {
-      const searchMatch =
-        !searchTerm ||
-        searchTerm
-          .toLowerCase()
-          .split(" ")
-          .every((word) => {
-            const project = projects.find((p) => p.id === task.project_id);
-            const employee = employees.find(
-              (e) => e.id === task.assigned_employee_id,
-            );
-            const taskText = `
-            ${task.name}
-            ${task.description || ""}
-            ${project?.name || ""}
-            ${employee?.name || ""}
-          `.toLowerCase();
-            return taskText.includes(word);
-          });
+    return tasks
+      .map((t) => {
+        const tracked = taskTrackedHours[t.id];
+        const actualHours =
+          tracked !== undefined && tracked > 0
+            ? Number(tracked.toFixed(1))
+            : Number((t.actual_time || 0).toFixed(1));
+        return { ...t, actual_time: actualHours };
+      })
+      .filter((task) => {
+        const searchMatch =
+          !searchTerm ||
+          searchTerm
+            .toLowerCase()
+            .split(" ")
+            .every((word) => {
+              const project = projects.find((p) => p.id === task.project_id);
+              const employee = employees.find(
+                (e) => e.id === task.assigned_employee_id,
+              );
+              const taskText = `
+              ${task.name}
+              ${task.description || ""}
+              ${project?.name || ""}
+              ${employee?.name || ""}
+            `.toLowerCase();
+              return taskText.includes(word);
+            });
 
-      const projectMatch =
-        selectedProjectId === "all" || task.project_id === selectedProjectId;
+        const projectMatch =
+          selectedProjectId === "all" || task.project_id === selectedProjectId;
 
-      const employeeMatch =
-        selectedEmployeeId === "all" ||
-        task.assigned_employee_id === selectedEmployeeId;
+        const employeeMatch =
+          selectedEmployeeId === "all" ||
+          task.assigned_employee_id === selectedEmployeeId;
 
-      const dateMatch =
-        !dateRange ||
-        !dateRange.from ||
-        (new Date(task.start_date) >= dateRange.from &&
-          (!dateRange.to || new Date(task.end_date) <= dateRange.to));
+        const dateMatch =
+          !dateRange ||
+          !dateRange.from ||
+          (new Date(task.start_date) >= dateRange.from &&
+            (!dateRange.to || new Date(task.end_date) <= dateRange.to));
 
-      return searchMatch && projectMatch && employeeMatch && dateMatch;
-    });
-  }, [tasks, searchTerm, selectedProjectId, selectedEmployeeId, dateRange, projects, employees]);
+        return searchMatch && projectMatch && employeeMatch && dateMatch;
+      });
+  }, [tasks, taskTrackedHours, searchTerm, selectedProjectId, selectedEmployeeId, dateRange, projects, employees]);
 
   // Overall metrics calculation
   const totalTasksCount = filteredTasks.length;
@@ -788,9 +811,9 @@ export const ReportsView: React.FC = () => {
                   <Clock className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground font-medium truncate">Horas Realizadas (Clockify)</p>
+                  <p className="text-xs text-muted-foreground font-medium truncate">Horas Registradas (Acompanhamento)</p>
                   <p className="text-xl sm:text-2xl font-bold text-foreground">{totalActualHours}h</p>
-                  <span className="text-[10px] text-muted-foreground">Tempo real rastreado</span>
+                  <span className="text-[10px] text-muted-foreground">Tempo real registrado no apontamento</span>
                 </div>
               </CardContent>
             </Card>
@@ -969,8 +992,8 @@ export const ReportsView: React.FC = () => {
                       <th className="py-2.5 px-3 font-semibold">Tarefa</th>
                       <th className="py-2.5 px-3 font-semibold">Projeto</th>
                       <th className="py-2.5 px-3 font-semibold">Responsável</th>
-                      <th className="py-2.5 px-3 font-semibold text-center">Estimado</th>
-                      <th className="py-2.5 px-3 font-semibold text-center">Realizado</th>
+                      <th className="py-2.5 px-3 font-semibold text-center">Esf. Estimado</th>
+                      <th className="py-2.5 px-3 font-semibold text-center">Horas Registradas</th>
                       <th className="py-2.5 px-3 font-semibold text-center">Desvio (Saldo)</th>
                       <th className="py-2.5 px-3 font-semibold">Progresso Real</th>
                       <th className="py-2.5 px-3 font-semibold text-right">Status</th>
@@ -1007,7 +1030,10 @@ export const ReportsView: React.FC = () => {
                               {est}h
                             </td>
                             <td className="py-2.5 px-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                              {act}h
+                              <span className="inline-flex items-center gap-1 justify-center">
+                                <Clock className="w-3 h-3 opacity-70" />
+                                <span>{act}h</span>
+                              </span>
                             </td>
                             <td className="py-2.5 px-3 text-center">
                               {diff === 0 ? (
