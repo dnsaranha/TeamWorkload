@@ -80,12 +80,32 @@ export const TimeTrackingSheet: React.FC<TimeTrackingSheetProps> = ({
   const [timerEmployeeId, setTimerEmployeeId] = useState<string | null>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load initial data
+  // Load initial data & listen to active timer sync events
   useEffect(() => {
     loadAllData();
     loadActiveTimer();
 
+    const handleActiveSync = (e: any) => {
+      const active = e.detail;
+      if (!active) {
+        setIsTimerRunning(false);
+        setTimerSeconds(0);
+        setTimerDescription("");
+        setTimerTaskId(null);
+      } else {
+        setIsTimerRunning(Boolean(active.isRunning));
+        setTimerSeconds(Number(active.elapsedSeconds) || 0);
+        if (active.description !== undefined) setTimerDescription(active.description || "");
+        if (active.taskId !== undefined) setTimerTaskId(active.taskId);
+        if (active.projectId !== undefined) setTimerProjectId(active.projectId);
+        if (active.employeeId !== undefined) setTimerEmployeeId(active.employeeId);
+      }
+    };
+
+    window.addEventListener("crono_active_timer_sync", handleActiveSync as any);
+
     return () => {
+      window.removeEventListener("crono_active_timer_sync", handleActiveSync as any);
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
   }, []);
@@ -114,20 +134,44 @@ export const TimeTrackingSheet: React.FC<TimeTrackingSheetProps> = ({
 
   const loadActiveTimer = () => {
     const active = timeEntryService.getActive();
-    if (active) {
-      setTimerDescription(active.description || "");
-      setTimerTaskId(active.taskId || null);
-      setTimerProjectId(active.projectId || null);
-      setTimerEmployeeId(active.employeeId || null);
+    if (!active) {
+      setTimerSeconds(0);
+      setIsTimerRunning(false);
+      return;
+    }
 
-      if (active.isRunning && active.startTime) {
-        const elapsed = Math.floor((Date.now() - active.startTime) / 1000) + (active.elapsedSeconds || 0);
-        setTimerSeconds(elapsed);
-        setIsTimerRunning(true);
-      } else {
-        setTimerSeconds(active.elapsedSeconds || 0);
+    // Protection against corrupted / runaway timers (e.g. 77:37:56)
+    const isRunaway = (active.elapsedSeconds || 0) > 12 * 3600;
+    if (isRunaway) {
+      setIsTimerRunning(false);
+      setTimerSeconds(0);
+      timeEntryService.clearActive();
+      return;
+    }
+
+    setTimerDescription(active.description || "");
+    setTimerTaskId(active.taskId || null);
+    setTimerProjectId(active.projectId || null);
+    setTimerEmployeeId(active.employeeId || null);
+
+    if (active.isRunning && active.startTime) {
+      const elapsedSinceStart = Math.max(0, Math.floor((Date.now() - active.startTime) / 1000));
+      if (elapsedSinceStart > 8 * 3600) {
+        // Inactive abandoned session: pause it
         setIsTimerRunning(false);
+        setTimerSeconds(active.elapsedSeconds || 0);
+        timeEntryService.saveActive({
+          ...active,
+          isRunning: false,
+          startTime: null,
+        });
+      } else {
+        setTimerSeconds((active.elapsedSeconds || 0) + elapsedSinceStart);
+        setIsTimerRunning(true);
       }
+    } else {
+      setTimerSeconds(active.elapsedSeconds || 0);
+      setIsTimerRunning(false);
     }
   };
 
@@ -137,16 +181,19 @@ export const TimeTrackingSheet: React.FC<TimeTrackingSheetProps> = ({
       timerIntervalRef.current = setInterval(() => {
         setTimerSeconds((prev) => {
           const next = prev + 1;
-          timeEntryService.saveActive({
-            isRunning: true,
-            startTime: Date.now() - next * 1000,
-            elapsedSeconds: next,
-            taskId: timerTaskId,
-            taskName: tasks.find((t) => t.id === timerTaskId)?.name || "",
-            projectId: timerProjectId,
-            employeeId: timerEmployeeId,
-            description: timerDescription,
-          });
+          // Periodically sync every 10 seconds without hammering localStorage
+          if (next % 10 === 0) {
+            timeEntryService.saveActive({
+              isRunning: true,
+              startTime: Date.now() - next * 1000,
+              elapsedSeconds: next,
+              taskId: timerTaskId,
+              taskName: tasks.find((t) => t.id === timerTaskId)?.name || "",
+              projectId: timerProjectId,
+              employeeId: timerEmployeeId,
+              description: timerDescription,
+            });
+          }
           return next;
         });
       }, 1000);
@@ -184,6 +231,18 @@ export const TimeTrackingSheet: React.FC<TimeTrackingSheetProps> = ({
       projectId: timerProjectId,
       employeeId: timerEmployeeId,
       description: timerDescription,
+    });
+  };
+
+  const handleResetTimer = () => {
+    setIsTimerRunning(false);
+    setTimerSeconds(0);
+    setTimerDescription("");
+    setTimerTaskId(null);
+    timeEntryService.clearActive();
+    toast({
+      title: "Cronômetro Zerado",
+      description: "O contador foi resetado com sucesso para 00:00:00.",
     });
   };
 
@@ -536,15 +595,27 @@ export const TimeTrackingSheet: React.FC<TimeTrackingSheetProps> = ({
               )}
 
               {(isTimerRunning || timerSeconds > 0) && (
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={handleStopAndSaveTimer}
-                  className="h-8 sm:h-9 px-2.5 sm:px-3 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs"
-                >
-                  <Square className="h-3.5 w-3.5 fill-current" />
-                  <span>Salvar</span>
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResetTimer}
+                    className="h-8 sm:h-9 px-2 sm:px-2.5 gap-1 border-border text-muted-foreground hover:text-destructive hover:border-destructive/40 text-xs"
+                    title="Zerar e descartar contador"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Zerar</span>
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleStopAndSaveTimer}
+                    className="h-8 sm:h-9 px-2.5 sm:px-3 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs"
+                  >
+                    <Square className="h-3.5 w-3.5 fill-current" />
+                    <span>Salvar</span>
+                  </Button>
+                </>
               )}
             </div>
           </div>

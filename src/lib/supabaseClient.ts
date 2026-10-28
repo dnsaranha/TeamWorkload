@@ -1038,10 +1038,34 @@ export const timeEntryService = {
     projectId: string | null;
     employeeId: string | null;
     description: string;
+    lastUpdated?: number;
   } | null {
     try {
       const data = localStorage.getItem("crono_pulse_active_timer");
-      return data ? JSON.parse(data) : null;
+      if (!data) return null;
+      const parsed = JSON.parse(data);
+
+      // Safeguard against runaway timers (like 77 hours):
+      // If elapsed time is beyond 12 hours or was abandoned for > 4 hours, auto-pause or reset
+      if (parsed) {
+        if ((parsed.elapsedSeconds || 0) > 12 * 3600) {
+          // Clear corrupted/runaway 77h timer
+          localStorage.removeItem("crono_pulse_active_timer");
+          return null;
+        }
+
+        if (parsed.isRunning) {
+          const lastActivity = parsed.lastUpdated || parsed.startTime || 0;
+          if (Date.now() - lastActivity > 4 * 3600 * 1000) {
+            // Inactive for more than 4 hours: pause it instead of letting it count to infinity
+            parsed.isRunning = false;
+            parsed.startTime = null;
+            localStorage.setItem("crono_pulse_active_timer", JSON.stringify(parsed));
+          }
+        }
+      }
+
+      return parsed;
     } catch {
       return null;
     }
@@ -1049,7 +1073,14 @@ export const timeEntryService = {
 
   saveActive(state: any): void {
     try {
-      localStorage.setItem("crono_pulse_active_timer", JSON.stringify(state));
+      const payload = {
+        ...state,
+        lastUpdated: Date.now(),
+      };
+      localStorage.setItem("crono_pulse_active_timer", JSON.stringify(payload));
+      try {
+        window.dispatchEvent(new CustomEvent("crono_active_timer_sync", { detail: payload }));
+      } catch {}
     } catch (e) {
       console.error("Error saving active timer:", e);
     }
@@ -1058,6 +1089,9 @@ export const timeEntryService = {
   clearActive(): void {
     try {
       localStorage.removeItem("crono_pulse_active_timer");
+      try {
+        window.dispatchEvent(new CustomEvent("crono_active_timer_sync", { detail: null }));
+      } catch {}
     } catch (e) {
       console.error("Error clearing active timer:", e);
     }

@@ -188,26 +188,58 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
     window.addEventListener("touchend", onPointerUp);
   };
 
-  // Load active timer from storage on mount
+  // Load active timer from storage on mount & listen to sync events
   useEffect(() => {
     loadData();
     const savedActive = timeEntryService.getActive();
     if (savedActive) {
-      setIsRunning(savedActive.isRunning);
-      setSelectedTaskId(savedActive.taskId);
-      setSelectedProjectId(savedActive.projectId);
-      setSelectedEmployeeId(savedActive.employeeId);
-      setDescription(savedActive.description || "");
-
-      if (savedActive.isRunning && savedActive.startTime) {
-        const elapsedSinceStart = Math.floor(
-          (Date.now() - savedActive.startTime) / 1000
-        );
-        setSeconds((savedActive.elapsedSeconds || 0) + elapsedSinceStart);
+      const isRunaway = (savedActive.elapsedSeconds || 0) > 12 * 3600;
+      if (isRunaway) {
+        setIsRunning(false);
+        setSeconds(0);
+        timeEntryService.clearActive();
       } else {
-        setSeconds(savedActive.elapsedSeconds || 0);
+        setIsRunning(savedActive.isRunning);
+        setSelectedTaskId(savedActive.taskId);
+        setSelectedProjectId(savedActive.projectId);
+        setSelectedEmployeeId(savedActive.employeeId);
+        setDescription(savedActive.description || "");
+
+        if (savedActive.isRunning && savedActive.startTime) {
+          const elapsedSinceStart = Math.floor(
+            (Date.now() - savedActive.startTime) / 1000
+          );
+          if (elapsedSinceStart > 8 * 3600) {
+            // Abandoned: pause it
+            setIsRunning(false);
+            setSeconds(savedActive.elapsedSeconds || 0);
+          } else {
+            setSeconds((savedActive.elapsedSeconds || 0) + elapsedSinceStart);
+          }
+        } else {
+          setSeconds(savedActive.elapsedSeconds || 0);
+        }
       }
     }
+
+    // Global listener for active timer synchronization across components
+    const handleActiveSync = (e: any) => {
+      const active = e.detail;
+      if (!active) {
+        setIsRunning(false);
+        setSeconds(0);
+        setStartTime(null);
+        setDescription("");
+        setSelectedTaskId(null);
+      } else {
+        setIsRunning(Boolean(active.isRunning));
+        setSeconds(Number(active.elapsedSeconds) || 0);
+        if (active.description !== undefined) setDescription(active.description || "");
+        if (active.taskId !== undefined) setSelectedTaskId(active.taskId);
+        if (active.projectId !== undefined) setSelectedProjectId(active.projectId);
+        if (active.employeeId !== undefined) setSelectedEmployeeId(active.employeeId);
+      }
+    };
 
     // Global listener for starting task tracking from any other component
     const handleGlobalStart = (e: CustomEvent) => {
@@ -226,11 +258,19 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
       "crono_pulse_start_tracking" as any,
       handleGlobalStart as any
     );
+    window.addEventListener(
+      "crono_active_timer_sync" as any,
+      handleActiveSync as any
+    );
 
     return () => {
       window.removeEventListener(
         "crono_pulse_start_tracking" as any,
         handleGlobalStart as any
+      );
+      window.removeEventListener(
+        "crono_active_timer_sync" as any,
+        handleActiveSync as any
       );
       if (timerRef.current) clearInterval(timerRef.current);
     };
@@ -257,7 +297,23 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
   useEffect(() => {
     if (isRunning) {
       timerRef.current = setInterval(() => {
-        setSeconds((prev) => prev + 1);
+        setSeconds((prev) => {
+          const next = prev + 1;
+          // Periodically save every 10 seconds while ticking to preserve progress
+          if (next % 10 === 0) {
+            timeEntryService.saveActive({
+              isRunning: true,
+              startTime: Date.now() - next * 1000,
+              elapsedSeconds: next,
+              taskId: selectedTaskId,
+              taskName: description,
+              projectId: selectedProjectId,
+              employeeId: selectedEmployeeId,
+              description,
+            });
+          }
+          return next;
+        });
       }, 1000);
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -266,35 +322,37 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isRunning]);
-
-  // Persist timer state
-  useEffect(() => {
-    if (isRunning || seconds > 0) {
-      timeEntryService.saveActive({
-        isRunning,
-        startTime: isRunning ? Date.now() : null,
-        elapsedSeconds: seconds,
-        taskId: selectedTaskId,
-        taskName: description,
-        projectId: selectedProjectId,
-        employeeId: selectedEmployeeId,
-        description,
-      });
-    } else {
-      timeEntryService.clearActive();
-    }
-  }, [isRunning, seconds, selectedTaskId, selectedProjectId, selectedEmployeeId, description]);
+  }, [isRunning, selectedTaskId, description, selectedProjectId, selectedEmployeeId]);
 
   const startTimer = () => {
     if (!startTime) {
       setStartTime(new Date().toISOString());
     }
     setIsRunning(true);
+    timeEntryService.saveActive({
+      isRunning: true,
+      startTime: Date.now() - seconds * 1000,
+      elapsedSeconds: seconds,
+      taskId: selectedTaskId,
+      taskName: description,
+      projectId: selectedProjectId,
+      employeeId: selectedEmployeeId,
+      description,
+    });
   };
 
   const pauseTimer = () => {
     setIsRunning(false);
+    timeEntryService.saveActive({
+      isRunning: false,
+      startTime: null,
+      elapsedSeconds: seconds,
+      taskId: selectedTaskId,
+      taskName: description,
+      projectId: selectedProjectId,
+      employeeId: selectedEmployeeId,
+      description,
+    });
   };
 
   const stopAndSaveTimer = async () => {
