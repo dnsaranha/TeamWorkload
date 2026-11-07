@@ -35,7 +35,9 @@ import {
   Edit2,
   ArrowRight,
   UserPlus,
+  CornerDownRight,
 } from "lucide-react";
+import { SubtasksManager } from "./SubtasksManager";
 import {
   format,
   parseISO,
@@ -2249,16 +2251,34 @@ export const ResourcePlanningView: React.FC = () => {
                                         className="cursor-pointer min-w-0 flex-1"
                                         onClick={() => handleEditTask(task)}
                                       >
-                                        <p className="font-semibold text-foreground text-xs truncate group-hover/task:text-primary">
-                                          {task.name}
-                                        </p>
-                                        <p className="text-[9px] sm:text-[10px] text-muted-foreground truncate flex items-center gap-1">
-                                          <Briefcase className="h-2.5 w-2.5 opacity-60 flex-shrink-0" />
-                                          <span className="truncate">{project?.name || "Geral"}</span>
-                                          {task.repeats_weekly && (
-                                            <Repeat className="h-2.5 w-2.5 text-blue-500 ml-1 inline" />
-                                          )}
-                                        </p>
+                                        {(() => {
+                                          const parentTask = task.parent_id ? tasks.find((t) => t.id === task.parent_id) : null;
+                                          return (
+                                            <>
+                                              <p className="font-semibold text-foreground text-xs truncate group-hover/task:text-primary flex items-center gap-1">
+                                                {task.parent_id && (
+                                                  <CornerDownRight className="h-3 w-3 text-primary shrink-0" />
+                                                )}
+                                                <span className="truncate">{task.name}</span>
+                                                {task.parent_id && (
+                                                  <span className="text-[9px] px-1 py-0.2 rounded bg-primary/10 text-primary shrink-0 font-normal">
+                                                    Subtarefa
+                                                  </span>
+                                                )}
+                                              </p>
+                                              <p className="text-[9px] sm:text-[10px] text-muted-foreground truncate flex items-center gap-1">
+                                                <Briefcase className="h-2.5 w-2.5 opacity-60 flex-shrink-0" />
+                                                <span className="truncate">{project?.name || "Geral"}</span>
+                                                {parentTask && (
+                                                  <span className="truncate opacity-80">• de: {parentTask.name}</span>
+                                                )}
+                                                {task.repeats_weekly && (
+                                                  <Repeat className="h-2.5 w-2.5 text-blue-500 ml-1 inline" />
+                                                )}
+                                              </p>
+                                            </>
+                                          );
+                                        })()}
                                       </div>
                                       <div className="flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-opacity flex-shrink-0">
                                         <Button
@@ -2529,6 +2549,17 @@ export const ResourcePlanningView: React.FC = () => {
             <DialogDescription className="text-xs">
               Defina o projeto, colaborador, datas e dedicação em horas/dia.
             </DialogDescription>
+            {editingTask?.parent_id && (
+              <div className="mt-1 flex items-center gap-1.5 text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md">
+                <CornerDownRight className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  Subtarefa vinculada a:{" "}
+                  <strong>
+                    {tasks.find((t) => t.id === editingTask.parent_id)?.name || "Tarefa Principal"}
+                  </strong>
+                </span>
+              </div>
+            )}
           </DialogHeader>
 
           <div className="space-y-3.5 text-xs">
@@ -2777,6 +2808,18 @@ export const ResourcePlanningView: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {/* Embedded Subtasks Manager if editing existing task */}
+            {editingTask && (
+              <div className="pt-2 border-t border-border/60">
+                <SubtasksManager
+                  taskId={editingTask.id}
+                  taskName={editingTask.name}
+                  projectId={editingTask.project_id || undefined}
+                  onSubtasksChange={loadAllData}
+                />
+              </div>
+            )}
           </div>
 
           <DialogFooter className="flex items-center justify-between gap-2 pt-2">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Play,
   Pause,
@@ -93,6 +93,38 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
   const [projects, setProjects] = useState<Project[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [recentEntries, setRecentEntries] = useState<TimeEntry[]>([]);
+
+  // Hierarchical tasks tree for multi-level subtask selection
+  const hierarchicalTasks = useMemo(() => {
+    const childrenMap = new Map<string, Task[]>();
+    tasks.forEach((t) => {
+      if (t.parent_id) {
+        const list = childrenMap.get(t.parent_id) || [];
+        list.push(t);
+        childrenMap.set(t.parent_id, list);
+      }
+    });
+
+    const taskIds = new Set(tasks.map((t) => t.id));
+    const rootTasks = tasks.filter((t) => !t.parent_id || !taskIds.has(t.parent_id));
+    const result: { id: string; name: string; level: number; parentName?: string; task: Task }[] = [];
+
+    const traverse = (t: Task, level: number, parentName?: string) => {
+      result.push({
+        id: t.id,
+        name: t.name,
+        level,
+        parentName,
+        task: t,
+      });
+
+      const children = childrenMap.get(t.id) || [];
+      children.forEach((c) => traverse(c, level + 1, t.name));
+    };
+
+    rootTasks.forEach((t) => traverse(t, 0));
+    return result;
+  }, [tasks]);
 
   // Draggable position state (remembered across sessions)
   const [position, setPosition] = useState<{ x: number; y: number }>(() => {
@@ -836,25 +868,39 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
                       >
                         Nenhuma (Trabalho Avulso)
                       </DropdownMenuItem>
-                      {tasks.map((t) => (
-                        <DropdownMenuItem
-                          key={t.id}
-                          onClick={() => {
-                            setSelectedTaskId(t.id);
-                            setDescription(t.name);
-                            if (t.project_id) setSelectedProjectId(t.project_id);
-                            if (t.assigned_employee_id) setSelectedEmployeeId(t.assigned_employee_id);
-                          }}
-                          className="text-xs flex items-center justify-between gap-1"
-                        >
-                          <span className="truncate">{t.name}</span>
-                          {t.estimated_time && (
-                            <span className="text-[10px] text-muted-foreground shrink-0">
-                              ({t.estimated_time}h)
+                      {hierarchicalTasks.map((item) => {
+                        const t = item.task;
+                        return (
+                          <DropdownMenuItem
+                            key={t.id}
+                            onClick={() => {
+                              setSelectedTaskId(t.id);
+                              const parent = t.parent_id ? tasks.find((p) => p.id === t.parent_id) : null;
+                              setDescription(parent ? `${parent.name} - ${t.name}` : t.name);
+                              if (t.project_id) setSelectedProjectId(t.project_id);
+                              else if (parent?.project_id) setSelectedProjectId(parent.project_id);
+                              if (t.assigned_employee_id) setSelectedEmployeeId(t.assigned_employee_id);
+                              else if (parent?.assigned_employee_id) setSelectedEmployeeId(parent.assigned_employee_id);
+                            }}
+                            className={`text-xs flex items-center justify-between gap-1 ${
+                              item.level > 0 ? "pl-5 text-muted-foreground" : "font-medium"
+                            }`}
+                          >
+                            <span className="truncate">
+                              {item.level > 0 ? `${"↳ ".repeat(item.level)}${t.name}` : t.name}
                             </span>
-                          )}
-                        </DropdownMenuItem>
-                      ))}
+                            {item.level > 0 ? (
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-primary/10 text-primary shrink-0">
+                                Subtarefa
+                              </span>
+                            ) : t.estimated_time ? (
+                              <span className="text-[10px] text-muted-foreground shrink-0">
+                                ({t.estimated_time}h)
+                              </span>
+                            ) : null}
+                          </DropdownMenuItem>
+                        );
+                      })}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -1014,18 +1060,33 @@ export const FloatingTimeTracker: React.FC<FloatingTimeTrackerProps> = ({
                     >
                       Nenhuma
                     </DropdownMenuItem>
-                    {tasks.map((t) => (
-                      <DropdownMenuItem
-                        key={t.id}
-                        onClick={() => {
-                          setManualTaskId(t.id);
-                          if (!manualDesc) setManualDesc(t.name);
-                        }}
-                        className="text-xs"
-                      >
-                        {t.name}
-                      </DropdownMenuItem>
-                    ))}
+                    {hierarchicalTasks.map((item) => {
+                      const t = item.task;
+                      return (
+                        <DropdownMenuItem
+                          key={t.id}
+                          onClick={() => {
+                            setManualTaskId(t.id);
+                            const parent = t.parent_id ? tasks.find((p) => p.id === t.parent_id) : null;
+                            if (!manualDesc) setManualDesc(parent ? `${parent.name} - ${t.name}` : t.name);
+                            if (t.project_id) setManualProjectId(t.project_id);
+                            else if (parent?.project_id) setManualProjectId(parent.project_id);
+                          }}
+                          className={`text-xs flex items-center justify-between gap-1 ${
+                            item.level > 0 ? "pl-5 text-muted-foreground" : "font-medium"
+                          }`}
+                        >
+                          <span className="truncate">
+                            {item.level > 0 ? `${"↳ ".repeat(item.level)}${t.name}` : t.name}
+                          </span>
+                          {item.level > 0 && (
+                            <span className="text-[9px] px-1 py-0.2 rounded bg-primary/10 text-primary shrink-0">
+                              Subtarefa
+                            </span>
+                          )}
+                        </DropdownMenuItem>
+                      );
+                    })}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>

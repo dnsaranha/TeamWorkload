@@ -35,6 +35,7 @@ import {
   Flame,
   Filter,
   X,
+  CornerDownRight,
 } from "lucide-react";
 import {
   projectService,
@@ -1010,6 +1011,7 @@ export const ReportsView: React.FC = () => {
                       filteredTasks.map((task) => {
                         const proj = projects.find((p) => p.id === task.project_id);
                         const emp = employees.find((e) => e.id === task.assigned_employee_id);
+                        const parentTask = task.parent_id ? tasks.find((t) => t.id === task.parent_id) : null;
                         const est = task.estimated_time || 0;
                         const act = task.actual_time || 0;
                         const diff = Number((act - est).toFixed(1));
@@ -1018,7 +1020,26 @@ export const ReportsView: React.FC = () => {
                         return (
                           <tr key={task.id} className="hover:bg-muted/30 transition-colors">
                             <td className="py-2.5 px-3 font-medium text-foreground">
-                              {task.name}
+                              {task.parent_id ? (
+                                <div className="flex items-center gap-1.5 pl-3">
+                                  <CornerDownRight className="w-3.5 h-3.5 text-primary/70 shrink-0" />
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="truncate">{task.name}</span>
+                                      <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 font-normal bg-primary/10 text-primary border-primary/20">
+                                        Subtarefa
+                                      </Badge>
+                                    </div>
+                                    {parentTask && (
+                                      <p className="text-[10px] text-muted-foreground font-normal truncate">
+                                        de: {parentTask.name}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span>{task.name}</span>
+                              )}
                             </td>
                             <td className="py-2.5 px-3 text-muted-foreground">
                               {proj?.name || <span className="italic">Geral</span>}

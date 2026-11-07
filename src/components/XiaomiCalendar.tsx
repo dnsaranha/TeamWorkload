@@ -36,6 +36,7 @@ import {
   Play,
   Timer,
   Lock,
+  CornerDownRight,
 } from "lucide-react";
 import {
   format,
@@ -1591,31 +1592,39 @@ export const XiaomiCalendar: React.FC<XiaomiCalendarProps> = ({ onTaskChange }) 
                                 </Button>
                               </div>
                             ) : (
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <h4
-                                  className={`text-sm font-semibold leading-snug break-words ${
-                                    isCompleted ? "line-through text-muted-foreground" : "text-foreground"
-                                  }`}
-                                >
-                                  {task.name}
-                                </h4>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleStartInlineEditTitle(task);
-                                  }}
-                                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground p-0.5 rounded"
-                                  title="Editar título diretamente"
-                                >
-                                  <Edit2 className="h-3 w-3" />
-                                </button>
-                                {task.special_marker && task.special_marker !== "none" && (
-                                  <Badge className="text-[9px] h-4 bg-purple-500/15 border-purple-500/30 text-purple-600 dark:text-purple-300">
-                                    {task.special_marker.replace("_", " ")}
-                                  </Badge>
-                                )}
-                              </div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <h4
+                                    className={`text-sm font-semibold leading-snug break-words flex items-center gap-1 ${
+                                      isCompleted ? "line-through text-muted-foreground" : "text-foreground"
+                                    }`}
+                                  >
+                                    {task.parent_id && (
+                                      <CornerDownRight className="h-3.5 w-3.5 text-primary shrink-0" />
+                                    )}
+                                    <span>{task.name}</span>
+                                  </h4>
+                                  {task.parent_id && (
+                                    <Badge className="text-[9px] h-4 bg-primary/10 border-primary/20 text-primary font-normal">
+                                      Subtarefa
+                                    </Badge>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleStartInlineEditTitle(task);
+                                    }}
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground p-0.5 rounded"
+                                    title="Editar título diretamente"
+                                  >
+                                    <Edit2 className="h-3 w-3" />
+                                  </button>
+                                  {task.special_marker && task.special_marker !== "none" && (
+                                    <Badge className="text-[9px] h-4 bg-purple-500/15 border-purple-500/30 text-purple-600 dark:text-purple-300">
+                                      {task.special_marker.replace("_", " ")}
+                                    </Badge>
+                                  )}
+                                </div>
                             )}
 
                             {task.description && !isEditingInline && (
@@ -2001,11 +2010,17 @@ export const XiaomiCalendar: React.FC<XiaomiCalendarProps> = ({ onTaskChange }) 
                           </button>
                           <div className="min-w-0">
                             <p
-                              className={`text-xs font-bold truncate ${
+                              className={`text-xs font-bold truncate flex items-center gap-1 ${
                                 isCompleted ? "line-through text-muted-foreground" : "text-foreground"
                               }`}
                             >
-                              {task.name}
+                              {task.parent_id && <CornerDownRight className="h-2.5 w-2.5 text-primary shrink-0" />}
+                              <span className="truncate">{task.name}</span>
+                              {task.parent_id && (
+                                <span className="text-[9px] px-1 py-0.2 rounded bg-primary/10 text-primary font-normal">
+                                  Subtarefa
+                                </span>
+                              )}
                             </p>
                             <p className="text-[10px] text-muted-foreground truncate">
                               {task.project?.name || "Sem projeto"} •{" "}

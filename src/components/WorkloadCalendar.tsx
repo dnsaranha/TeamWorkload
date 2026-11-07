@@ -14,7 +14,9 @@ import {
   MinusCircle,
   Trash2,
   ChevronsUpDown,
+  CornerDownRight,
 } from "lucide-react";
+import { SubtasksManager } from "./SubtasksManager";
 import {
   type Task,
   type Employee,
@@ -1054,6 +1056,17 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                 ? "Gerencie exceções diárias e configurações gerais desta tarefa recorrente."
                 : "Atualize os detalhes da tarefa e estimativas de tempo."}
             </DialogDescription>
+            {currentTask?.parent_id && (
+              <div className="mt-1 flex items-center gap-1.5 text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md">
+                <CornerDownRight className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  Subtarefa vinculada a:{" "}
+                  <strong>
+                    {tasks.find((t) => t.id === currentTask.parent_id)?.name || "Tarefa Principal"}
+                  </strong>
+                </span>
+              </div>
+            )}
           </DialogHeader>
           {currentTask && (
             <ScrollArea className="max-h-[75vh]">
@@ -1705,6 +1718,16 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                     </div>
                   </CollapsibleContent>
                 </Collapsible>
+
+                {/* Subtasks Manager for current task */}
+                <div className="pt-2 border-t border-border/60">
+                  <SubtasksManager
+                    taskId={currentTask.id}
+                    taskName={currentTask.name}
+                    projectId={currentTask.project_id || undefined}
+                    onSubtasksChange={fetchData}
+                  />
+                </div>
               </div>
             </ScrollArea>
           )}
@@ -1768,11 +1791,14 @@ const DraggableTask: React.FC<DraggableTaskProps> = ({
           ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20"
           : "bg-primary/10 border-primary/25 text-primary hover:bg-primary/20"
       }`}
-      title={`${task.name} - ${employee?.name || "Sem responsável"} (${project?.name || "Sem projeto"})`}
+      title={`${task.parent_id ? "[Subtarefa] " : ""}${task.name} - ${employee?.name || "Sem responsável"} (${project?.name || "Sem projeto"})`}
     >
       <div className="flex items-center justify-between gap-1">
-        <div className={`font-medium truncate ${isCompleted ? "line-through opacity-80" : ""}`}>
-          {task.name}
+        <div className={`font-medium truncate flex items-center gap-1 ${isCompleted ? "line-through opacity-80" : ""}`}>
+          {task.parent_id && (
+            <CornerDownRight className="h-3 w-3 text-primary/80 shrink-0" />
+          )}
+          <span className="truncate">{task.name}</span>
         </div>
         {task.is_recurring_instance && !isCompleted && (
           <Repeat

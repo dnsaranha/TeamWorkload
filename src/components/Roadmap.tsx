@@ -302,13 +302,17 @@ const Roadmap = () => {
     const taskItems = filters.itemType !== 'projects' ? filteredTasks.map((task) => {
       const category = getCategoryFor(task, "task", dynamicCategories);
       const specialMarker = task.special_marker;
+      const isSubtask = Boolean(task.parent_id);
+      const parentTask = isSubtask ? tasks.find((t) => t.id === task.parent_id) : null;
       let className = `roadmap-item status-${task.status}`;
       if (specialMarker) className += ` special-${specialMarker}`;
+      if (isSubtask) className += ` subtask-item`;
 
       return {
         id: `task-${task.id}`,
         content: `<div class="roadmap-item-content">
-          <div class="item-title">${task.name}</div>
+          <div class="item-title">${isSubtask ? `↳ ${task.name}` : task.name}</div>
+          ${isSubtask ? `<div class="subtask-parent" style="font-size:9px;color:var(--primary);opacity:0.9;">Subtarefa${parentTask ? ` de: ${parentTask.name}` : ""}</div>` : ""}
           ${specialMarker ? `<div class="special-marker">${specialMarker.replace(/_/g, " ").toUpperCase()}</div>` : ""}
           <div class="item-project">${task.project?.name || "Sem projeto"}</div>
         </div>`,
@@ -316,7 +320,7 @@ const Roadmap = () => {
         end: new Date(task.end_date),
         group: category,
         className,
-        title: `${task.name}\n\nProjeto: ${task.project?.name || "Sem projeto"}\nStatus: ${task.status}\nDuração: ${task.estimated_time}h`,
+        title: `${isSubtask ? "[Subtarefa] " : ""}${task.name}${parentTask ? `\nSubtarefa de: ${parentTask.name}` : ""}\n\nProjeto: ${task.project?.name || "Sem projeto"}\nStatus: ${task.status}\nDuração: ${task.estimated_time}h`,
         type: "range",
       };
     }) : [];

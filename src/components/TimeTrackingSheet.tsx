@@ -428,6 +428,49 @@ export const TimeTrackingSheet: React.FC<TimeTrackingSheetProps> = ({
     return `${hours.toFixed(1)}h`;
   };
 
+  // Hierarchical tasks tree for multi-level subtask selection
+  const hierarchicalTasks = useMemo(() => {
+    const childrenMap = new Map<string, Task[]>();
+    tasks.forEach((t) => {
+      if (t.parent_id) {
+        const list = childrenMap.get(t.parent_id) || [];
+        list.push(t);
+        childrenMap.set(t.parent_id, list);
+      }
+    });
+
+    const taskIds = new Set(tasks.map((t) => t.id));
+    const rootTasks = tasks.filter((t) => !t.parent_id || !taskIds.has(t.parent_id));
+    const result: { id: string; name: string; level: number; parentName?: string }[] = [];
+
+    const traverse = (t: Task, level: number, parentName?: string) => {
+      result.push({
+        id: t.id,
+        name: t.name,
+        level,
+        parentName,
+      });
+
+      // Support legacy subtasks array if present
+      if (t.subtasks && t.subtasks.length > 0) {
+        t.subtasks.forEach((st) => {
+          result.push({
+            id: `${t.id}::${st.id}`,
+            name: st.title,
+            level: level + 1,
+            parentName: t.name,
+          });
+        });
+      }
+
+      const children = childrenMap.get(t.id) || [];
+      children.forEach((c) => traverse(c, level + 1, t.name));
+    };
+
+    rootTasks.forEach((t) => traverse(t, 0));
+    return result;
+  }, [tasks]);
+
   // Filtered entries
   const filteredEntries = useMemo(() => {
     return entries.filter((entry) => {
@@ -669,9 +712,12 @@ export const TimeTrackingSheet: React.FC<TimeTrackingSheetProps> = ({
                     setTimerTaskId(val);
                     const task = tasks.find((t) => t.id === val);
                     if (task) {
-                      setTimerDescription(task.name);
+                      const parent = task.parent_id ? tasks.find((p) => p.id === task.parent_id) : null;
+                      setTimerDescription(parent ? `${parent.name} - ${task.name}` : task.name);
                       if (task.project_id) setTimerProjectId(task.project_id);
+                      else if (parent?.project_id) setTimerProjectId(parent.project_id);
                       if (task.assigned_employee_id) setTimerEmployeeId(task.assigned_employee_id);
+                      else if (parent?.assigned_employee_id) setTimerEmployeeId(parent.assigned_employee_id);
                     }
                   }
                 }}
@@ -679,29 +725,23 @@ export const TimeTrackingSheet: React.FC<TimeTrackingSheetProps> = ({
                 <SelectTrigger className="w-full sm:w-36 h-8 sm:h-9 text-xs bg-background shrink-0 truncate">
                   <SelectValue placeholder="Tarefa" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-60 overflow-y-auto">
                   <SelectItem value="none">Sem Tarefa</SelectItem>
-                  {tasks.flatMap((t) => {
-                    const items = [
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.name}
-                      </SelectItem>,
-                    ];
-                    if (t.subtasks && t.subtasks.length > 0) {
-                      t.subtasks.forEach((st) => {
-                        items.push(
-                          <SelectItem
-                            key={`${t.id}::${st.id}`}
-                            value={`${t.id}::${st.id}`}
-                            className="pl-6 text-xs text-muted-foreground"
-                          >
-                            ↳ {st.title}
-                          </SelectItem>
-                        );
-                      });
-                    }
-                    return items;
-                  })}
+                  {hierarchicalTasks.map((t) => (
+                    <SelectItem
+                      key={t.id}
+                      value={t.id}
+                      className={`text-xs ${
+                        t.level === 1
+                          ? "pl-6 text-muted-foreground"
+                          : t.level >= 2
+                            ? "pl-9 text-muted-foreground font-mono"
+                            : "font-medium"
+                      }`}
+                    >
+                      {t.level > 0 ? `${"↳ ".repeat(t.level)}${t.name}` : t.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1017,11 +1057,21 @@ export const TimeTrackingSheet: React.FC<TimeTrackingSheetProps> = ({
                         <SelectTrigger className="h-7 text-xs bg-background truncate">
                           <SelectValue placeholder="Tarefa" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-60 overflow-y-auto">
                           <SelectItem value="none">Sem Tarefa</SelectItem>
-                          {tasks.map((t) => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.name}
+                          {hierarchicalTasks.map((t) => (
+                            <SelectItem
+                              key={t.id}
+                              value={t.id}
+                              className={`text-xs ${
+                                t.level === 1
+                                  ? "pl-5 text-muted-foreground"
+                                  : t.level >= 2
+                                    ? "pl-8 text-muted-foreground font-mono"
+                                    : "font-medium"
+                              }`}
+                            >
+                              {t.level > 0 ? `${"↳ ".repeat(t.level)}${t.name}` : t.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1215,11 +1265,21 @@ export const TimeTrackingSheet: React.FC<TimeTrackingSheetProps> = ({
                         <SelectTrigger className="h-7 text-xs bg-transparent border-transparent hover:border-border focus:border-primary focus:bg-background truncate">
                           <SelectValue placeholder="Tarefa" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-60 overflow-y-auto">
                           <SelectItem value="none">Sem Tarefa</SelectItem>
-                          {tasks.map((t) => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.name}
+                          {hierarchicalTasks.map((t) => (
+                            <SelectItem
+                              key={t.id}
+                              value={t.id}
+                              className={`text-xs ${
+                                t.level === 1
+                                  ? "pl-5 text-muted-foreground"
+                                  : t.level >= 2
+                                    ? "pl-8 text-muted-foreground font-mono"
+                                    : "font-medium"
+                              }`}
+                            >
+                              {t.level > 0 ? `${"↳ ".repeat(t.level)}${t.name}` : t.name}
                             </SelectItem>
                           ))}
                         </SelectContent>

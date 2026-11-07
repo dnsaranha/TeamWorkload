@@ -37,7 +37,7 @@ import {
   type Employee,
   type Project,
 } from "@/lib/supabaseClient";
-import { Clock, Briefcase } from "lucide-react";
+import { Clock, Briefcase, CornerDownRight } from "lucide-react";
 import { useDrag } from "react-dnd";
 import { ItemTypes } from "../lib/dnd";
 
@@ -723,7 +723,15 @@ const DraggableTask: React.FC<DraggableTaskProps> = ({ task }) => {
       }`}
     >
       <div className="flex items-start justify-between">
-        <h4 className="font-medium text-sm mb-2">{task.name}</h4>
+        <h4 className="font-medium text-sm mb-2 flex items-center gap-1 flex-wrap">
+          {task.parent_id && <CornerDownRight className="h-3.5 w-3.5 text-primary shrink-0" />}
+          <span>{task.name}</span>
+          {task.parent_id && (
+            <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5 bg-primary/10 text-primary border-primary/20">
+              Subtarefa
+            </Badge>
+          )}
+        </h4>
       </div>
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <div className="flex items-center gap-1">

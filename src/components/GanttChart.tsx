@@ -607,22 +607,28 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
       // If project is collapsed, don't show its tasks in rows
       if (isProjectCollapsed) return;
 
-      // Separate main tasks (parent_id is null/undefined) and subtasks
-      const mainTasks = pTasks.filter((t) => !t.parent_id);
-      const subtasksMap = new Map<string, Task[]>();
-
+      // Build child map for multi-level hierarchy
+      const childrenMap = new Map<string, Task[]>();
       pTasks.forEach((t) => {
         if (t.parent_id) {
-          const list = subtasksMap.get(t.parent_id) || [];
+          const list = childrenMap.get(t.parent_id) || [];
           list.push(t);
-          subtasksMap.set(t.parent_id, list);
+          childrenMap.set(t.parent_id, list);
         }
       });
 
-      mainTasks.forEach((task, tIdx) => {
-        const subtasks = subtasksMap.get(task.id) || [];
-        const isParentCollapsed = Boolean(collapsedParentTasks[task.id]);
-        const seqNumber = `${tIdx + 1}`;
+      // Root tasks in project (no parent_id or parent not present in this project's task list)
+      const pTaskIds = new Set(pTasks.map((t) => t.id));
+      const rootTasks = pTasks.filter((t) => !t.parent_id || !pTaskIds.has(t.parent_id));
+
+      const traverseTask = (
+        task: Task,
+        level: number,
+        seqPrefix: string,
+        parentTask?: Task
+      ) => {
+        const children = childrenMap.get(task.id) || [];
+        const isCollapsed = Boolean(collapsedParentTasks[task.id]);
 
         const taskProg =
           task.progress !== null && task.progress !== undefined
@@ -633,59 +639,38 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
                 ? 50
                 : 0;
 
-        // Add Main Task Row
         rows.push({
-          rowType: "task",
+          rowType: level === 1 ? "task" : "subtask",
           id: task.id,
           projectId,
           project: project || undefined,
           task,
-          seqNumber,
-          level: 1,
-          isExpanded: !isParentCollapsed,
-          hasChildren: subtasks.length > 0,
+          parentTask,
+          seqNumber: seqPrefix,
+          level,
+          isExpanded: !isCollapsed,
+          hasChildren: children.length > 0,
           startDate: task.start_date,
           endDate: task.end_date,
           totalHours: task.estimated_time || 0,
           progress: taskProg,
           status: task.status || "pending",
-          employee: task.assigned_employee_id ? empMap.get(task.assigned_employee_id) : undefined,
+          employee: task.assigned_employee_id
+            ? empMap.get(task.assigned_employee_id)
+            : undefined,
           specialMarker: task.special_marker,
         });
 
-        // Add Subtasks if parent is expanded
-        if (!isParentCollapsed && subtasks.length > 0) {
-          subtasks.forEach((subtask, sIdx) => {
-            const subProg =
-              subtask.progress !== null && subtask.progress !== undefined
-                ? subtask.progress
-                : subtask.status === "completed"
-                  ? 100
-                  : subtask.status === "in_progress"
-                    ? 50
-                    : 0;
-
-            rows.push({
-              rowType: "subtask",
-              id: subtask.id,
-              projectId,
-              project: project || undefined,
-              task: subtask,
-              parentTask: task,
-              seqNumber: `${tIdx + 1}.${sIdx + 1}`,
-              level: 2,
-              startDate: subtask.start_date,
-              endDate: subtask.end_date,
-              totalHours: subtask.estimated_time || 0,
-              progress: subProg,
-              status: subtask.status || "pending",
-              employee: subtask.assigned_employee_id
-                ? empMap.get(subtask.assigned_employee_id)
-                : undefined,
-              specialMarker: subtask.special_marker,
-            });
+        // Recursively add children if parent is expanded
+        if (!isCollapsed && children.length > 0) {
+          children.forEach((child, cIdx) => {
+            traverseTask(child, level + 1, `${seqPrefix}.${cIdx + 1}`, task);
           });
         }
+      };
+
+      rootTasks.forEach((task, tIdx) => {
+        traverseTask(task, 1, `${tIdx + 1}`);
       });
     });
 
@@ -2307,10 +2292,13 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
                     onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, task.id)}
                     onDragEnd={handleDragEnd}
-                    className={`h-11 px-2 flex items-center justify-between hover:bg-muted/30 transition-all cursor-pointer text-xs group select-none ${
+                    style={{
+                      paddingLeft: `${Math.max(8, (row.level - 1) * 14 + 8)}px`,
+                    }}
+                    className={`h-11 pr-2 flex items-center justify-between hover:bg-muted/30 transition-all cursor-pointer text-xs group select-none ${
                       isQuickLinkSource ? "bg-primary/20 border-l-4 border-primary ring-1 ring-primary" : ""
                     } ${isSelected && !isQuickLinkSource ? "bg-primary/10 border-l-4 border-primary" : ""} ${
-                      isSubtask ? "bg-muted/10 pl-5" : ""
+                      isSubtask ? "bg-muted/10" : ""
                     } ${
                       isDraggingThis ? "opacity-40 border border-dashed border-primary" : ""
                     } ${isDragOverThis ? "border-t-2 border-primary bg-primary/10" : ""}`}
@@ -2333,12 +2321,13 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
                         <GripVertical className="h-3.5 w-3.5" />
                       </div>
 
-                      {/* Subtask Branch indicator or Parent Task collapse */}
-                      {isSubtask ? (
+                      {/* Subtask Branch indicator and/or Parent Task collapse */}
+                      {isSubtask && (
                         <div className="text-muted-foreground/50 shrink-0 font-mono text-xs flex items-center mr-0.5">
                           <CornerDownRight className="h-3 w-3 text-primary/60" />
                         </div>
-                      ) : isParentTask ? (
+                      )}
+                      {isParentTask ? (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -2350,9 +2339,9 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
                         >
                           {isParentCollapsed ? "+" : "−"}
                         </button>
-                      ) : (
+                      ) : !isSubtask ? (
                         <div className="w-2 shrink-0" />
-                      )}
+                      ) : null}
 
                       {/* Numbering */}
                       {displaySettings.listColumns.seqNumber && (
@@ -3361,15 +3350,35 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
                       <SelectValue placeholder="Nenhuma (Tarefa Principal)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Nenhuma (Tarefa Principal)</SelectItem>
-                      {tasks
-                        .filter((t) => !editingTask || t.id !== editingTask.id)
-                        .filter((t) => !t.parent_id)
-                        .map((t) => (
+                      {(() => {
+                        const invalidIds = new Set<string>();
+                        if (editingTask) {
+                          invalidIds.add(editingTask.id);
+                          const queue = [editingTask.id];
+                          while (queue.length > 0) {
+                            const cur = queue.shift()!;
+                            tasks.forEach((t) => {
+                              if (t.parent_id === cur && !invalidIds.has(t.id)) {
+                                invalidIds.add(t.id);
+                                queue.push(t.id);
+                              }
+                            });
+                          }
+                        }
+
+                        // Filter tasks by currently selected project if any
+                        const candidateTasks = tasks.filter(
+                          (t) =>
+                            !invalidIds.has(t.id) &&
+                            (!formProjectId || formProjectId === "none" || t.project_id === formProjectId)
+                        );
+
+                        return candidateTasks.map((t) => (
                           <SelectItem key={t.id} value={t.id}>
-                            {t.name}
+                            {t.parent_id ? `↳ ${t.name} (Subtarefa)` : t.name}
                           </SelectItem>
-                        ))}
+                        ));
+                      })()}
                     </SelectContent>
                   </Select>
                 </div>
