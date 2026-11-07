@@ -2816,7 +2816,7 @@ export const ResourcePlanningView: React.FC = () => {
                   taskId={editingTask.id}
                   taskName={editingTask.name}
                   projectId={editingTask.project_id || undefined}
-                  onSubtasksChange={loadAllData}
+                  onSubtasksChange={loadData}
                 />
               </div>
             )}

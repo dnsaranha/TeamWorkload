@@ -1725,7 +1725,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                     taskId={currentTask.id}
                     taskName={currentTask.name}
                     projectId={currentTask.project_id || undefined}
-                    onSubtasksChange={fetchData}
+                    onSubtasksChange={loadData}
                   />
                 </div>
               </div>
