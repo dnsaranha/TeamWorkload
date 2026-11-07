@@ -61,6 +61,18 @@ export type TaskException = {
   removed?: boolean;
 };
 
+export type Subtask = {
+  id: string;
+  title: string;
+  completed: boolean;
+  estimated_time?: number | null; // Estimated hours, e.g. 1.5
+  actual_time?: number | null; // Logged / execution hours
+  assigned_employee_id?: string | null;
+  assigned_employee_name?: string | null;
+  due_date?: string | null; // YYYY-MM-DD
+  created_at?: string;
+};
+
 export type Task = {
   id: string;
   name: string;
@@ -83,6 +95,7 @@ export type Task = {
   actual_time?: number | null; // Tracked execution time in hours
   group_id?: string | null;
   group_name?: string | null;
+  subtasks?: Subtask[] | null; // List of structured subtasks
   created_at: string | null;
   updated_at: string | null;
   project?: Project | null;
@@ -110,6 +123,7 @@ export type TaskInsert = {
   actual_time?: number | null;
   group_id?: string | null;
   group_name?: string | null;
+  subtasks?: Subtask[] | null;
 };
 
 export type TaskUpdate = Partial<TaskInsert>;
@@ -771,6 +785,7 @@ export const taskService = {
       actual_time: task.actual_time ?? 0,
       group_id: task.group_id || null,
       group_name: task.group_name || null,
+      subtasks: task.subtasks || [],
     };
     const updatedList = [newTask, ...tasks.filter((t) => t.id !== newTask.id)];
     mockDB.setTasks(updatedList);
@@ -814,6 +829,7 @@ export const taskService = {
       end_date: task.end_date || new Date().toISOString().split("T")[0],
       created_at: now,
       updated_at: now,
+      subtasks: task.subtasks || [],
       ...task,
     };
     mockDB.setTasks([fallbackTask, ...tasks.filter((t) => t.id !== id)]);
@@ -823,6 +839,87 @@ export const taskService = {
       console.warn("Could not save fallback task remotely:", err);
     }
     return fallbackTask;
+  },
+
+  async addSubtask(taskId: string, subtask: Omit<Subtask, "id">): Promise<Task> {
+    const tasks = mockDB.getTasks();
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) throw new Error("Tarefa não encontrada");
+
+    const newSubtask: Subtask = {
+      ...subtask,
+      id: `sub-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      created_at: new Date().toISOString(),
+    };
+
+    const currentSubtasks = Array.isArray(task.subtasks) ? [...task.subtasks] : [];
+    const updatedSubtasks = [...currentSubtasks, newSubtask];
+
+    const completedCount = updatedSubtasks.filter((s) => s.completed).length;
+    const progress = Math.round((completedCount / updatedSubtasks.length) * 100);
+
+    return this.update(taskId, {
+      subtasks: updatedSubtasks,
+      progress,
+    });
+  },
+
+  async updateSubtask(
+    taskId: string,
+    subtaskId: string,
+    patch: Partial<Subtask>
+  ): Promise<Task> {
+    const tasks = mockDB.getTasks();
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) throw new Error("Tarefa não encontrada");
+
+    const currentSubtasks = Array.isArray(task.subtasks) ? [...task.subtasks] : [];
+    const updatedSubtasks = currentSubtasks.map((s) =>
+      s.id === subtaskId ? { ...s, ...patch } : s
+    );
+
+    const completedCount = updatedSubtasks.filter((s) => s.completed).length;
+    const progress =
+      updatedSubtasks.length > 0
+        ? Math.round((completedCount / updatedSubtasks.length) * 100)
+        : task.progress;
+
+    return this.update(taskId, {
+      subtasks: updatedSubtasks,
+      progress,
+    });
+  },
+
+  async toggleSubtask(taskId: string, subtaskId: string): Promise<Task> {
+    const tasks = mockDB.getTasks();
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) throw new Error("Tarefa não encontrada");
+
+    const currentSubtasks = Array.isArray(task.subtasks) ? [...task.subtasks] : [];
+    const target = currentSubtasks.find((s) => s.id === subtaskId);
+    if (!target) throw new Error("Subtarefa não encontrada");
+
+    return this.updateSubtask(taskId, subtaskId, { completed: !target.completed });
+  },
+
+  async deleteSubtask(taskId: string, subtaskId: string): Promise<Task> {
+    const tasks = mockDB.getTasks();
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) throw new Error("Tarefa não encontrada");
+
+    const currentSubtasks = Array.isArray(task.subtasks) ? [...task.subtasks] : [];
+    const updatedSubtasks = currentSubtasks.filter((s) => s.id !== subtaskId);
+
+    const completedCount = updatedSubtasks.filter((s) => s.completed).length;
+    const progress =
+      updatedSubtasks.length > 0
+        ? Math.round((completedCount / updatedSubtasks.length) * 100)
+        : 0;
+
+    return this.update(taskId, {
+      subtasks: updatedSubtasks,
+      progress,
+    });
   },
 
   async delete(id: string): Promise<void> {

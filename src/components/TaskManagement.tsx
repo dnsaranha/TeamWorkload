@@ -49,17 +49,23 @@ import {
   Building2,
   Users,
   Clock,
+  ChevronDown,
+  ChevronRight,
+  ListTodo,
+  CheckCircle2,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import ProjectGridSheet from "./ProjectGridSheet";
+import SubtasksManager from "./SubtasksManager";
 import {
   taskService,
   projectService,
   employeeService,
   timeEntryService,
   type Task,
+  type Subtask,
   type Project,
   type Employee,
   type TimeEntry,
@@ -99,6 +105,21 @@ const TaskManagement = () => {
   const [currentTask, setCurrentTask] = useState<TaskWithRelations | null>(
     null,
   );
+  const [subtasksModalTask, setSubtasksModalTask] =
+    useState<TaskWithRelations | null>(null);
+  const [expandedTaskIds, setExpandedTaskIds] = useState<
+    Record<string, boolean>
+  >({});
+
+  const [newSubtaskDraft, setNewSubtaskDraft] = useState("");
+  const [newSubtaskHours, setNewSubtaskHours] = useState("");
+
+  const toggleTaskExpand = (taskId: string) => {
+    setExpandedTaskIds((prev) => ({
+      ...prev,
+      [taskId]: !prev[taskId],
+    }));
+  };
 
   const [newTask, setNewTask] = useState({
     name: "",
@@ -115,6 +136,7 @@ const TaskManagement = () => {
     repeat_days: [] as string[],
     hours_per_day: 0,
     special_marker: "none",
+    subtasks: [] as Subtask[],
   });
 
   const [newProject, setNewProject] = useState({
@@ -276,6 +298,7 @@ const TaskManagement = () => {
         hours_per_day: newTask.repeats_weekly ? defaultHours : null,
         special_marker:
           newTask.special_marker === "none" ? null : newTask.special_marker,
+        subtasks: newTask.subtasks || [],
       };
 
       const createdTask = await taskService.create(taskData);
@@ -296,10 +319,58 @@ const TaskManagement = () => {
         repeat_days: [] as string[],
         hours_per_day: 0,
         special_marker: "none",
+        subtasks: [],
       });
+      setNewSubtaskDraft("");
+      setNewSubtaskHours("");
       setIsNewTaskDialogOpen(false);
     } catch (error) {
       console.error("Error creating task:", error);
+    }
+  };
+
+  const handleTaskUpdatedFromManager = (updatedTask: Task) => {
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === updatedTask.id
+          ? {
+              ...t,
+              ...updatedTask,
+              project: t.project,
+              assigned_employee:
+                employees.find((e) => e.id === updatedTask.assigned_employee_id) ||
+                t.assigned_employee,
+            }
+          : t,
+      ),
+    );
+    if (currentTask && currentTask.id === updatedTask.id) {
+      setCurrentTask((prev) =>
+        prev
+          ? {
+              ...prev,
+              ...updatedTask,
+              project: prev.project,
+              assigned_employee:
+                employees.find((e) => e.id === updatedTask.assigned_employee_id) ||
+                prev.assigned_employee,
+            }
+          : null,
+      );
+    }
+    if (subtasksModalTask && subtasksModalTask.id === updatedTask.id) {
+      setSubtasksModalTask((prev) =>
+        prev
+          ? {
+              ...prev,
+              ...updatedTask,
+              project: prev.project,
+              assigned_employee:
+                employees.find((e) => e.id === updatedTask.assigned_employee_id) ||
+                prev.assigned_employee,
+            }
+          : null,
+      );
     }
   };
 
@@ -366,6 +437,8 @@ const TaskManagement = () => {
           currentTask.special_marker === "none"
             ? null
             : currentTask.special_marker,
+        subtasks: currentTask.subtasks || null,
+        progress: currentTask.progress !== undefined ? currentTask.progress : null,
       };
 
       const updatedTask = await taskService.update(currentTask.id, updateData);
@@ -1600,6 +1673,120 @@ const TaskManagement = () => {
                       </div>
                     </>
                   )}
+
+                  {/* Subtarefas Section */}
+                  <div className="pt-3 mt-2 border-t border-border">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-xs font-semibold flex items-center gap-1.5">
+                        <ListTodo className="h-3.5 w-3.5 text-primary" />
+                        <span>Subtarefas ({newTask.subtasks.length})</span>
+                      </Label>
+                      <span className="text-[11px] text-muted-foreground">Opcional</span>
+                    </div>
+
+                    {newTask.subtasks.length > 0 && (
+                      <div className="space-y-1.5 mb-2.5 max-h-36 overflow-y-auto pr-1">
+                        {newTask.subtasks.map((st, idx) => (
+                          <div
+                            key={st.id}
+                            className="flex items-center justify-between p-1.5 px-2 rounded bg-muted/40 text-xs border border-border/50"
+                          >
+                            <span className="font-medium truncate flex-1">
+                              {idx + 1}. {st.title}
+                            </span>
+                            {st.estimated_time && (
+                              <Badge variant="outline" className="text-[10px] h-5 px-1.5 font-mono mr-2 bg-background">
+                                <Clock className="h-2.5 w-2.5 mr-1 opacity-70" />
+                                {st.estimated_time}h
+                              </Badge>
+                            )}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setNewTask((prev) => ({
+                                  ...prev,
+                                  subtasks: prev.subtasks.filter((s) => s.id !== st.id),
+                                }));
+                              }}
+                              className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                      <Input
+                        placeholder="Adicionar subtarefa... (ex: Revisar documentação)"
+                        value={newSubtaskDraft}
+                        onChange={(e) => setNewSubtaskDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (newSubtaskDraft.trim()) {
+                              const h = parseFloat(newSubtaskHours);
+                              const createdSubtask: Subtask = {
+                                id: `sub-draft-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                                title: newSubtaskDraft.trim(),
+                                completed: false,
+                                estimated_time: !isNaN(h) && h > 0 ? h : null,
+                                created_at: new Date().toISOString(),
+                              };
+                              setNewTask((prev) => ({
+                                ...prev,
+                                subtasks: [...prev.subtasks, createdSubtask],
+                              }));
+                              setNewSubtaskDraft("");
+                              setNewSubtaskHours("");
+                            }
+                          }
+                        }}
+                        className="h-8 text-xs flex-1"
+                      />
+                      <Input
+                        type="number"
+                        step="0.5"
+                        min="0.5"
+                        placeholder="Horas"
+                        value={newSubtaskHours}
+                        onChange={(e) => setNewSubtaskHours(e.target.value)}
+                        className="h-8 w-18 text-xs font-mono px-2"
+                        title="Esforço estimado (horas)"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (newSubtaskDraft.trim()) {
+                            const h = parseFloat(newSubtaskHours);
+                            const createdSubtask: Subtask = {
+                              id: `sub-draft-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                              title: newSubtaskDraft.trim(),
+                              completed: false,
+                              estimated_time: !isNaN(h) && h > 0 ? h : null,
+                              created_at: new Date().toISOString(),
+                            };
+                            setNewTask((prev) => ({
+                              ...prev,
+                              subtasks: [...prev.subtasks, createdSubtask],
+                            }));
+                            setNewSubtaskDraft("");
+                            setNewSubtaskHours("");
+                          }
+                        }}
+                        disabled={!newSubtaskDraft.trim()}
+                        className="h-8 px-2.5 text-xs gap-1 shrink-0"
+                      >
+                        <Plus className="h-3 w-3" />
+                        <span>Add</span>
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </ScrollArea>
               <DialogFooter>
@@ -1838,95 +2025,166 @@ const TaskManagement = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredTasks.map((task) => (
-                    <TableRow key={task.id}>
-                      <TableCell className="font-medium">{task.name}</TableCell>
-                      <TableCell className="max-w-[150px] truncate">{task.project?.name || "-"}</TableCell>
-                      <TableCell>
-                        {task.group_name ? (
-                          <Badge
-                            variant="outline"
-                            className="text-[11px] font-semibold text-purple-700 bg-purple-50 dark:bg-purple-950 dark:text-purple-300 border-purple-200 dark:border-purple-800 gap-1 inline-flex items-center"
-                          >
-                            <Building2 className="w-3 h-3" />
-                            {task.group_name}
-                          </Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Geral</span>
+                  filteredTasks.map((task) => {
+                    const isExpanded = !!expandedTaskIds[task.id];
+                    const subtasksList = Array.isArray(task.subtasks) ? task.subtasks : [];
+                    const completedSubtasks = subtasksList.filter((s) => s.completed).length;
+                    const totalSubtasks = subtasksList.length;
+
+                    return (
+                      <React.Fragment key={task.id}>
+                        <TableRow className={isExpanded ? "bg-muted/15" : undefined}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-start gap-2">
+                              <button
+                                type="button"
+                                onClick={() => toggleTaskExpand(task.id)}
+                                className="p-1 mt-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                                title={isExpanded ? "Recolher subtarefas" : "Expandir subtarefas"}
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4" />
+                                )}
+                              </button>
+                              <div className="flex flex-col min-w-0">
+                                <span className="truncate">{task.name}</span>
+                                {totalSubtasks > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleTaskExpand(task.id)}
+                                    className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-primary mt-0.5 text-left w-fit"
+                                  >
+                                    <ListTodo className="h-3 w-3 text-primary/70 shrink-0" />
+                                    <span>
+                                      {completedSubtasks}/{totalSubtasks} subtarefas ({Math.round((completedSubtasks / totalSubtasks) * 100)}%)
+                                    </span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleTaskExpand(task.id)}
+                                    className="text-[10px] text-muted-foreground/60 hover:text-primary mt-0.5 text-left w-fit flex items-center gap-1 opacity-70 hover:opacity-100"
+                                  >
+                                    <Plus className="h-2.5 w-2.5" />
+                                    <span>Adicionar subtarefa</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="max-w-[150px] truncate">{task.project?.name || "-"}</TableCell>
+                          <TableCell>
+                            {task.group_name ? (
+                              <Badge
+                                variant="outline"
+                                className="text-[11px] font-semibold text-purple-700 bg-purple-50 dark:bg-purple-950 dark:text-purple-300 border-purple-200 dark:border-purple-800 gap-1 inline-flex items-center"
+                              >
+                                <Building2 className="w-3 h-3" />
+                                {task.group_name}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Geral</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="font-mono">{task.estimated_time}h</TableCell>
+                          <TableCell className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                            <span className="inline-flex items-center gap-1">
+                              <Clock className="w-3 h-3 opacity-70" />
+                              {(taskTrackedHours[task.id] ?? task.actual_time ?? 0).toFixed(1)}h
+                            </span>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {format(new Date(task.start_date + "T00:00:00"), "dd/MM")}{" "}
+                            -{" "}
+                            {format(
+                              new Date(task.end_date + "T00:00:00"),
+                              "dd/MM/yyyy",
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                task.status === "completed"
+                                  ? "default"
+                                  : task.status === "in_progress"
+                                    ? "secondary"
+                                    : "outline"
+                              }
+                            >
+                              {task.status === "pending"
+                                ? "Pendente"
+                                : task.status === "in_progress"
+                                  ? "Em Andamento"
+                                  : "Concluída"}
+                            </Badge>
+                            {task.status === "completed" && task.completion_date && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                Concluída em{" "}
+                                {format(new Date(task.completion_date), "dd/MM/yyyy")}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {task.assigned_employee?.name || (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openAssignDialog(task)}
+                                className="h-7 text-xs"
+                              >
+                                Atribuir
+                              </Button>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setSubtasksModalTask(task)}
+                                className="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
+                                title="Gerenciar Subtarefas"
+                              >
+                                <ListTodo size={14} />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openEditDialog(task)}
+                                className="h-8 w-8 p-0"
+                              >
+                                <Edit size={14} />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteTask(task.id)}
+                                className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                              >
+                                <Trash2 size={14} />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+
+                        {/* Expanded Subtasks Row */}
+                        {isExpanded && (
+                          <TableRow className="bg-muted/10 border-b border-border/80">
+                            <TableCell colSpan={9} className="p-3 pl-8 sm:pl-10">
+                              <SubtasksManager
+                                task={task}
+                                employees={employees}
+                                onTaskUpdated={handleTaskUpdatedFromManager}
+                                compact
+                              />
+                            </TableCell>
+                          </TableRow>
                         )}
-                      </TableCell>
-                      <TableCell className="font-mono">{task.estimated_time}h</TableCell>
-                      <TableCell className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                        <span className="inline-flex items-center gap-1">
-                          <Clock className="w-3 h-3 opacity-70" />
-                          {(taskTrackedHours[task.id] ?? task.actual_time ?? 0).toFixed(1)}h
-                        </span>
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {format(new Date(task.start_date + "T00:00:00"), "dd/MM")}{" "}
-                        -{" "}
-                        {format(
-                          new Date(task.end_date + "T00:00:00"),
-                          "dd/MM/yyyy",
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            task.status === "completed"
-                              ? "default"
-                              : task.status === "in_progress"
-                                ? "secondary"
-                                : "outline"
-                          }
-                        >
-                          {task.status === "pending"
-                            ? "Pendente"
-                            : task.status === "in_progress"
-                              ? "Em Andamento"
-                              : "Concluída"}
-                        </Badge>
-                        {task.status === "completed" && task.completion_date && (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            Concluída em{" "}
-                            {format(new Date(task.completion_date), "dd/MM/yyyy")}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {task.assigned_employee?.name || (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openAssignDialog(task)}
-                            className="h-7 text-xs"
-                          >
-                            Atribuir
-                          </Button>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openEditDialog(task)}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Edit size={14} />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteTask(task.id)}
-                            className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
-                          >
-                            <Trash2 size={14} />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                      </React.Fragment>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
@@ -2554,12 +2812,55 @@ const TaskManagement = () => {
                     </div>
                   </div>
                 )}
+
+                {/* Subtarefas Management inside Edit Dialog */}
+                <div className="mt-4 pt-4 border-t border-border">
+                  <SubtasksManager
+                    task={currentTask}
+                    employees={employees}
+                    onTaskUpdated={handleTaskUpdatedFromManager}
+                  />
+                </div>
               </div>
             </ScrollArea>
           )}
           <DialogFooter>
             <Button type="submit" onClick={handleUpdateTask}>
-              Update Task
+              Salvar Alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Standalone Subtasks Modal */}
+      <Dialog
+        open={!!subtasksModalTask}
+        onOpenChange={(open) => !open && setSubtasksModalTask(null)}
+      >
+        <DialogContent className="max-w-2xl w-[calc(100%-2rem)]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <ListTodo className="h-5 w-5 text-primary" />
+              <span>Subtarefas: {subtasksModalTask?.name}</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Gerencie as subtarefas e acompanhe o progresso desta tarefa.
+            </DialogDescription>
+          </DialogHeader>
+          {subtasksModalTask && (
+            <SubtasksManager
+              task={subtasksModalTask}
+              employees={employees}
+              onTaskUpdated={handleTaskUpdatedFromManager}
+            />
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSubtasksModalTask(null)}
+            >
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>

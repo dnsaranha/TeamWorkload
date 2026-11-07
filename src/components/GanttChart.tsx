@@ -1406,6 +1406,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
         special_marker: formSpecialMarker === "none" ? null : formSpecialMarker,
         dependencies: formDependencies,
         completion_date: derivedStatus === "completed" ? new Date().toISOString().split("T")[0] : null,
+        subtasks: editingTask?.subtasks || null,
       };
 
       if (editingTask) {

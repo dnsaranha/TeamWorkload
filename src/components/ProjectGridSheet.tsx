@@ -50,8 +50,13 @@ import {
   RefreshCw,
   Settings,
   Pencil,
+  ListTodo,
+  CornerUpLeft,
+  CornerDownRight,
+  FolderTree,
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import SubtasksManager from "./SubtasksManager";
 import {
   taskService,
   employeeService,
@@ -122,6 +127,18 @@ export type ColumnKey =
   | "specialMarker"
   | "actions";
 
+export type GridRowItem = {
+  task: Task;
+  level: number;
+  isSubtask: boolean;
+  parentTask: Task | null;
+  hasSubtasks: boolean;
+  subtasksCount: number;
+  subtasksCompletedCount: number;
+  isCollapsed: boolean;
+  outlineNumber: string;
+};
+
 interface ColumnDef {
   key: ColumnKey;
   label: string;
@@ -145,7 +162,7 @@ const DEFAULT_COLUMNS: ColumnDef[] = [
   { key: "finishDate", label: "Término", defaultWidth: 115, minWidth: 95 },
   { key: "project", label: "Projeto", defaultWidth: 140, minWidth: 100 },
   { key: "specialMarker", label: "Marcador", defaultWidth: 110, minWidth: 80 },
-  { key: "actions", label: "Ações", defaultWidth: 70, minWidth: 60, isMandatory: true },
+  { key: "actions", label: "Ações", defaultWidth: 125, minWidth: 95, isMandatory: true },
 ];
 
 const STORAGE_KEYS = {
@@ -182,6 +199,7 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
   } | null>(null);
   const [editingValue, setEditingValue] = useState<string>("");
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  const [subtasksModalTask, setSubtasksModalTask] = useState<Task | null>(null);
 
   // New inline task creation draft
   const [newRowDraft, setNewRowDraft] = useState<{
@@ -220,7 +238,12 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
   // Drag & drop row reordering
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
-  const [dropPosition, setDropPosition] = useState<"before" | "after">("before");
+  const [dropPosition, setDropPosition] = useState<"before" | "after" | "as-child">("before");
+  const [collapsedParentTasks, setCollapsedParentTasks] = useState<Record<string, boolean>>({});
+
+  const selectedTask = useMemo(() => {
+    return tasks.find((t) => t.id === selectedRowId) || null;
+  }, [tasks, selectedRowId]);
 
   // Column Resizing Ref
   const resizingRef = useRef<{
@@ -286,6 +309,43 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
         }
       } catch (e) {
         console.warn("Error parsing task order:", e);
+      }
+
+      // Migrate / Normalize any embedded subtasks to full first-class child tasks
+      const allLoadedIds = new Set(loadedTasks.map((t) => t.id));
+      const newlyCreatedChildren: Task[] = [];
+      for (const t of loadedTasks) {
+        if (Array.isArray(t.subtasks) && t.subtasks.length > 0) {
+          for (const sub of t.subtasks) {
+            if (!allLoadedIds.has(sub.id)) {
+              const childTask: Task = {
+                id: sub.id,
+                name: sub.title || "Subtarefa",
+                description: null,
+                estimated_time: Number(sub.estimated_time) || 0,
+                actual_time: Number(sub.actual_time) || 0,
+                start_date: t.start_date || new Date().toISOString().split("T")[0],
+                end_date: sub.due_date || t.end_date || new Date().toISOString().split("T")[0],
+                project_id: t.project_id || null,
+                assigned_employee_id: sub.assigned_employee_id || null,
+                status: sub.completed ? "completed" : "pending",
+                completion_date: sub.completed ? new Date().toISOString().split("T")[0] : null,
+                parent_id: t.id,
+                progress: sub.completed ? 100 : 0,
+                created_at: sub.created_at || new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              };
+              newlyCreatedChildren.push(childTask);
+              allLoadedIds.add(childTask.id);
+              taskService.create(childTask).catch(() => {});
+            }
+          }
+          t.subtasks = [];
+          taskService.update(t.id, { subtasks: [] }).catch(() => {});
+        }
+      }
+      if (newlyCreatedChildren.length > 0) {
+        loadedTasks.push(...newlyCreatedChildren);
       }
 
       setTasks(loadedTasks);
@@ -783,7 +843,136 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
     }
   };
 
-  // Drag and Drop Rows
+  // Helper to prevent circular hierarchy in multi-level subtasks
+  const isDescendant = (checkTaskId: string, potentialAncestorId: string, taskList: Task[]): boolean => {
+    let cur = taskList.find((t) => t.id === checkTaskId);
+    const visited = new Set<string>();
+    while (cur && cur.parent_id) {
+      if (cur.parent_id === potentialAncestorId) return true;
+      if (visited.has(cur.id)) break;
+      visited.add(cur.id);
+      cur = taskList.find((t) => t.id === cur!.parent_id);
+    }
+    return false;
+  };
+
+  // 1. Promote Subtask one level up (Outdent / Recuar nível)
+  const handlePromoteToTask = async (taskId: string) => {
+    try {
+      const currentTask = tasks.find((t) => t.id === taskId);
+      if (!currentTask || !currentTask.parent_id) return;
+
+      const parentTask = tasks.find((t) => t.id === currentTask.parent_id);
+      // Promote one level up: if parent has parent_id, become sibling of parent (child of grandparent); otherwise become root (null)
+      const newParentId = parentTask?.parent_id || null;
+
+      await taskService.update(taskId, { parent_id: newParentId });
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, parent_id: newParentId } : t)));
+      setSelectedRowId(taskId);
+      if (onDataChange) onDataChange();
+    } catch (err) {
+      console.error("Error promoting task:", err);
+    }
+  };
+
+  // 2. Demote Task to Subtask of previous task in the list (Indent / Avançar nível)
+  const handleDemoteToSubtask = async (taskId: string, targetParentId?: string) => {
+    try {
+      let chosenParentId = targetParentId;
+      if (!chosenParentId) {
+        // Find preceding task in the visible display rows
+        const allDisplayRows: GridRowItem[] = [];
+        groupedData.forEach((g) => allDisplayRows.push(...g.displayRows));
+        const currentIdx = allDisplayRows.findIndex((r) => r.task.id === taskId);
+        if (currentIdx > 0) {
+          const prevRow = allDisplayRows[currentIdx - 1];
+          chosenParentId = prevRow.task.id;
+        } else {
+          const tIdx = tasks.findIndex((t) => t.id === taskId);
+          if (tIdx > 0) chosenParentId = tasks[tIdx - 1].id;
+        }
+      }
+
+      if (!chosenParentId || chosenParentId === taskId) return;
+      if (isDescendant(chosenParentId, taskId, tasks)) return;
+
+      await taskService.update(taskId, { parent_id: chosenParentId });
+      setTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, parent_id: chosenParentId } : t))
+      );
+      setCollapsedParentTasks((prev) => ({ ...prev, [chosenParentId!]: false }));
+      setSelectedRowId(taskId);
+      if (onDataChange) onDataChange();
+    } catch (err) {
+      console.error("Error demoting task to subtask:", err);
+    }
+  };
+
+  // 3. Link / Reparent task to another task with cycle protection
+  const handleReparentTask = async (taskId: string, newParentId: string | null) => {
+    try {
+      if (newParentId) {
+        if (newParentId === taskId || isDescendant(newParentId, taskId, tasks)) return;
+      }
+
+      await taskService.update(taskId, { parent_id: newParentId });
+      setTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, parent_id: newParentId } : t))
+      );
+      if (newParentId) {
+        setCollapsedParentTasks((prev) => ({ ...prev, [newParentId]: false }));
+      }
+      setSelectedRowId(taskId);
+      if (onDataChange) onDataChange();
+    } catch (err) {
+      console.error("Error reparenting task:", err);
+    }
+  };
+
+  // 4. Create Inline Subtask under a Parent Task
+  const handleCreateInlineSubtask = async (parentTaskId: string, projectId: string | null) => {
+    const parentTask = tasks.find((t) => t.id === parentTaskId);
+    const today = new Date().toISOString().split("T")[0];
+    const defaultEnd = parentTask?.end_date || addDays(new Date(), 2).toISOString().split("T")[0];
+
+    const newSubtaskData: TaskInsert = {
+      name: "Nova Subtarefa",
+      parent_id: parentTaskId,
+      project_id: projectId || parentTask?.project_id || null,
+      estimated_time: 4,
+      start_date: parentTask?.start_date || today,
+      end_date: defaultEnd,
+      status: "pending",
+      assigned_employee_id: parentTask?.assigned_employee_id || null,
+      group_id: parentTask?.group_id || null,
+      group_name: parentTask?.group_name || null,
+      dependencies: [],
+    };
+
+    try {
+      const created = await taskService.create(newSubtaskData);
+      setTasks((prev) => {
+        const copy = [...prev];
+        const pIdx = copy.findIndex((t) => t.id === parentTaskId);
+        if (pIdx === -1) return [...copy, created];
+        let insertIdx = pIdx + 1;
+        while (insertIdx < copy.length && copy[insertIdx].parent_id === parentTaskId) {
+          insertIdx++;
+        }
+        copy.splice(insertIdx, 0, created);
+        return copy;
+      });
+      setCollapsedParentTasks((prev) => ({ ...prev, [parentTaskId]: false }));
+      setSelectedRowId(created.id);
+      setActiveCell({ taskId: created.id, field: "name" });
+      setEditingValue("Nova Subtarefa");
+      if (onDataChange) onDataChange();
+    } catch (err) {
+      console.error("Error creating inline subtask:", err);
+    }
+  };
+
+  // Drag and Drop Rows (Supports Reorder & Drag-to-Parent)
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
     setDraggedTaskId(taskId);
     setSelectedRowId(taskId);
@@ -797,8 +986,15 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
     if (draggedTaskId && draggedTaskId !== targetTaskId) {
       setDragOverTaskId(targetTaskId);
       const rect = e.currentTarget.getBoundingClientRect();
-      const midY = rect.top + rect.height / 2;
-      setDropPosition(e.clientY < midY ? "before" : "after");
+      const relY = e.clientY - rect.top;
+      const ratio = relY / rect.height;
+      if (ratio < 0.28) {
+        setDropPosition("before");
+      } else if (ratio > 0.72) {
+        setDropPosition("after");
+      } else {
+        setDropPosition("as-child");
+      }
     }
   };
 
@@ -809,25 +1005,70 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
   const handleDrop = async (e: React.DragEvent, targetTaskId: string) => {
     e.preventDefault();
     const sourceTaskId = draggedTaskId || e.dataTransfer.getData("text/plain");
+    const currentDropPos = dropPosition;
     setDragOverTaskId(null);
     setDraggedTaskId(null);
 
     if (!sourceTaskId || sourceTaskId === targetTaskId) return;
 
+    const sourceTask = tasks.find((t) => t.id === sourceTaskId);
+    const targetTask = tasks.find((t) => t.id === targetTaskId);
+    if (!sourceTask || !targetTask) return;
+
+    // Prevent making a parent a child of its own subtask or any of its descendants
+    if (targetTask.id === sourceTaskId || targetTask.parent_id === sourceTaskId || isDescendant(targetTaskId, sourceTaskId, tasks)) return;
+
+    // Mode A: Dropped in middle of target task -> make it a subtask of targetTask!
+    if (currentDropPos === "as-child") {
+      const newParentId = targetTask.id;
+      const updatedTasks = tasks.map((t) =>
+        t.id === sourceTaskId
+          ? { ...t, parent_id: newParentId, project_id: targetTask.project_id }
+          : t
+      );
+      setTasks(updatedTasks);
+      setSelectedRowId(sourceTaskId);
+      setCollapsedParentTasks((prev) => ({ ...prev, [newParentId]: false }));
+
+      try {
+        await taskService.update(sourceTaskId, {
+          parent_id: newParentId,
+          project_id: targetTask.project_id,
+        });
+        if (onDataChange) onDataChange();
+      } catch (err) {
+        console.error("Error setting task parent via drag:", err);
+      }
+      return;
+    }
+
+    // Mode B: Dropped before or after -> Reorder
     const sourceIndex = tasks.findIndex((t) => t.id === sourceTaskId);
     const targetIndex = tasks.findIndex((t) => t.id === targetTaskId);
     if (sourceIndex === -1 || targetIndex === -1) return;
 
     const newTasks = [...tasks];
     const [moved] = newTasks.splice(sourceIndex, 1);
+
+    // If target is a subtask, inherit its parent_id; otherwise keep top level
+    const targetParentId = targetTask.parent_id || null;
+    moved.parent_id = targetParentId;
+    if (targetTask.project_id) {
+      moved.project_id = targetTask.project_id;
+    }
+
     const adjustedTargetIndex = newTasks.findIndex((t) => t.id === targetTaskId);
-    const insertIndex = dropPosition === "before" ? adjustedTargetIndex : adjustedTargetIndex + 1;
+    const insertIndex = currentDropPos === "before" ? adjustedTargetIndex : adjustedTargetIndex + 1;
     newTasks.splice(insertIndex, 0, moved);
 
     setTasks(newTasks);
     setSelectedRowId(sourceTaskId);
 
     try {
+      await taskService.update(sourceTaskId, {
+        parent_id: targetParentId,
+        project_id: moved.project_id,
+      });
       await taskService.reorderTasks(newTasks);
       if (onDataChange) onDataChange();
     } catch (err) {
@@ -860,10 +1101,105 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
     });
   }, [tasks, searchTerm, selectedProjectId, selectedEmployeeId, statusFilter]);
 
-  // Grouped structure for MS Project hierarchy
+  // Grouped structure for MS Project hierarchy with parent-subtask flattening
   const groupedData = useMemo(() => {
+    // Helper to build hierarchical display rows with WBS outline numbering
+    const buildDisplayRowsForTasks = (taskList: Task[]): GridRowItem[] => {
+      const childrenMap = new Map<string, Task[]>();
+      const topLevelTasks: Task[] = [];
+      const taskIdsInGroup = new Set(taskList.map((t) => t.id));
+
+      const taskMap = new Map<string, Task>();
+      tasks.forEach((t) => taskMap.set(t.id, t));
+
+      taskList.forEach((t) => {
+        if (t.parent_id && taskIdsInGroup.has(t.parent_id)) {
+          const list = childrenMap.get(t.parent_id) || [];
+          list.push(t);
+          childrenMap.set(t.parent_id, list);
+        } else {
+          topLevelTasks.push(t);
+        }
+      });
+
+      const rows: GridRowItem[] = [];
+
+      // Recursive tree builder supporting arbitrary nested levels (subtarefas de subtarefas: 1, 1.1, 1.1.1, ...)
+      const traverseNode = (
+        currentTask: Task,
+        level: number,
+        parent: Task | null,
+        outlineNum: string
+      ) => {
+        const children = childrenMap.get(currentTask.id) || [];
+        const hasSubtasks = children.length > 0;
+        const isCollapsed = !!collapsedParentTasks[currentTask.id];
+        const completedChildren = children.filter((c) => c.status === "completed").length;
+        const isSubtask = level > 0 || !!currentTask.parent_id;
+
+        rows.push({
+          task: currentTask,
+          level,
+          isSubtask,
+          parentTask: parent,
+          hasSubtasks,
+          subtasksCount: children.length,
+          subtasksCompletedCount: completedChildren,
+          isCollapsed,
+          outlineNumber: outlineNum,
+        });
+
+        // If expanded, recursively traverse nested subtasks
+        if (hasSubtasks && !isCollapsed) {
+          children.forEach((child, childIdx) => {
+            traverseNode(
+              child,
+              level + 1,
+              currentTask,
+              `${outlineNum}.${childIdx + 1}`
+            );
+          });
+        }
+      };
+
+      let rootIndex = 1;
+      topLevelTasks.forEach((parent) => {
+        const isSubtask = !!parent.parent_id;
+        const parentTask = isSubtask ? taskMap.get(parent.parent_id!) || null : null;
+        traverseNode(parent, isSubtask ? 1 : 0, parentTask, String(rootIndex++));
+      });
+
+      return rows;
+    };
+
     if (groupBy === "none") {
-      return [{ id: "all", name: "Todas as Tarefas", project: null, tasks: filteredTasks }];
+      return [
+        {
+          id: "all",
+          name: "Todas as Tarefas",
+          project: null,
+          tasks: filteredTasks,
+          displayRows: buildDisplayRowsForTasks(filteredTasks),
+          totalEffort: Number(filteredTasks.reduce((s, t) => s + (Number(t.estimated_time) || 0), 0).toFixed(1)),
+          totalActualEffort: Number(
+            filteredTasks
+              .reduce((s, t) => {
+                const tr = taskTrackedHours[t.id];
+                return s + (tr !== undefined && tr > 0 ? tr : Number(t.actual_time) || 0);
+              }, 0)
+              .toFixed(1)
+          ),
+          remainingEffort: Number(
+            filteredTasks
+              .reduce((s, t) => (t.status === "completed" ? s : s + (Number(t.estimated_time) || 0)), 0)
+              .toFixed(1)
+          ),
+          completedCount: filteredTasks.filter((t) => t.status === "completed").length,
+          earliestStart: null,
+          latestFinish: null,
+          totalDays: 0,
+        },
+      ];
     }
 
     const projectMap = new Map<string, Task[]>();
@@ -884,6 +1220,7 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
       name: string;
       project: Project | null;
       tasks: Task[];
+      displayRows: GridRowItem[];
       totalEffort: number;
       totalActualEffort: number;
       remainingEffort: number;
@@ -936,6 +1273,7 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
             name: proj.name,
             project: proj,
             tasks: projTasks,
+            displayRows: buildDisplayRowsForTasks(projTasks),
             totalEffort: totalEff,
             totalActualEffort: Number(totalAct.toFixed(1)),
             remainingEffort: remEff,
@@ -984,6 +1322,7 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
         name: "Tarefas Sem Projeto Associado",
         project: null,
         tasks: unassignedTasks,
+        displayRows: buildDisplayRowsForTasks(unassignedTasks),
         totalEffort: totalEff,
         totalActualEffort: Number(totalAct.toFixed(1)),
         remainingEffort: remEff,
@@ -995,7 +1334,7 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
     }
 
     return groups;
-  }, [filteredTasks, projects, selectedProjectId, groupBy, taskTrackedHours]);
+  }, [filteredTasks, projects, selectedProjectId, groupBy, taskTrackedHours, collapsedParentTasks, tasks]);
 
   // Overall Project Stats for Header
   const overallStats = useMemo(() => {
@@ -1021,21 +1360,30 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
     return { totalTasks, completed, totalEffort, totalActualEffort, remainingEffort };
   }, [tasks, taskTrackedHours]);
 
-  // Global sequential row index lookup
+  // Global sequential row index lookup and Outline numbering lookup
   const taskRowIndexMap = useMemo(() => {
     const map = new Map<string, number>();
     let counter = 1;
     groupedData.forEach((group) => {
-      // Group header counts as a numbered item if grouped
       if (groupBy === "project") {
         map.set(`group-${group.id}`, counter++);
       }
-      group.tasks.forEach((t) => {
-        map.set(t.id, counter++);
+      group.displayRows.forEach((row) => {
+        map.set(row.task.id, counter++);
       });
     });
     return map;
   }, [groupedData, groupBy]);
+
+  const taskOutlineNumberMap = useMemo(() => {
+    const map = new Map<string, string>();
+    groupedData.forEach((group) => {
+      group.displayRows.forEach((row) => {
+        map.set(row.task.id, row.outlineNumber);
+      });
+    });
+    return map;
+  }, [groupedData]);
 
   // Helper for rendering date with highlight (Today / Overdue like MS Project Web)
   const renderDateCell = (dateStr?: string | null) => {
@@ -1310,6 +1658,66 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
               <SelectItem value="completed">Concluída</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        {/* Center / WBS Hierarchy Action Buttons (Promote, Demote, Add Subtask) */}
+        <div className="flex items-center bg-muted/60 p-0.5 rounded-lg border border-border space-x-0.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!selectedTask}
+            onClick={() => {
+              if (selectedTask) {
+                handleCreateInlineSubtask(
+                  selectedTask.id,
+                  selectedTask.project_id
+                );
+              }
+            }}
+            className="h-8 text-xs px-2 gap-1 text-foreground hover:text-emerald-600 disabled:opacity-40 font-medium cursor-pointer"
+            title={
+              selectedTask
+                ? `Adicionar subtarefa sob "${selectedTask.name}"`
+                : "Selecione uma tarefa para adicionar subtarefa"
+            }
+          >
+            <Plus className="h-3.5 w-3.5 text-emerald-600" />
+            <span className="hidden sm:inline">+ Subtarefa</span>
+          </Button>
+
+          <div className="w-[1px] h-4 bg-border mx-0.5" />
+
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!selectedTask || !selectedTask.parent_id}
+            onClick={() => {
+              if (selectedTask?.parent_id) {
+                handlePromoteToTask(selectedTask.id);
+              }
+            }}
+            className="h-8 text-xs px-2 gap-1 text-foreground hover:text-blue-600 disabled:opacity-40 font-medium cursor-pointer"
+            title="Promover nível WBS (Recuar para nível superior)"
+          >
+            <CornerUpLeft className="h-3.5 w-3.5 text-blue-600" />
+            <span className="hidden sm:inline">Promover</span>
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!selectedTask}
+            onClick={() => {
+              if (selectedTask) {
+                handleDemoteToSubtask(selectedTask.id);
+              }
+            }}
+            className="h-8 text-xs px-2 gap-1 text-foreground hover:text-amber-600 disabled:opacity-40 font-medium cursor-pointer"
+            title="Transformar em Subtarefa da tarefa anterior (Avançar nível WBS)"
+          >
+            <CornerDownRight className="h-3.5 w-3.5 text-amber-600" />
+            <span className="hidden sm:inline">Virar Subtarefa</span>
+          </Button>
         </div>
 
         {/* Right Tools (Grouping, Columns Dropdown, Collapse/Expand) */}
@@ -1669,12 +2077,14 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
                       </tr>
                     )}
 
-                    {/* Child Task Rows (Spreadsheet editable cells) */}
+                    {/* Hierarchical Task Rows (Parents and Subtasks with inline spreadsheet editing) */}
                     {!isGroupCollapsed &&
-                      group.tasks.map((task) => {
+                      group.displayRows.map((row) => {
+                        const task = row.task;
+                        const isSubtask = row.isSubtask;
                         const isSelected = selectedRowId === task.id;
                         const isCompleted = task.status === "completed";
-                        const rowNum = taskRowIndexMap.get(task.id) || 1;
+                        const rowNum = row.outlineNumber;
                         const employee = employees.find((e) => e.id === task.assigned_employee_id);
                         const durationDays = Math.max(
                           1,
@@ -1699,13 +2109,17 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
                             onClick={() => setSelectedRowId(task.id)}
                             className={`group h-9 transition-colors border-b border-border/40 ${
                               isSelected
-                                ? "bg-primary/5 dark:bg-primary/10"
+                                ? "bg-primary/10 dark:bg-primary/20"
+                                : isSubtask
+                                ? "bg-muted/15 hover:bg-muted/30"
                                 : "hover:bg-muted/30"
                             } ${isDragging ? "opacity-30 bg-muted" : ""} ${
                               isDragOver
                                 ? dropPosition === "before"
                                   ? "border-t-2 border-primary bg-primary/10"
-                                  : "border-b-2 border-primary bg-primary/10"
+                                  : dropPosition === "after"
+                                  ? "border-b-2 border-primary bg-primary/10"
+                                  : "bg-emerald-500/20 ring-2 ring-emerald-500 ring-inset border-emerald-500"
                                 : ""
                             }`}
                           >
@@ -1715,16 +2129,16 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
                                 return (
                                   <td
                                     key={col.key}
-                                    className="px-1 py-1 text-center font-mono text-[11px] text-muted-foreground border-r border-border/40 relative"
+                                    className="px-1 py-1 text-center font-mono text-[11px] text-muted-foreground border-r border-border/40 relative select-none"
                                   >
-                                    <div className="flex items-center justify-center space-x-1">
+                                    <div className="flex items-center justify-center space-x-0.5">
                                       <div
                                         className="cursor-grab active:cursor-grabbing text-muted-foreground/30 group-hover:text-muted-foreground p-0.5"
-                                        title="Arraste para reordenar"
+                                        title="Arraste para reordenar ou solte no meio de outra tarefa para tornar subtarefa"
                                       >
                                         <GripVertical className="h-3 w-3" />
                                       </div>
-                                      <span>{rowNum}</span>
+                                      <span className="font-semibold">{rowNum}</span>
                                     </div>
                                   </td>
                                 );
@@ -1740,7 +2154,7 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
                                     <button
                                       type="button"
                                       onClick={() => handleToggleTaskStatus(task)}
-                                      className="inline-flex items-center justify-center p-0.5 rounded-full hover:scale-110 transition-transform"
+                                      className="inline-flex items-center justify-center p-0.5 rounded-full hover:scale-110 transition-transform cursor-pointer"
                                       title={isCompleted ? "Marcar como pendente" : "Marcar como concluída"}
                                     >
                                       {isCompleted ? (
@@ -1753,7 +2167,7 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
                                 );
                               }
 
-                              // 3. Task Name (Inline Direct Edit with green focus outline like MS Project)
+                              // 3. Task Name (Inline Direct Edit with indentation for subtasks & collapse toggle)
                               if (col.key === "name") {
                                 const isEditing =
                                   activeCell?.taskId === task.id && activeCell?.field === "name";
@@ -1797,19 +2211,88 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
                                       />
                                     ) : (
                                       <div
-                                        className={`flex items-center space-x-2 truncate ${
-                                          groupBy === "project" ? "pl-2" : ""
-                                        }`}
+                                        style={{
+                                          paddingLeft: `${Math.max(0, row.level) * 22 + (groupBy === "project" ? 4 : 0)}px`,
+                                        }}
+                                        className="flex items-center space-x-1.5 truncate"
                                       >
+                                        {/* Subtask branch indicator for any nested level */}
+                                        {row.level > 0 && (
+                                          <div className="flex items-center text-muted-foreground/60 shrink-0">
+                                            <CornerDownRight className="h-3 w-3 text-muted-foreground/70 mr-0.5" />
+                                          </div>
+                                        )}
+
+                                        {/* Expand / collapse toggle (for any task or subtask that has children) */}
+                                        {row.hasSubtasks && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setCollapsedParentTasks((prev) => ({
+                                                ...prev,
+                                                [task.id]: !prev[task.id],
+                                              }));
+                                            }}
+                                            className="p-0.5 hover:bg-muted rounded text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+                                            title={row.isCollapsed ? "Expandir subtarefas" : "Recolher subtarefas"}
+                                          >
+                                            {row.isCollapsed ? (
+                                              <ChevronRight className="h-3.5 w-3.5" />
+                                            ) : (
+                                              <ChevronDown className="h-3.5 w-3.5" />
+                                            )}
+                                          </button>
+                                        )}
+
                                         <span
-                                          className={`font-medium truncate ${
+                                          className={`truncate ${
                                             isCompleted
                                               ? "line-through text-muted-foreground opacity-70"
-                                              : "text-foreground"
+                                              : row.level > 1
+                                              ? "text-foreground/85 font-normal"
+                                              : row.level === 1
+                                              ? "text-foreground/90 font-medium"
+                                              : "text-foreground font-semibold"
                                           }`}
                                         >
                                           {task.name}
                                         </span>
+
+                                        {/* Level 1 Subtask badge */}
+                                        {row.level === 1 && (
+                                          <span className="text-[9px] font-medium px-1 py-0.2 rounded bg-muted/80 text-muted-foreground border border-border shrink-0">
+                                            Subtarefa
+                                          </span>
+                                        )}
+
+                                        {/* Level >= 2 Subtask of subtask badge */}
+                                        {row.level >= 2 && (
+                                          <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/25 shrink-0">
+                                            Sub-subtarefa {row.level > 2 ? `Nv.${row.level}` : ""}
+                                          </span>
+                                        )}
+
+                                        {/* Counter badge for any task or subtask that has nested subtasks */}
+                                        {row.hasSubtasks && (
+                                          <span
+                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0 border border-emerald-500/20"
+                                            title={`${row.subtasksCount} subtarefas vinculadas (${row.subtasksCompletedCount} concluídas)`}
+                                          >
+                                            <ListTodo className="h-2.5 w-2.5" />
+                                            <span>
+                                              {row.subtasksCompletedCount}/{row.subtasksCount}
+                                            </span>
+                                          </span>
+                                        )}
+
+                                        {/* Drag-over drop indication tooltip */}
+                                        {isDragOver && dropPosition === "as-child" && (
+                                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-500 text-white shadow-xs shrink-0 animate-pulse">
+                                            ↳ Soltar para virar subtarefa
+                                          </span>
+                                        )}
+
                                         {task.special_marker && task.special_marker !== "none" && (
                                           <span
                                             className="w-1.5 h-1.5 rotate-45 bg-purple-600 shrink-0"
@@ -2310,15 +2793,140 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
                                 );
                               }
 
-                              // 13. Actions (Move up/down & Delete)
+                              // 13. Actions (WBS Promote, Demote, Add Subtask, Reparent Popover, Move & Delete)
                               if (col.key === "actions") {
                                 return (
                                   <td key={col.key} className="px-1 py-1 text-center">
-                                    <div className="flex items-center justify-center space-x-1 opacity-80 hover:opacity-100 transition-opacity">
+                                    <div className="flex items-center justify-center space-x-0.5 opacity-90 hover:opacity-100 transition-opacity">
+                                      {/* If Subtask: Promote one level up */}
+                                      {isSubtask && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handlePromoteToTask(task.id);
+                                          }}
+                                          className="p-1 text-blue-600 hover:bg-blue-500/15 rounded cursor-pointer"
+                                          title={
+                                            row.level > 1
+                                              ? "Promover nível WBS (Recuar para nível superior)"
+                                              : "Promover para Tarefa Principal (Recuar nível)"
+                                          }
+                                        >
+                                          <CornerUpLeft className="h-3.5 w-3.5" />
+                                        </button>
+                                      )}
+
+                                      {/* Add Inline Subtask under this task/subtask */}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleCreateInlineSubtask(task.id, task.project_id);
+                                        }}
+                                        className="p-1 text-emerald-600 hover:bg-emerald-500/15 rounded cursor-pointer"
+                                        title={
+                                          row.isSubtask
+                                            ? "Adicionar subtarefa de subtarefa"
+                                            : "Adicionar subtarefa"
+                                        }
+                                      >
+                                        <Plus className="h-3.5 w-3.5" />
+                                      </button>
+
+                                      {/* Demote to Subtask of previous task */}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDemoteToSubtask(task.id);
+                                        }}
+                                        className="p-1 text-amber-600 hover:bg-amber-500/15 rounded cursor-pointer"
+                                        title="Transformar em subtarefa da linha anterior (Avançar nível)"
+                                      >
+                                        <CornerDownRight className="h-3.5 w-3.5" />
+                                      </button>
+
+                                      {/* Reparent Popover (Choose parent or promote) */}
+                                      <Popover>
+                                        <PopoverTrigger asChild>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="p-1 text-muted-foreground/70 hover:text-foreground hover:bg-muted rounded cursor-pointer"
+                                            title="Hierarquia WBS / Mover para outra tarefa"
+                                          >
+                                            <FolderTree className="h-3.5 w-3.5" />
+                                          </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent align="end" className="w-64 p-2 space-y-1.5">
+                                          <div className="text-xs font-semibold text-muted-foreground px-1">
+                                            Hierarquia WBS da Tarefa
+                                          </div>
+                                          {isSubtask && (
+                                            <button
+                                              type="button"
+                                              onClick={() => handlePromoteToTask(task.id)}
+                                              className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-blue-500/10 text-blue-600 font-medium flex items-center gap-1.5"
+                                            >
+                                              <CornerUpLeft className="h-3.5 w-3.5" />
+                                              <span>
+                                                {row.level > 1
+                                                  ? "Promover para nível superior"
+                                                  : "Promover para Tarefa Principal"}
+                                              </span>
+                                            </button>
+                                          )}
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDemoteToSubtask(task.id)}
+                                            className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-amber-500/10 text-amber-600 font-medium flex items-center gap-1.5"
+                                          >
+                                            <CornerDownRight className="h-3.5 w-3.5" />
+                                            <span>Transformar em Subtarefa da linha acima</span>
+                                          </button>
+                                          <div className="border-t border-border my-1" />
+                                          <div className="text-[11px] font-semibold text-muted-foreground px-1">
+                                            Vincular como subtarefa de:
+                                          </div>
+                                          <div className="max-h-40 overflow-y-auto space-y-0.5">
+                                            {tasks
+                                              .filter(
+                                                (t) =>
+                                                  t.id !== task.id &&
+                                                  !isDescendant(t.id, task.id, tasks) &&
+                                                  (selectedProjectId === "all" || t.project_id === task.project_id)
+                                              )
+                                              .map((cand) => (
+                                                <button
+                                                  key={cand.id}
+                                                  type="button"
+                                                  onClick={() => handleReparentTask(task.id, cand.id)}
+                                                  className={`w-full text-left px-2 py-1 text-xs rounded hover:bg-muted flex items-center justify-between truncate ${
+                                                    task.parent_id === cand.id
+                                                      ? "bg-primary/10 text-primary font-semibold"
+                                                      : ""
+                                                  }`}
+                                                >
+                                                  <span className="truncate">
+                                                    <span className="font-mono text-muted-foreground mr-1 text-[11px]">
+                                                      {taskOutlineNumberMap.get(cand.id) || "#"}
+                                                    </span>
+                                                    {cand.name}
+                                                  </span>
+                                                  {task.parent_id === cand.id && (
+                                                    <Check className="h-3 w-3 shrink-0 text-primary" />
+                                                  )}
+                                                </button>
+                                              ))}
+                                          </div>
+                                        </PopoverContent>
+                                      </Popover>
+
                                       <button
                                         type="button"
                                         onClick={() => handleMoveTaskOrder(task.id, "up")}
-                                        className="p-1 hover:text-primary rounded hover:bg-muted"
+                                        className="p-1 hover:text-primary rounded hover:bg-muted text-muted-foreground/70"
                                         title="Mover para cima"
                                       >
                                         <ChevronUp className="h-3.5 w-3.5" />
@@ -2326,16 +2934,24 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
                                       <button
                                         type="button"
                                         onClick={() => handleMoveTaskOrder(task.id, "down")}
-                                        className="p-1 hover:text-primary rounded hover:bg-muted"
+                                        className="p-1 hover:text-primary rounded hover:bg-muted text-muted-foreground/70"
                                         title="Mover para baixo"
                                       >
                                         <ChevronDown className="h-3.5 w-3.5" />
                                       </button>
                                       <button
                                         type="button"
+                                        onClick={() => setSubtasksModalTask(task)}
+                                        className="p-1 hover:text-primary rounded hover:bg-muted text-muted-foreground/70"
+                                        title="Gerenciar Subtarefas"
+                                      >
+                                        <ListTodo className="h-3.5 w-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
                                         onClick={() => handleDeleteTask(task.id)}
                                         className="p-1 hover:text-rose-500 rounded hover:bg-rose-500/10 text-muted-foreground/80 active:scale-95 transition-all"
-                                        title="Excluir tarefa"
+                                        title={isSubtask ? "Excluir subtarefa" : "Excluir tarefa"}
                                       >
                                         <Trash2 className="h-3.5 w-3.5" />
                                       </button>
@@ -2643,6 +3259,46 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
               className="gap-1.5 font-semibold"
             >
               Confirmar Exclusão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Subtasks Dialog */}
+      <Dialog
+        open={Boolean(subtasksModalTask)}
+        onOpenChange={(open) => !open && setSubtasksModalTask(null)}
+      >
+        <DialogContent className="max-w-2xl w-[calc(100%-2rem)]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <ListTodo className="h-5 w-5 text-primary" />
+              <span>Subtarefas: {subtasksModalTask?.name}</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Gerencie as subtarefas e acompanhe o progresso desta tarefa.
+            </DialogDescription>
+          </DialogHeader>
+          {subtasksModalTask && (
+            <SubtasksManager
+              task={subtasksModalTask}
+              employees={employees}
+              onTaskUpdated={(updated) => {
+                setTasks((prev) =>
+                  prev.map((t) => (t.id === updated.id ? updated : t))
+                );
+                setSubtasksModalTask(updated);
+                if (onDataChange) onDataChange();
+              }}
+            />
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSubtasksModalTask(null)}
+            >
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>

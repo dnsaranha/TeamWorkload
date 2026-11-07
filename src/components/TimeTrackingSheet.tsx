@@ -650,13 +650,29 @@ export const TimeTrackingSheet: React.FC<TimeTrackingSheetProps> = ({
               <Select
                 value={timerTaskId || "none"}
                 onValueChange={(val) => {
-                  const taskId = val === "none" ? null : val;
-                  setTimerTaskId(taskId);
-                  const task = tasks.find((t) => t.id === taskId);
-                  if (task) {
-                    if (!timerDescription) setTimerDescription(task.name);
-                    if (task.project_id) setTimerProjectId(task.project_id);
-                    if (task.assigned_employee_id) setTimerEmployeeId(task.assigned_employee_id);
+                  if (val === "none") {
+                    setTimerTaskId(null);
+                    return;
+                  }
+                  if (val.includes("::")) {
+                    const [tId, sId] = val.split("::");
+                    const parentTask = tasks.find((t) => t.id === tId);
+                    const sub = parentTask?.subtasks?.find((s) => s.id === sId);
+                    setTimerTaskId(tId);
+                    if (parentTask) {
+                      setTimerDescription(`${parentTask.name} - ${sub?.title || "Subtarefa"}`);
+                      if (parentTask.project_id) setTimerProjectId(parentTask.project_id);
+                      if (sub?.assigned_employee_id) setTimerEmployeeId(sub.assigned_employee_id);
+                      else if (parentTask.assigned_employee_id) setTimerEmployeeId(parentTask.assigned_employee_id);
+                    }
+                  } else {
+                    setTimerTaskId(val);
+                    const task = tasks.find((t) => t.id === val);
+                    if (task) {
+                      setTimerDescription(task.name);
+                      if (task.project_id) setTimerProjectId(task.project_id);
+                      if (task.assigned_employee_id) setTimerEmployeeId(task.assigned_employee_id);
+                    }
                   }
                 }}
               >
@@ -665,11 +681,27 @@ export const TimeTrackingSheet: React.FC<TimeTrackingSheetProps> = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Sem Tarefa</SelectItem>
-                  {tasks.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.name}
-                    </SelectItem>
-                  ))}
+                  {tasks.flatMap((t) => {
+                    const items = [
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>,
+                    ];
+                    if (t.subtasks && t.subtasks.length > 0) {
+                      t.subtasks.forEach((st) => {
+                        items.push(
+                          <SelectItem
+                            key={`${t.id}::${st.id}`}
+                            value={`${t.id}::${st.id}`}
+                            className="pl-6 text-xs text-muted-foreground"
+                          >
+                            ↳ {st.title}
+                          </SelectItem>
+                        );
+                      });
+                    }
+                    return items;
+                  })}
                 </SelectContent>
               </Select>
             </div>
