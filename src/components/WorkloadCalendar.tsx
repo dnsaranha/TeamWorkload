@@ -521,7 +521,7 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
       return;
     }
 
-    const formattedStartDate = newStartDate.toISOString().split("T")[0];
+    let formattedStartDate = newStartDate.toISOString().split("T")[0];
     let formattedEndDate = formattedStartDate; // Default for new tasks
 
     // If the task already exists in the calendar, it's a reschedule. Preserve duration.
@@ -538,6 +538,17 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
 
       const newEndDate = new Date(newStartDate.getTime() + durationInMillis);
       formattedEndDate = newEndDate.toISOString().split("T")[0];
+    }
+
+    // If the task is a subtask, ensure it stays within parent boundaries
+    if (originalTask?.parent_id) {
+      const parentTask = tasks.find((t) => t.id === originalTask.parent_id);
+      if (parentTask) {
+        if (formattedStartDate < parentTask.start_date) formattedStartDate = parentTask.start_date;
+        if (formattedStartDate > parentTask.end_date) formattedStartDate = parentTask.end_date;
+        if (formattedEndDate > parentTask.end_date) formattedEndDate = parentTask.end_date;
+        if (formattedEndDate < formattedStartDate) formattedEndDate = formattedStartDate;
+      }
     }
 
     try {
@@ -735,7 +746,33 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
         exceptions: currentTask.exceptions,
       };
 
+      // If currentTask is a subtask, clamp dates to parent boundaries
+      if (currentTask.parent_id) {
+        const parentTask = tasks.find((t) => t.id === currentTask.parent_id);
+        if (parentTask) {
+          if (updateData.start_date < parentTask.start_date) updateData.start_date = parentTask.start_date;
+          if (updateData.start_date > parentTask.end_date) updateData.start_date = parentTask.end_date;
+          if (updateData.end_date > parentTask.end_date) updateData.end_date = parentTask.end_date;
+          if (updateData.end_date < updateData.start_date) updateData.end_date = updateData.start_date;
+        }
+      }
+
       const updatedTask = await taskService.update(currentTask.id, updateData);
+
+      // Clamp any children if currentTask is a parent
+      const childSubtasks = tasks.filter((t) => t.parent_id === currentTask.id);
+      for (const child of childSubtasks) {
+        let cs = child.start_date;
+        let ce = child.end_date;
+        let changed = false;
+        if (cs < updateData.start_date) { cs = updateData.start_date; changed = true; }
+        if (cs > updateData.end_date) { cs = updateData.end_date; changed = true; }
+        if (ce > updateData.end_date) { ce = updateData.end_date; changed = true; }
+        if (ce < cs) { ce = cs; changed = true; }
+        if (changed) {
+          await taskService.update(child.id, { start_date: cs, end_date: ce });
+        }
+      }
 
       const updatedTasks = tasks.map((task) =>
         task.id === currentTask.id ? (updatedTask as Task) : task,
@@ -1722,10 +1759,12 @@ const WorkloadCalendar: React.FC<WorkloadCalendarProps> = ({
                 {/* Subtasks Manager for current task */}
                 <div className="pt-2 border-t border-border/60">
                   <SubtasksManager
-                    taskId={currentTask.id}
-                    taskName={currentTask.name}
-                    projectId={currentTask.project_id || undefined}
-                    onSubtasksChange={loadData}
+                    task={currentTask}
+                    employees={employees}
+                    onTaskUpdated={(updatedTask) => {
+                      setCurrentTask(updatedTask);
+                      loadData();
+                    }}
                   />
                 </div>
               </div>

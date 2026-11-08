@@ -69,13 +69,23 @@ export const SubtasksManager: React.FC<SubtasksManagerProps> = ({
       const assignedEmp = employees.find((emp) => emp.id === newEmployeeId);
 
       const hoursNum = parseFloat(newEstimatedHours);
+      let effectiveDueDate = newDueDate ? newDueDate : null;
+      if (effectiveDueDate) {
+        if (task.start_date && effectiveDueDate < task.start_date) {
+          effectiveDueDate = task.start_date;
+        }
+        if (task.end_date && effectiveDueDate > task.end_date) {
+          effectiveDueDate = task.end_date;
+        }
+      }
+
       const updated = await taskService.addSubtask(task.id, {
         title: newTitle.trim(),
         completed: false,
         estimated_time: !isNaN(hoursNum) && hoursNum > 0 ? hoursNum : null,
         assigned_employee_id: newEmployeeId !== "none" ? newEmployeeId : null,
         assigned_employee_name: assignedEmp ? assignedEmp.name : null,
-        due_date: newDueDate || null,
+        due_date: effectiveDueDate,
       });
 
       // Clear form
@@ -389,6 +399,20 @@ export const SubtasksManager: React.FC<SubtasksManagerProps> = ({
               ))}
             </SelectContent>
           </Select>
+
+          {/* Due date picker (constrained by task start and end) */}
+          <div className="relative w-28">
+            <Input
+              type="date"
+              value={newDueDate}
+              min={task.start_date || undefined}
+              max={task.end_date || undefined}
+              onChange={(e) => setNewDueDate(e.target.value)}
+              disabled={isSubmitting}
+              className="h-8 text-[11px] px-1 font-mono"
+              title={`Prazo da subtarefa (restrito ao período de ${task.start_date} a ${task.end_date})`}
+            />
+          </div>
 
           {/* Add Button */}
           <Button

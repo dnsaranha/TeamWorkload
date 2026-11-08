@@ -37,8 +37,8 @@ import {
 } from "@/lib/supabaseClient";
 
 type TaskWithRelations = Task & {
-  project: Project | null;
-  assigned_employee: Employee | null;
+  project?: Project | null;
+  assigned_employee?: Employee | null;
 };
 
 interface RoadmapItem {
@@ -112,7 +112,7 @@ const Roadmap = () => {
 
   const getCategoryFor = useCallback(
     (
-      item: TaskWithRelations | Project,
+      item: Task | TaskWithRelations | Project,
       type: "task" | "project",
       allDynamicCategories: { id: string; name: string; color: string }[],
     ): string => {

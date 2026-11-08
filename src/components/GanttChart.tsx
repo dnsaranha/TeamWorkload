@@ -857,30 +857,92 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
     }
   };
 
+  // Helper to recursively clamp subtasks inside their parent dates in GanttChart
+  const clampSubtasksDates = async (
+    parentId: string,
+    parentStart: string,
+    parentEnd: string,
+    allTasks: Task[]
+  ) => {
+    const directChildren = allTasks.filter((t) => t.parent_id === parentId);
+    for (const child of directChildren) {
+      let childStart = child.start_date;
+      let childEnd = child.end_date;
+      let hasChanges = false;
+
+      if (childStart < parentStart) {
+        childStart = parentStart;
+        hasChanges = true;
+      }
+      if (childStart > parentEnd) {
+        childStart = parentEnd;
+        hasChanges = true;
+      }
+      if (childEnd > parentEnd) {
+        childEnd = parentEnd;
+        hasChanges = true;
+      }
+      if (childEnd < childStart) {
+        childEnd = childStart;
+        hasChanges = true;
+      }
+
+      if (hasChanges) {
+        await taskService.update(child.id, { start_date: childStart, end_date: childEnd });
+      }
+      await clampSubtasksDates(child.id, childStart, childEnd, allTasks);
+    }
+  };
+
   // Persist updated task dates after dragging or resizing
   const handleTaskDatesChange = async (
     task: Task,
     newStartStr: string,
     newEndStr: string
   ) => {
-    if (task.start_date === newStartStr && task.end_date === newEndStr) return;
+    let finalStart = newStartStr;
+    let finalEnd = newEndStr;
+
+    // Subtasks must remain strictly within the parent task's period
+    if (task.parent_id) {
+      const parentTask = tasks.find((t) => t.id === task.parent_id);
+      if (parentTask) {
+        if (finalStart < parentTask.start_date) {
+          finalStart = parentTask.start_date;
+        }
+        if (finalStart > parentTask.end_date) {
+          finalStart = parentTask.end_date;
+        }
+        if (finalEnd > parentTask.end_date) {
+          finalEnd = parentTask.end_date;
+        }
+        if (finalEnd < finalStart) {
+          finalEnd = finalStart;
+        }
+      }
+    }
+
+    if (task.start_date === finalStart && task.end_date === finalEnd) return;
 
     try {
       // 1. Check and re-align project boundaries if task extends beyond
-      await checkAndExpandProjectDates(task, newStartStr, newEndStr);
+      await checkAndExpandProjectDates(task, finalStart, finalEnd);
 
       // 2. Persist updated task dates
       await taskService.update(task.id, {
-        start_date: newStartStr,
-        end_date: newEndStr,
+        start_date: finalStart,
+        end_date: finalEnd,
       });
+
+      // 3. If this task has child subtasks, keep them bounded inside [finalStart, finalEnd]
+      await clampSubtasksDates(task.id, finalStart, finalEnd, tasks);
 
       toast({
         title: "Cronograma Atualizado",
         description: `"${task.name}": ${format(
-          parseISO(newStartStr),
+          parseISO(finalStart),
           "dd/MM/yyyy"
-        )} a ${format(parseISO(newEndStr), "dd/MM/yyyy")}.`,
+        )} a ${format(parseISO(finalEnd), "dd/MM/yyyy")}.`,
       });
 
       await loadData();
@@ -1123,9 +1185,28 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
         const origStart = parseISO(activeDrag.initialStartDate);
         const origEnd = parseISO(activeDrag.initialEndDate);
 
+        const parentTask = activeDrag.task.parent_id
+          ? tasks.find((t) => t.id === activeDrag.task.parent_id)
+          : null;
+        const pStart = parentTask ? parseISO(parentTask.start_date) : null;
+        const pEnd = parentTask ? parseISO(parentTask.end_date) : null;
+
         if (activeDrag.type === "move") {
-          const newStart = addDays(origStart, deltaDays);
-          const newEnd = addDays(origEnd, deltaDays);
+          let newStart = addDays(origStart, deltaDays);
+          let newEnd = addDays(origEnd, deltaDays);
+          const durationDays = differenceInCalendarDays(origEnd, origStart);
+
+          // Subtasks must stay bounded inside parent dates
+          if (pStart && newStart < pStart) {
+            newStart = pStart;
+            newEnd = addDays(newStart, durationDays);
+          }
+          if (pEnd && newEnd > pEnd) {
+            newEnd = pEnd;
+            newStart = addDays(newEnd, -durationDays);
+            if (pStart && newStart < pStart) newStart = pStart;
+          }
+
           setActiveDrag((prev) =>
             prev
               ? {
@@ -1139,6 +1220,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
         } else if (activeDrag.type === "resize-start") {
           let newStart = addDays(origStart, deltaDays);
           if (newStart > origEnd) newStart = origEnd;
+          if (pStart && newStart < pStart) newStart = pStart;
           setActiveDrag((prev) =>
             prev
               ? {
@@ -1152,6 +1234,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
         } else if (activeDrag.type === "resize-end") {
           let newEnd = addDays(origEnd, deltaDays);
           if (newEnd < origStart) newEnd = origStart;
+          if (pEnd && newEnd > pEnd) newEnd = pEnd;
           setActiveDrag((prev) =>
             prev
               ? {
@@ -1394,8 +1477,19 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
         subtasks: editingTask?.subtasks || null,
       };
 
+      if (formParentId !== "none") {
+        const parent = tasks.find((t) => t.id === formParentId);
+        if (parent) {
+          if (payload.start_date < parent.start_date) payload.start_date = parent.start_date;
+          if (payload.start_date > parent.end_date) payload.start_date = parent.end_date;
+          if (payload.end_date > parent.end_date) payload.end_date = parent.end_date;
+          if (payload.end_date < payload.start_date) payload.end_date = payload.start_date;
+        }
+      }
+
       if (editingTask) {
         await taskService.update(editingTask.id, payload);
+        await clampSubtasksDates(editingTask.id, payload.start_date, payload.end_date, tasks);
       } else {
         await taskService.create(payload);
       }
@@ -1490,6 +1584,16 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
       fromName: string;
       toName: string;
       link: DependencyLink;
+      fromId: string;
+      toId: string;
+      fromTask?: Task;
+      toTask?: Task;
+      startX: number;
+      startY: number;
+      endX: number;
+      endY: number;
+      midX: number;
+      midY: number;
     }[] = [];
 
     const rowHeight = 44; // height of each Gantt row
@@ -3345,7 +3449,23 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
                       <span className="text-[10px] text-primary font-medium">Subtarefa ativa</span>
                     )}
                   </Label>
-                  <Select value={formParentId} onValueChange={setFormParentId}>
+                  <Select
+                    value={formParentId}
+                    onValueChange={(val) => {
+                      setFormParentId(val);
+                      if (val !== "none") {
+                        const p = tasks.find((t) => t.id === val);
+                        if (p) {
+                          if (formStartDate < p.start_date || formStartDate > p.end_date) {
+                            setFormStartDate(p.start_date);
+                          }
+                          if (formEndDate > p.end_date || formEndDate < p.start_date) {
+                            setFormEndDate(p.end_date);
+                          }
+                        }
+                      }
+                    }}
+                  >
                     <SelectTrigger className="text-xs bg-background">
                       <SelectValue placeholder="Nenhuma (Tarefa Principal)" />
                     </SelectTrigger>
@@ -3416,6 +3536,19 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
                 </div>
               </div>
 
+              {/* Subtask Date Restriction Notice */}
+              {formParentId !== "none" && (() => {
+                const parent = tasks.find((t) => t.id === formParentId);
+                return parent ? (
+                  <div className="text-[11px] text-primary bg-primary/10 border border-primary/25 rounded-md px-2.5 py-1.5 flex items-center gap-1.5 font-medium">
+                    <CornerDownRight className="h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      Subtarefa restrita ao período da tarefa superior: <strong>{parent.start_date}</strong> a <strong>{parent.end_date}</strong>
+                    </span>
+                  </div>
+                ) : null;
+              })()}
+
               {/* Dates */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -3423,6 +3556,8 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
                   <Input
                     type="date"
                     value={formStartDate}
+                    min={formParentId !== "none" ? tasks.find((t) => t.id === formParentId)?.start_date : undefined}
+                    max={formParentId !== "none" ? tasks.find((t) => t.id === formParentId)?.end_date : undefined}
                     onChange={(e) => setFormStartDate(e.target.value)}
                     className="text-xs bg-background"
                   />
@@ -3432,6 +3567,12 @@ export const GanttChart: React.FC<GanttChartProps> = ({ onTaskChange }) => {
                   <Input
                     type="date"
                     value={formEndDate}
+                    min={
+                      formParentId !== "none"
+                        ? tasks.find((t) => t.id === formParentId)?.start_date || formStartDate
+                        : formStartDate
+                    }
+                    max={formParentId !== "none" ? tasks.find((t) => t.id === formParentId)?.end_date : undefined}
                     onChange={(e) => setFormEndDate(e.target.value)}
                     className="text-xs bg-background"
                   />

@@ -8,7 +8,7 @@ export type Employee = {
   email?: string | null;
   weekly_hours: number;
   skills: any; // Using any to match Supabase Json type
-  dias_de_trabalho: string[] | null;
+  dias_de_trabalho?: string[] | null;
   status?: "ativo" | "inativo" | string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -76,14 +76,14 @@ export type Subtask = {
 export type Task = {
   id: string;
   name: string;
-  description: string | null;
-  estimated_time: number;
+  description?: string | null;
+  estimated_time?: number;
   start_date: string;
   end_date: string;
-  project_id: string | null;
-  assigned_employee_id: string | null;
-  status: string | null;
-  completion_date: string | null;
+  project_id?: string | null;
+  assigned_employee_id?: string | null;
+  status?: string | null;
+  completion_date?: string | null;
   repeats_weekly?: boolean;
   repeat_days?: string[] | null;
   hours_per_day?: number | null;
@@ -96,8 +96,8 @@ export type Task = {
   group_id?: string | null;
   group_name?: string | null;
   subtasks?: Subtask[] | null; // List of structured subtasks
-  created_at: string | null;
-  updated_at: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
   project?: Project | null;
   assigned_employee?: Employee | null;
 };
@@ -105,7 +105,7 @@ export type Task = {
 export type TaskInsert = {
   name: string;
   description?: string | null;
-  estimated_time: number;
+  estimated_time?: number | null;
   start_date: string;
   end_date: string;
   project_id?: string | null;

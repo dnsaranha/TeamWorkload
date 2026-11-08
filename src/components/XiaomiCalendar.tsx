@@ -343,19 +343,48 @@ export const XiaomiCalendar: React.FC<XiaomiCalendarProps> = ({ onTaskChange }) 
   const handleSaveEditedTask = async () => {
     if (!editingTaskId || !editTaskTitle.trim()) return;
     try {
+      const editingTask = tasks.find((t) => t.id === editingTaskId);
+      let s = editTaskStartDate;
+      let e = editTaskEndDate || editTaskStartDate;
+
+      if (editingTask?.parent_id) {
+        const parentTask = tasks.find((t) => t.id === editingTask.parent_id);
+        if (parentTask) {
+          if (s < parentTask.start_date) s = parentTask.start_date;
+          if (s > parentTask.end_date) s = parentTask.end_date;
+          if (e > parentTask.end_date) e = parentTask.end_date;
+          if (e < s) e = s;
+        }
+      }
+
       const finalHours = editTaskIsAllDay ? 8 : (Number(editTaskHours) || 2);
       await taskService.update(editingTaskId, {
         name: editTaskTitle.trim(),
         description: editTaskDesc.trim() || null,
         estimated_time: finalHours,
-        start_date: editTaskStartDate,
-        end_date: editTaskEndDate || editTaskStartDate,
+        start_date: s,
+        end_date: e,
         project_id: editTaskProjectId !== "none" ? editTaskProjectId : null,
         assigned_employee_id: editTaskEmployeeId !== "none" ? editTaskEmployeeId : null,
         status: editTaskStatus,
         special_marker: editTaskIsAllDay ? "all_day" : (editTaskSpecialMarker !== "none" ? editTaskSpecialMarker : null),
         completion_date: editTaskStatus === "completed" ? new Date().toISOString() : null,
       });
+
+      // Clamp any subtasks if editingTask is a parent
+      const childSubtasks = tasks.filter((t) => t.parent_id === editingTaskId);
+      for (const child of childSubtasks) {
+        let cs = child.start_date;
+        let ce = child.end_date;
+        let changed = false;
+        if (cs < s) { cs = s; changed = true; }
+        if (cs > e) { cs = e; changed = true; }
+        if (ce > e) { ce = e; changed = true; }
+        if (ce < cs) { ce = cs; changed = true; }
+        if (changed) {
+          await taskService.update(child.id, { start_date: cs, end_date: ce });
+        }
+      }
 
       // Save start hour mapping
       saveTaskStartHours({

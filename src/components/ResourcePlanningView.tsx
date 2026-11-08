@@ -794,14 +794,26 @@ export const ResourcePlanningView: React.FC = () => {
           : ["monday", "tuesday", "wednesday", "thursday", "friday"]
         : null;
 
+      let effectiveStart = formStartDate;
+      let effectiveEnd = finalEndDate;
+      if (editingTask?.parent_id) {
+        const parentTask = tasks.find((t) => t.id === editingTask.parent_id);
+        if (parentTask) {
+          if (effectiveStart < parentTask.start_date) effectiveStart = parentTask.start_date;
+          if (effectiveStart > parentTask.end_date) effectiveStart = parentTask.end_date;
+          if (effectiveEnd > parentTask.end_date) effectiveEnd = parentTask.end_date;
+          if (effectiveEnd < effectiveStart) effectiveEnd = effectiveStart;
+        }
+      }
+
       if (editingTask) {
         // Update existing task
         await taskService.update(editingTask.id, {
           name: formTaskName,
           project_id: targetProjectId,
           assigned_employee_id: formEmployeeId || null,
-          start_date: formStartDate,
-          end_date: finalEndDate,
+          start_date: effectiveStart,
+          end_date: effectiveEnd,
           hours_per_day: Number(formHoursPerDay) || 1,
           estimated_time: Number(formEstimatedHours) || 8,
           special_marker: formIsTentative ? "tentative" : null,
@@ -809,6 +821,21 @@ export const ResourcePlanningView: React.FC = () => {
           repeat_days: finalRepeatDays,
           description: formDescription,
         });
+
+        // Also ensure all subtasks of this task stay bounded within [effectiveStart, effectiveEnd]
+        const childSubtasks = tasks.filter((t) => t.parent_id === editingTask.id);
+        for (const child of childSubtasks) {
+          let cs = child.start_date;
+          let ce = child.end_date;
+          let changed = false;
+          if (cs < effectiveStart) { cs = effectiveStart; changed = true; }
+          if (cs > effectiveEnd) { cs = effectiveEnd; changed = true; }
+          if (ce > effectiveEnd) { ce = effectiveEnd; changed = true; }
+          if (ce < cs) { ce = cs; changed = true; }
+          if (changed) {
+            await taskService.update(child.id, { start_date: cs, end_date: ce });
+          }
+        }
 
         toast({
           title: "Alocação atualizada",
@@ -2609,26 +2636,35 @@ export const ResourcePlanningView: React.FC = () => {
             </div>
 
             {/* Dates Row */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Data de Início</Label>
-                <Input
-                  type="date"
-                  value={formStartDate}
-                  onChange={(e) => setFormStartDate(e.target.value)}
-                  className="h-8 text-xs font-mono"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Data de Término</Label>
-                <Input
-                  type="date"
-                  value={formEndDate}
-                  onChange={(e) => setFormEndDate(e.target.value)}
-                  className="h-8 text-xs font-mono"
-                />
-              </div>
-            </div>
+            {(() => {
+              const parentTask = editingTask?.parent_id ? tasks.find((t) => t.id === editingTask.parent_id) : null;
+              return (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">Data de Início</Label>
+                    <Input
+                      type="date"
+                      value={formStartDate}
+                      min={parentTask?.start_date || undefined}
+                      max={parentTask?.end_date || undefined}
+                      onChange={(e) => setFormStartDate(e.target.value)}
+                      className="h-8 text-xs font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">Data de Término</Label>
+                    <Input
+                      type="date"
+                      value={formEndDate}
+                      min={parentTask?.start_date || formStartDate || undefined}
+                      max={parentTask?.end_date || undefined}
+                      onChange={(e) => setFormEndDate(e.target.value)}
+                      className="h-8 text-xs font-mono"
+                    />
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Effort Row */}
             <div className="grid grid-cols-2 gap-2">
@@ -2813,10 +2849,12 @@ export const ResourcePlanningView: React.FC = () => {
             {editingTask && (
               <div className="pt-2 border-t border-border/60">
                 <SubtasksManager
-                  taskId={editingTask.id}
-                  taskName={editingTask.name}
-                  projectId={editingTask.project_id || undefined}
-                  onSubtasksChange={loadData}
+                  task={editingTask}
+                  employees={employees}
+                  onTaskUpdated={(updatedTask) => {
+                    setEditingTask(updatedTask);
+                    loadData();
+                  }}
                 />
               </div>
             )}

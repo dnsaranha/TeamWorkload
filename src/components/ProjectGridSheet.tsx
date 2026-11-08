@@ -104,6 +104,7 @@ import {
 } from "./ui/select";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Checkbox } from "./ui/checkbox";
+import { useToast } from "./ui/use-toast";
 
 interface ProjectGridSheetProps {
   onDataChange?: () => void;
@@ -175,6 +176,7 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
   onDataChange,
   initialProjectId,
 }) => {
+  const { toast } = useToast();
   // Main Data States
   const [tasks, setTasks] = useState<Task[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -380,7 +382,7 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
           ? Number(taskTrackedHours[task.id].toFixed(1))
           : Number((task.actual_time || 0).toFixed(1)),
         "Progresso (%)": task.progress || (task.status === "completed" ? 100 : 0),
-        "Predecessora ID": task.parent_task_id || "",
+        "Tarefa Superior (Parent ID)": task.parent_id || "",
         "Marcador Especial": task.special_marker || "",
       };
     });
@@ -727,6 +729,49 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
     } catch {}
   };
 
+  // Helper to recursively clamp all child subtasks within their parent's boundaries
+  const clampChildTasksDates = async (
+    parentId: string,
+    parentStart: string,
+    parentEnd: string,
+    allTasks: Task[]
+  ) => {
+    const directChildren = allTasks.filter((t) => t.parent_id === parentId);
+    for (const child of directChildren) {
+      let childStart = child.start_date;
+      let childEnd = child.end_date;
+      let hasChanges = false;
+
+      if (childStart < parentStart) {
+        childStart = parentStart;
+        hasChanges = true;
+      }
+      if (childStart > parentEnd) {
+        childStart = parentEnd;
+        hasChanges = true;
+      }
+      if (childEnd > parentEnd) {
+        childEnd = parentEnd;
+        hasChanges = true;
+      }
+      if (childEnd < childStart) {
+        childEnd = childStart;
+        hasChanges = true;
+      }
+
+      if (hasChanges) {
+        await taskService.update(child.id, { start_date: childStart, end_date: childEnd });
+        setTasks((prev) =>
+          prev.map((t) =>
+            t.id === child.id ? { ...t, start_date: childStart, end_date: childEnd } : t
+          )
+        );
+      }
+      // Recursively clamp grandchildren
+      await clampChildTasksDates(child.id, childStart, childEnd, allTasks);
+    }
+  };
+
   // Quick Inline Update Handler
   const handleUpdateTaskField = async (
     taskId: string,
@@ -750,15 +795,87 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
         }
       }
 
-      // If start_date changes, ensure end_date is valid or adjusted
+      // If start_date changes
       if (field === "start_date") {
         const currentTask = tasks.find((t) => t.id === taskId);
-        if (currentTask && currentTask.end_date) {
-          const s = parseISO(value);
-          const e = parseISO(currentTask.end_date);
-          if (s > e) {
-            updatePayload.end_date = value;
+        if (currentTask) {
+          let newStart = value;
+          const parentTask = currentTask.parent_id
+            ? tasks.find((t) => t.id === currentTask.parent_id)
+            : null;
+
+          // Subtask must be within parent boundaries
+          if (parentTask) {
+            if (newStart < parentTask.start_date) {
+              newStart = parentTask.start_date;
+              toast({
+                title: "Período Ajustado à Tarefa Superior",
+                description: `A data de início da subtarefa não pode ser anterior à data de início da tarefa superior (${parentTask.start_date}).`,
+              });
+            } else if (newStart > parentTask.end_date) {
+              newStart = parentTask.end_date;
+              toast({
+                title: "Período Ajustado à Tarefa Superior",
+                description: `A data de início da subtarefa não pode ultrapassar o término da tarefa superior (${parentTask.end_date}).`,
+              });
+            }
+            updatePayload.start_date = newStart;
           }
+
+          let finalEnd = currentTask.end_date;
+          if (currentTask.end_date) {
+            const s = parseISO(newStart);
+            const e = parseISO(currentTask.end_date);
+            if (s > e) {
+              finalEnd = newStart;
+              updatePayload.end_date = newStart;
+            }
+          }
+
+          // If this task is a parent, clamp its children so they stay inside [newStart, finalEnd]
+          await clampChildTasksDates(taskId, newStart, finalEnd || newStart, tasks);
+        }
+      }
+
+      // If end_date changes
+      if (field === "end_date") {
+        const currentTask = tasks.find((t) => t.id === taskId);
+        if (currentTask) {
+          let newEnd = value;
+          const parentTask = currentTask.parent_id
+            ? tasks.find((t) => t.id === currentTask.parent_id)
+            : null;
+
+          // Subtask must be within parent boundaries
+          if (parentTask) {
+            if (newEnd > parentTask.end_date) {
+              newEnd = parentTask.end_date;
+              toast({
+                title: "Período Ajustado à Tarefa Superior",
+                description: `A data de término da subtarefa não pode ultrapassar o término da tarefa superior (${parentTask.end_date}).`,
+              });
+            } else if (newEnd < parentTask.start_date) {
+              newEnd = parentTask.start_date;
+              toast({
+                title: "Período Ajustado à Tarefa Superior",
+                description: `A data de término da subtarefa não pode ser anterior ao início da tarefa superior (${parentTask.start_date}).`,
+              });
+            }
+            updatePayload.end_date = newEnd;
+          }
+
+          let finalStart = currentTask.start_date;
+          if (currentTask.start_date) {
+            const s = parseISO(currentTask.start_date);
+            const e = parseISO(newEnd);
+            if (e < s) {
+              finalStart = newEnd;
+              updatePayload.start_date = newEnd;
+            }
+          }
+
+          // If this task is a parent, clamp its children so they stay inside [finalStart, newEnd]
+          await clampChildTasksDates(taskId, finalStart || newEnd, newEnd, tasks);
         }
       }
 
@@ -896,12 +1013,39 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
       if (!chosenParentId || chosenParentId === taskId) return;
       if (isDescendant(chosenParentId, taskId, tasks)) return;
 
-      await taskService.update(taskId, { parent_id: chosenParentId });
+      const currentTask = tasks.find((t) => t.id === taskId);
+      const chosenParent = tasks.find((t) => t.id === chosenParentId);
+      let s = currentTask?.start_date || new Date().toISOString().split("T")[0];
+      let e = currentTask?.end_date || s;
+      let datesAdjusted = false;
+
+      if (chosenParent) {
+        if (s < chosenParent.start_date) { s = chosenParent.start_date; datesAdjusted = true; }
+        if (s > chosenParent.end_date) { s = chosenParent.end_date; datesAdjusted = true; }
+        if (e > chosenParent.end_date) { e = chosenParent.end_date; datesAdjusted = true; }
+        if (e < s) { e = s; datesAdjusted = true; }
+      }
+
+      await taskService.update(taskId, {
+        parent_id: chosenParentId,
+        start_date: s,
+        end_date: e,
+      });
       setTasks((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, parent_id: chosenParentId } : t))
+        prev.map((t) =>
+          t.id === taskId
+            ? { ...t, parent_id: chosenParentId, start_date: s, end_date: e }
+            : t
+        )
       );
       setCollapsedParentTasks((prev) => ({ ...prev, [chosenParentId!]: false }));
       setSelectedRowId(taskId);
+      if (datesAdjusted && chosenParent) {
+        toast({
+          title: "Datas da Subtarefa Ajustadas",
+          description: `O período foi enquadrado na tarefa superior "${chosenParent.name}" (${chosenParent.start_date} a ${chosenParent.end_date}).`,
+        });
+      }
       if (onDataChange) onDataChange();
     } catch (err) {
       console.error("Error demoting task to subtask:", err);
@@ -915,14 +1059,39 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
         if (newParentId === taskId || isDescendant(newParentId, taskId, tasks)) return;
       }
 
-      await taskService.update(taskId, { parent_id: newParentId });
+      const currentTask = tasks.find((t) => t.id === taskId);
+      const newParent = newParentId ? tasks.find((t) => t.id === newParentId) : null;
+      let s = currentTask?.start_date || new Date().toISOString().split("T")[0];
+      let e = currentTask?.end_date || s;
+      let datesAdjusted = false;
+
+      if (newParent) {
+        if (s < newParent.start_date) { s = newParent.start_date; datesAdjusted = true; }
+        if (s > newParent.end_date) { s = newParent.end_date; datesAdjusted = true; }
+        if (e > newParent.end_date) { e = newParent.end_date; datesAdjusted = true; }
+        if (e < s) { e = s; datesAdjusted = true; }
+      }
+
+      await taskService.update(taskId, {
+        parent_id: newParentId,
+        start_date: s,
+        end_date: e,
+      });
       setTasks((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, parent_id: newParentId } : t))
+        prev.map((t) =>
+          t.id === taskId ? { ...t, parent_id: newParentId, start_date: s, end_date: e } : t
+        )
       );
       if (newParentId) {
         setCollapsedParentTasks((prev) => ({ ...prev, [newParentId]: false }));
       }
       setSelectedRowId(taskId);
+      if (datesAdjusted && newParent) {
+        toast({
+          title: "Datas da Subtarefa Ajustadas",
+          description: `O período foi enquadrado na tarefa superior "${newParent.name}" (${newParent.start_date} a ${newParent.end_date}).`,
+        });
+      }
       if (onDataChange) onDataChange();
     } catch (err) {
       console.error("Error reparenting task:", err);
@@ -1021,9 +1190,24 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
     // Mode A: Dropped in middle of target task -> make it a subtask of targetTask!
     if (currentDropPos === "as-child") {
       const newParentId = targetTask.id;
+      let s = sourceTask.start_date;
+      let e = sourceTask.end_date;
+      let datesAdjusted = false;
+
+      if (s < targetTask.start_date) { s = targetTask.start_date; datesAdjusted = true; }
+      if (s > targetTask.end_date) { s = targetTask.end_date; datesAdjusted = true; }
+      if (e > targetTask.end_date) { e = targetTask.end_date; datesAdjusted = true; }
+      if (e < s) { e = s; datesAdjusted = true; }
+
       const updatedTasks = tasks.map((t) =>
         t.id === sourceTaskId
-          ? { ...t, parent_id: newParentId, project_id: targetTask.project_id }
+          ? {
+              ...t,
+              parent_id: newParentId,
+              project_id: targetTask.project_id,
+              start_date: s,
+              end_date: e,
+            }
           : t
       );
       setTasks(updatedTasks);
@@ -1034,7 +1218,15 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
         await taskService.update(sourceTaskId, {
           parent_id: newParentId,
           project_id: targetTask.project_id,
+          start_date: s,
+          end_date: e,
         });
+        if (datesAdjusted) {
+          toast({
+            title: "Datas da Subtarefa Ajustadas",
+            description: `O período foi enquadrado na tarefa superior "${targetTask.name}" (${targetTask.start_date} a ${targetTask.end_date}).`,
+          });
+        }
         if (onDataChange) onDataChange();
       } catch (err) {
         console.error("Error setting task parent via drag:", err);
@@ -2692,6 +2884,9 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
 
                               // 9. Start Date
                               if (col.key === "startDate") {
+                                const parentTask = task.parent_id
+                                  ? tasks.find((t) => t.id === task.parent_id)
+                                  : null;
                                 return (
                                   <td
                                     key={col.key}
@@ -2700,6 +2895,13 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
                                     <input
                                       type="date"
                                       value={task.start_date}
+                                      min={parentTask?.start_date || undefined}
+                                      max={parentTask?.end_date || undefined}
+                                      title={
+                                        parentTask
+                                          ? `Subtarefa restrita ao período da tarefa superior (${parentTask.start_date} a ${parentTask.end_date})`
+                                          : undefined
+                                      }
                                       onChange={(e) =>
                                         handleUpdateTaskField(task.id, "start_date", e.target.value)
                                       }
@@ -2711,6 +2913,9 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
 
                               // 10. Finish Date
                               if (col.key === "finishDate") {
+                                const parentTask = task.parent_id
+                                  ? tasks.find((t) => t.id === task.parent_id)
+                                  : null;
                                 return (
                                   <td
                                     key={col.key}
@@ -2719,6 +2924,13 @@ export const ProjectGridSheet: React.FC<ProjectGridSheetProps> = ({
                                     <input
                                       type="date"
                                       value={task.end_date}
+                                      min={parentTask?.start_date || task.start_date || undefined}
+                                      max={parentTask?.end_date || undefined}
+                                      title={
+                                        parentTask
+                                          ? `Subtarefa restrita ao período da tarefa superior (${parentTask.start_date} a ${parentTask.end_date})`
+                                          : undefined
+                                      }
                                       onChange={(e) =>
                                         handleUpdateTaskField(task.id, "end_date", e.target.value)
                                       }
